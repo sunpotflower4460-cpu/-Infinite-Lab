@@ -59,6 +59,14 @@
 - スマートフォンでの操作感（ピンチ、シート）、発熱・電池
 - iOS Safari 実機（WebKit エンジンでの一致は CI で確認）
 
+## v0.4 — 研究機能（進行中）
+
+| 項目                                                                           | 状態 | 根拠                                                                 |
+| ------------------------------------------------------------------------------ | ---- | -------------------------------------------------------------------- |
+| Experiment 04 Two-Arm Rotation（`modTau` による厳密な角度）                    | ✅   | `src/experiments/two-arm/`, `tests/unit/experiments/two-arm.test.ts` |
+| Reference Reconstruction（参照動画との比較・棄却）                             | ✅   | `tools/reference/analyze.py`, `docs/reference/ANALYSIS.md`           |
+| Pattern Detection（計算で求める事実）+ AI Observer（DeepSeek、推測として表示） | 次   |                                                                      |
+
 ## v0.4+ — 研究機能
 
 - Experimental Playground（式パーサ → Formula AST。表示 = 実行の原則はそのまま）
