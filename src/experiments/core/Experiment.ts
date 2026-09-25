@@ -1,6 +1,7 @@
 import {
   evaluate,
   explainFormula,
+  withConstantSymbol,
   type Env,
   type EvalContext,
   type FormulaSet,
@@ -43,5 +44,5 @@ export function paramsToEnv(params: ParamValues): Env {
 
 /** Symbol table for traces: the experiment's symbols plus `C` = the constant's symbol. */
 export function traceSymbols(symbols: SymbolTable, ctx: StepContext): SymbolTable {
-  return { ...symbols, C: ctx.constant.symbol }
+  return withConstantSymbol(symbols, ctx.constant.symbol)
 }

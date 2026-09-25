@@ -65,6 +65,16 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
   return go(e)
 }
 
+/** Symbol table with `C` bound to the constant's symbol (π, e, √2, φ). */
+export function withConstantSymbol(symbols: SymbolTable, constantSymbol: string): SymbolTable {
+  return { ...symbols, C: constantSymbol }
+}
+
+/** "target = expression" as displayed in the UI and written to exports. */
+export function renderFormula(f: Formula, symbols?: SymbolTable): string {
+  return `${symbols?.[f.target] ?? f.target} = ${renderExpr(f.expr, { symbols })}`
+}
+
 export interface FormulaEvaluation {
   target: string
   /** Symbolic form, e.g. "angle = digit / 10 × 2π". */
@@ -86,10 +96,9 @@ export function explainFormula(
   value: number,
   symbols?: SymbolTable,
 ): FormulaEvaluation {
-  const lhs = symbols?.[f.target] ?? f.target
   return {
     target: f.target,
-    symbolic: `${lhs} = ${renderExpr(f.expr, { symbols })}`,
+    symbolic: renderFormula(f, symbols),
     substituted: renderExpr(f.expr, { symbols, values: envBefore }),
     value,
     note: f.note,

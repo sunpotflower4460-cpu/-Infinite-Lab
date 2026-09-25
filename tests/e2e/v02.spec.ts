@@ -168,3 +168,45 @@ test('canvas keeps the host size after layout changes (camera and pixels agree)'
     )
     .toEqual([0, 0])
 })
+
+test('seeking forward while playing stops exactly at the target (no overshoot)', async ({ page }) => {
+  await page.goto('/')
+  await ready(page)
+  await page.getByTestId('precision').selectOption('10000')
+  await expect(page.getByTestId('status')).toContainText('10,000 digits') // new digits loaded
+  await expect(page.getByTestId('timeline')).toContainText('/ 10,001')
+  await page.getByRole('radio', { name: 'MAX' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await gotoStep(page, 5000)
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible() // stopped
+  await expect(page.getByTestId('timeline')).toContainText('5,000 / 10,001')
+  await expect(page.getByTestId('inspector-step')).toHaveText('5,000')
+})
+
+test('a manual change during a pending import cancels its verification', async ({ page }) => {
+  await page.goto('/')
+  await ready(page)
+  const file = {
+    format: 'pi-infinite-lab/experiment',
+    version: 1,
+    config: {
+      constant: 'e',
+      precision: 100000,
+      experiment: 'digit-circle-walk',
+      digitStart: 'integer',
+      parameters: {},
+    },
+    steps: 2000,
+    result: { geometrySha256: 'f'.repeat(64) },
+  }
+  await page.getByTestId('import-file').setInputFiles({
+    name: 'x.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(file)),
+  })
+  await page.getByLabel('Experiment').selectOption('circle-chain') // while e is still computing
+  await ready(page, '2.71828')
+  await expect(page.getByTestId('current-step')).toHaveText('0') // the pending seek was cancelled
+  await expect(page.getByTestId('verify')).toHaveCount(0) // no stale ✓ / ✗
+  await expect(page.getByLabel('Experiment')).toHaveValue('circle-chain')
+})

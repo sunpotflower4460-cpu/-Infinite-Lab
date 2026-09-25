@@ -3,6 +3,7 @@ import { KIND, STRIDE, type GeometryBatch } from '../geometry/batch'
 import { CHUNK_RECORDS, GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
 import { Camera } from './Camera'
+import { arcDistance, segmentDistance } from './hitTest'
 import type { Renderer } from './Renderer'
 
 export const COLORS = {
@@ -195,6 +196,8 @@ export class PixiRenderer implements Renderer {
       let dist: number
       if (kind === KIND.line) {
         dist = segmentDistance(wx, wy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!)
+      } else if (kind === KIND.arc) {
+        dist = arcDistance(wx, wy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!)
       } else {
         const c = Math.hypot(wx - d[o + 2]!, wy - d[o + 3]!)
         dist = kind === KIND.point ? c : Math.min(c, Math.abs(c - d[o + 4]!))
@@ -401,12 +404,4 @@ export class PixiRenderer implements Renderer {
       canvas.removeEventListener('dblclick', onDbl)
     })
   }
-}
-
-function segmentDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const len2 = dx * dx + dy * dy
-  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2)) : 0
-  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 }

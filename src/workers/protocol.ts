@@ -30,18 +30,21 @@ export interface SimulationInit {
 }
 
 export type SimRequest =
-  | ({ type: 'init' } & SimulationInit)
+  /** `initId` is echoed in `ready`, so the main thread can ignore readies of superseded inits. */
+  | ({ type: 'init'; initId: number } & SimulationInit)
   | { type: 'play'; stepsPerSecond: number } // Infinity = MAX
   | { type: 'setSpeed'; stepsPerSecond: number }
   | { type: 'pause' }
   | { type: 'step'; count: number }
+  /** Stop and compute exactly up to `step` (no-op if already there or beyond). */
+  | { type: 'seekTo'; step: number }
   | { type: 'reset' }
   | { type: 'inspect'; requestId: number; step: number }
   /** Main thread finished rendering a batch of the given generation (flow control). */
   | { type: 'ack'; generation: number }
 
 export type SimResponse =
-  | { type: 'ready'; totalSteps: number }
+  | { type: 'ready'; initId: number; totalSteps: number }
   | {
       type: 'batch'
       /** Incremented on every init / reset; acks for older generations are ignored. */

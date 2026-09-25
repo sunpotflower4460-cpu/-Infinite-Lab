@@ -67,6 +67,7 @@ export function Timeline() {
           inputMode="numeric"
           placeholder="go to step"
           value={goto}
+          disabled={!ready}
           onChange={(e) => setGoto(e.target.value)}
           aria-label="Go to step"
         />

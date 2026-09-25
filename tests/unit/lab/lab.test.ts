@@ -139,3 +139,16 @@ describe('experiment file import', () => {
     )
   })
 })
+
+describe('parseConfig rejects inherited / non-string ids', () => {
+  it.each([
+    [{ constant: 'toString', experiment: 'circle-chain' }, /unknown constant/],
+    [{ constant: '__proto__', experiment: 'circle-chain' }, /unknown constant/],
+    [{ constant: 5, experiment: 'circle-chain' }, /unknown constant/],
+    [{ experiment: 'constructor' }, /unknown experiment/],
+    [{ experiment: 'hasOwnProperty' }, /unknown experiment/],
+    [{ experiment: 'circle-chain', parameters: [1] }, /parameters must be an object/],
+  ])('%j', (input, message) => {
+    expect(() => parseConfig(input)).toThrow(message)
+  })
+})

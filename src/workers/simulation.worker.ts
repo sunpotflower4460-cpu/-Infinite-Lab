@@ -27,9 +27,9 @@ function measuredRate(now: number, executed: number): number {
   return (total * 1000) / span
 }
 
-function emit(steps: number): void {
+function emit(steps: number, budgeted = false): void {
   if (!sim) return
-  const r = sim.run(steps)
+  const r = sim.run(steps, budgeted)
   if (r.executed === 0 && !sim.runner.finished) return
   inFlight++
   post(
@@ -63,7 +63,7 @@ function tick(): void {
   lastTick = now
   if (inFlight < MAX_IN_FLIGHT) {
     const due = sim.stepsDue(dt)
-    if (due > 0) emit(due)
+    if (due > 0) emit(due, !Number.isFinite(sim.stepsPerSecond))
   }
   if (sim.runner.finished) {
     stop()
@@ -83,7 +83,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
         generation++
         rateWindow = []
         sim = new Simulation(msg)
-        post({ type: 'ready', totalSteps: sim.runner.totalSteps })
+        post({ type: 'ready', initId: msg.initId, totalSteps: sim.runner.totalSteps })
         break
       case 'play':
         if (!sim || sim.runner.finished) return
@@ -119,6 +119,21 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
           finished: sim.runner.finished,
         })
         break
+      case 'seekTo': {
+        if (!sim) return
+        stop()
+        // Uses the worker's own step counter: batches still in flight to the main thread
+        // cannot make the target overshoot.
+        const count = Math.max(0, Math.min(msg.step, sim.runner.totalSteps) - sim.runner.currentStep)
+        if (count > 0) emit(count)
+        post({
+          type: 'status',
+          playing: false,
+          currentStep: sim.runner.currentStep,
+          finished: sim.runner.finished,
+        })
+        break
+      }
       case 'reset':
         stop()
         inFlight = 0

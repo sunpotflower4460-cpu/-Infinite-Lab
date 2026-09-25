@@ -20,11 +20,15 @@ export interface LabConfig {
 export function parseConfig(input: unknown): LabConfig {
   if (typeof input !== 'object' || input === null) throw new Error('config must be an object')
   const o = input as Record<string, unknown>
-  const constant = typeof o.constant === 'string' ? o.constant : 'pi'
-  if (!CONSTANTS[constant]) throw new Error(`unknown constant "${String(o.constant)}"`)
+  // Own-property checks: inherited keys such as "toString" or "__proto__" are not ids.
+  const constant = o.constant === undefined ? 'pi' : o.constant
+  if (typeof constant !== 'string' || !Object.hasOwn(CONSTANTS, constant)) {
+    throw new Error(`unknown constant "${String(o.constant)}"`)
+  }
   const experiment = o.experiment
-  if (typeof experiment !== 'string' || !EXPERIMENTS[experiment])
+  if (typeof experiment !== 'string' || !Object.hasOwn(EXPERIMENTS, experiment)) {
     throw new Error(`unknown experiment "${String(experiment)}"`)
+  }
   const precision = o.precision === undefined ? 1_000 : o.precision
   if (!PRECISIONS.includes(precision as (typeof PRECISIONS)[number]))
     throw new Error(`unsupported precision ${String(precision)}`)
@@ -34,7 +38,9 @@ export function parseConfig(input: unknown): LabConfig {
 
   const def = EXPERIMENTS[experiment]!
   const given = (o.parameters ?? {}) as Record<string, unknown>
-  if (typeof given !== 'object' || given === null) throw new Error('parameters must be an object')
+  if (typeof given !== 'object' || given === null || Array.isArray(given)) {
+    throw new Error('parameters must be an object')
+  }
   const parameters: ParamValues = {}
   for (const key of Object.keys(given)) {
     if (!def.parameters.some((p) => p.key === key))
@@ -54,8 +60,4 @@ export function parseConfig(input: unknown): LabConfig {
     }
   }
   return { constant, precision: precision as number, experiment, digitStart, parameters }
-}
-
-export function sameConfig(a: LabConfig, b: LabConfig): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
 }

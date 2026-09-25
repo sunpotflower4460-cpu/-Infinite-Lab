@@ -1,5 +1,4 @@
-import { renderExpr } from '../../experiments/core/formula'
-import { getExperiment } from '../../experiments/registry'
+import { formulaLines, getExperiment } from '../../experiments/registry'
 import { useLab } from '../../state/labStore'
 import { formatExact } from '../../utils/format'
 
@@ -22,17 +21,14 @@ export function FormulaViewer({
   )
   const symbol = useLab((s) => s.constant?.symbol ?? 'C')
   const def = getExperiment(experimentId)
-  const symbols = { ...def.symbols, C: symbol }
 
   if (!trace) {
     return (
       <div className="formulas" data-testid={`formulas-${source}`}>
-        {def.formulas.map((f) => (
-          <div key={f.target} className="formula">
-            <span className="mono">
-              {symbols[f.target as keyof typeof symbols] ?? f.target} = {renderExpr(f.expr, { symbols })}
-            </span>
-            {!compact && f.note && <span className="muted note">{f.note}</span>}
+        {formulaLines(def, symbol).map((line, i) => (
+          <div key={def.formulas[i]!.target} className="formula">
+            <span className="mono">{line}</span>
+            {!compact && def.formulas[i]!.note && <span className="muted note">{def.formulas[i]!.note}</span>}
           </div>
         ))}
       </div>
