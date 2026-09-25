@@ -1,5 +1,6 @@
 import type { GeometryBatchWriter } from '../../geometry/batch'
-import { binaryConstant } from '../../math/exactReduce'
+import { COMPUTE_SYNC } from '../../math/constants'
+import { binaryConstantFor } from '../../math/exactReduce'
 import type { FormulaEvaluation } from './formula'
 import type {
   ConstantHandle,
@@ -33,7 +34,8 @@ export interface RunnerConfig {
 export class ExperimentRunner {
   private readonly experiment: GeometryExperiment
   private readonly checkpoints = new Map<number, unknown>()
-  private readonly digitView: DigitView
+  private digits: Uint8Array
+  private digitView: DigitView
   private readonly startOffset: number
   private readonly constant: ConstantHandle
   private step = 0
@@ -45,11 +47,12 @@ export class ExperimentRunner {
     readonly config: RunnerConfig,
   ) {
     const { digits } = config
+    this.digits = digits
     this.digitView = { length: digits.length, at: (i) => digits[i]! }
     this.startOffset = config.digitStart === 'fractional' ? config.integerPartLength : 0
     this.constant = {
       ...config.constant,
-      binary: binaryConstant(digits, config.integerPartLength),
+      binary: binaryConstantFor(config.constant.id, COMPUTE_SYNC[config.constant.id]!),
     }
     this.experiment = definition.create()
     this.experiment.initialize({ params: config.params })
@@ -63,7 +66,7 @@ export class ExperimentRunner {
 
   /** Total number of steps the available digits allow. */
   get totalSteps(): number {
-    return Math.max(0, this.config.digits.length - this.startOffset)
+    return Math.max(0, this.digits.length - this.startOffset)
   }
 
   get finished(): boolean {
@@ -79,7 +82,7 @@ export class ExperimentRunner {
     const digitPosition = this.digitPositionOf(step)
     return {
       index: step,
-      digit: this.config.digits[digitPosition]!,
+      digit: this.digits[digitPosition]!,
       digitPosition,
       previousDigits: this.digitView,
       constant: this.constant,
@@ -144,6 +147,22 @@ export class ExperimentRunner {
       env: { ...env },
       instructions,
     }
+  }
+
+  /**
+   * Continuous computation: replace the digits with a longer computation of the same constant.
+   * Certified digits never change, so the new sequence must start with the old one — this is
+   * checked, and a mismatch is an error rather than a silent change of the past.
+   */
+  extendDigits(digits: Uint8Array): void {
+    const old = this.digits
+    if (digits.length < old.length) throw new RangeError('extension is shorter than the current digits')
+    for (let i = 0; i < old.length; i++) {
+      if (digits[i] !== old[i])
+        throw new Error(`digit ${i} differs in the extension (${old[i]} → ${digits[i]})`)
+    }
+    this.digits = digits
+    this.digitView = { length: digits.length, at: (i) => digits[i]! }
   }
 
   reset(): void {

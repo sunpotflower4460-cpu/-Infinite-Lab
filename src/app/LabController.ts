@@ -2,12 +2,13 @@ import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment } from '../experiments/registry'
 import { defaultParams, type DigitStart, type ParamValue } from '../experiments/core/types'
 import { geometryDigest } from '../geometry/digest'
-import type { LabConfig } from '../lab/config'
+import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
+import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
-import { SPEEDS, useLab } from '../state/labStore'
+import { createLabStore, SPEEDS, useLab, type LabStore } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
 import { version as APP_VERSION } from '../../package.json'
@@ -33,38 +34,52 @@ export class LabController {
    * Work to do once the simulation for a restored / imported config is ready: run to
    * `seek` and compare the geometry digest with `verify`. Cancelled by any manual change.
    */
-  private pending: { seek: number | null; verify: string | null } | null = null
+  private pending: { seek: number | null; verify: string | null; note?: string } | null = null
+  /** Explanation attached to the next verification result (older file formats). */
+  private verifyNote: string | undefined
   /** Digest to verify once `seekTarget` has been reached. */
   private pendingVerify: string | null = null
   /** Forward seek in progress: the step we are computing up to. */
   private seekTarget: number | null = null
+  /** Request id of an in-flight continuous-computation extension (null = none). */
+  private extendRequestId: number | null = null
+  /** Compare Mode: the second lane (same experiment, another constant). */
+  peer: LabController | null = null
+  private unsubscribeMirror: (() => void) | null = null
+  /** Compare Mode playback clock (requestAnimationFrame id). */
+  private clockFrame: number | null = null
   /** Latest requested inspection, posted at most once per frame (Timeline drags). */
   private queuedInspect: number | null = null
 
-  constructor() {
+  constructor(readonly store: LabStore = useLab) {
     this.mathWorker = new Worker(new URL('../workers/math.worker.ts', import.meta.url), { type: 'module' })
     this.simWorker = new Worker(new URL('../workers/simulation.worker.ts', import.meta.url), {
       type: 'module',
     })
     this.mathWorker.onmessage = (e: MessageEvent<MathResponse>) => this.onMath(e.data)
     this.simWorker.onmessage = (e: MessageEvent<SimResponse>) => this.onSim(e.data)
-    this.renderer.onUserCamera = () => useLab.setState({ follow: false })
-    this.renderer.onPick = (step) => (step === null ? this.clearInspection() : this.inspect(step))
-    useLab.setState({ history: loadHistory(browserStorage()) })
+    this.renderer.onUserCamera = () => this.store.setState({ follow: false })
+    this.renderer.onPick = (step) => this.onPicked(step)
+    this.store.setState({ history: loadHistory(browserStorage()) })
   }
 
   async mount(host: HTMLElement): Promise<void> {
     if (this.mounted) return
     this.mounted = true
     await this.renderer.init(host)
+    this.store.setState({
+      backend: this.renderer.backend,
+      layerMode: this.renderer.layerName.startsWith('Instanced') ? 'instanced' : 'graphics',
+    })
     this.statsTimer = setInterval(
-      () => useLab.setState({ fps: this.renderer.fps, renderMs: this.renderer.lastRenderMs }),
+      () => this.store.setState({ fps: this.renderer.fps, renderMs: this.renderer.lastRenderMs }),
       500,
     )
-    this.computeConstant()
+    if (this.store.getState().phase === 'idle') this.computeConstant()
   }
 
   dispose(): void {
+    this.disableCompare()
     if (this.statsTimer) clearInterval(this.statsTimer)
     this.mathWorker.terminate()
     this.simWorker.terminate()
@@ -74,10 +89,11 @@ export class LabController {
   // ---- configuration -----------------------------------------------------------
 
   computeConstant(): void {
-    const { constantId, precision } = useLab.getState()
+    const { constantId, precision } = this.store.getState()
     const requestId = ++this.mathRequestId
+    this.extendRequestId = null // a new computation supersedes any extension
     this.pause()
-    useLab.setState({ phase: 'computing', error: null })
+    this.store.setState({ phase: 'computing', error: null, extending: null })
     this.postMath({ type: 'compute', requestId, constantId, precision })
   }
 
@@ -85,42 +101,43 @@ export class LabController {
   private cancelPending(): void {
     this.pending = null
     this.pendingVerify = null
-    useLab.setState({ verify: { status: 'idle' } })
+    this.store.setState({ verify: { status: 'idle' } })
   }
 
   setConstant(constantId: string): void {
     this.cancelPending()
-    useLab.setState({ constantId })
+    // a new constant starts from the precision the user picked, not an Infinite Mode extension
+    this.store.setState((s) => ({ constantId, precision: s.chosenPrecision }))
     this.computeConstant()
   }
 
   setPrecision(precision: number): void {
     this.cancelPending()
-    useLab.setState({ precision })
+    this.store.setState({ precision, chosenPrecision: precision })
     this.computeConstant()
   }
 
   setExperiment(experimentId: string): void {
     this.cancelPending()
     const def = getExperiment(experimentId)
-    useLab.setState({ experimentId, params: defaultParams(def.parameters) })
+    this.store.setState({ experimentId, params: defaultParams(def.parameters) })
     this.initSimulation()
   }
 
   setParam(key: string, value: ParamValue): void {
     this.cancelPending()
-    useLab.setState((s) => ({ params: { ...s.params, [key]: value } }))
+    this.store.setState((s) => ({ params: { ...s.params, [key]: value } }))
     this.initSimulation()
   }
 
   setDigitStart(digitStart: DigitStart): void {
     this.cancelPending()
-    useLab.setState({ digitStart })
+    this.store.setState({ digitStart })
     this.initSimulation()
   }
 
   currentConfig(): LabConfig {
-    const s = useLab.getState()
+    const s = this.store.getState()
     return {
       constant: s.constantId,
       precision: s.precision,
@@ -131,19 +148,20 @@ export class LabController {
   }
 
   /** Apply a full configuration, then optionally run to `steps` and verify a digest. */
-  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string): void {
+  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string, note?: string): void {
     this.pendingVerify = null
-    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null }
-    useLab.setState({
+    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null, note }
+    this.store.setState({
       constantId: config.constant,
       precision: config.precision,
+      chosenPrecision: config.precision,
       experimentId: config.experiment,
       digitStart: config.digitStart,
       params: { ...config.parameters },
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
     const loaded = this.loaded
-    const computing = useLab.getState().phase === 'computing'
+    const computing = this.store.getState().phase === 'computing'
     if (
       computing ||
       !loaded ||
@@ -165,7 +183,11 @@ export class LabController {
   // ---- playback -------------------------------------------------------------------
 
   play(): void {
-    const s = useLab.getState()
+    if (this.peer) {
+      this.startLockstep()
+      return
+    }
+    const s = this.store.getState()
     if (s.phase !== 'ready' || s.finished) return
     this.leaveView()
     this.clearVerifiedBadge()
@@ -173,34 +195,54 @@ export class LabController {
   }
 
   pause(): void {
+    this.stopLockstep()
     this.postSim({ type: 'pause' })
+    this.peer?.postSim({ type: 'pause' })
+  }
+
+  /** Whether Play would start anything (also covers Compare Mode's lockstep limits). */
+  canPlay(): boolean {
+    const a = this.store.getState()
+    if (a.phase !== 'ready') return false
+    if (!this.peer) return !a.finished
+    const b = this.peer.store.getState()
+    if (b.phase !== 'ready') return false
+    return Math.max(a.currentStep, b.currentStep) < Math.min(a.totalSteps, b.totalSteps)
   }
 
   togglePlay(): void {
-    if (useLab.getState().playing) this.pause()
-    else this.play()
+    const s = this.store.getState()
+    if (s.playing || s.lockstepPlaying) this.pause()
+    else if (this.canPlay()) this.play()
   }
 
   step(count = 1): void {
-    if (useLab.getState().phase !== 'ready') return
+    if (this.peer) {
+      this.seek(Math.max(this.store.getState().currentStep, this.peer.store.getState().currentStep) + count)
+      return
+    }
+    if (this.store.getState().phase !== 'ready') return
     this.leaveView()
     this.clearVerifiedBadge()
     this.postSim({ type: 'step', count })
   }
 
   reset(): void {
+    this.stopLockstep()
     this.cancelPending()
     this.postSim({ type: 'reset' })
+    this.peer?.reset()
   }
 
   /** A finished verification describes the geometry at that moment; drop it once it moves on. */
   private clearVerifiedBadge(): void {
-    const v = useLab.getState().verify
-    if (v.status === 'verified' || v.status === 'mismatch') useLab.setState({ verify: { status: 'idle' } })
+    const v = this.store.getState().verify
+    if (v.status === 'verified' || v.status === 'mismatch')
+      this.store.setState({ verify: { status: 'idle' } })
   }
 
   setSpeed(speedIndex: number): void {
-    useLab.setState({ speedIndex })
+    this.store.setState({ speedIndex })
     this.postSim({ type: 'setSpeed', stepsPerSecond: SPEEDS[speedIndex]!.stepsPerSecond })
   }
 
@@ -209,7 +251,14 @@ export class LabController {
    * (nothing is recomputed); going beyond the computed head computes the missing steps.
    */
   seek(step: number, options: { inspect?: boolean } = {}): void {
-    const s = useLab.getState()
+    this.stopLockstep() // a Timeline move pauses Compare playback, like it pauses a single lane
+    this.seekLane(step, options)
+    this.peer?.seekLane(step, options)
+  }
+
+  /** Seek this lane only. */
+  private seekLane(step: number, options: { inspect?: boolean } = {}): void {
+    const s = this.store.getState()
     if (s.phase !== 'ready') return
     const target = Math.max(0, Math.min(Math.round(step), s.totalSteps))
     if (target > s.currentStep) {
@@ -222,12 +271,12 @@ export class LabController {
     }
     if (s.playing) this.pause()
     const view = target === s.currentStep ? null : target
-    useLab.setState({ viewStep: view })
+    this.store.setState({ viewStep: view })
     this.renderer.setVisibleStep(view ?? Infinity)
     if (options.inspect === false) return
     if (target >= 1) this.queueInspect(target)
     else {
-      useLab.setState({ inspected: null })
+      this.store.setState({ inspected: null })
       this.renderer.setHighlight(null)
     }
   }
@@ -245,8 +294,8 @@ export class LabController {
   }
 
   private leaveView(): void {
-    if (useLab.getState().viewStep === null) return
-    useLab.setState({ viewStep: null, inspected: null })
+    if (this.store.getState().viewStep === null) return
+    this.store.setState({ viewStep: null, inspected: null })
     this.renderer.setVisibleStep(Infinity)
   }
 
@@ -256,14 +305,127 @@ export class LabController {
     this.postSim({ type: 'inspect', requestId: ++this.inspectRequestId, step })
   }
 
+  /** A click in either lane inspects that step in both (same step, different constant). */
+  private onPicked(step: number | null): void {
+    if (step !== null && typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches) {
+      ;(this.owner ?? this).store.setState({ sheet: 'inspector' })
+    }
+    const lanes = this.peer ? [this, this.peer] : this.owner ? [this.owner, this] : [this]
+    for (const lane of lanes) {
+      if (step === null) lane.clearInspection()
+      else lane.inspect(step)
+    }
+  }
+
+  /** For a Compare Mode lane: the main lab that owns it. */
+  private owner: LabController | null = null
+
+  // ---- Compare Mode -------------------------------------------------------------------
+
+  /**
+   * Compare Mode (spec §26): a second lane runs the same experiment, parameters, precision
+   * and steps with another constant. Playback advances both lanes in lockstep.
+   */
+  enableCompare(constantId: string): LabController {
+    this.stopLockstep()
+    this.setContinuous(false)
+    this.pause()
+    let peer = this.peer
+    if (!peer) {
+      peer = new LabController(createLabStore())
+      peer.owner = this
+      peer.setLayerMode(this.store.getState().layerMode)
+      this.peer = peer
+      this.unsubscribeMirror = this.store.subscribe((s, prev) => {
+        if (
+          s.experimentId !== prev.experimentId ||
+          s.params !== prev.params ||
+          s.digitStart !== prev.digitStart ||
+          s.precision !== prev.precision
+        ) {
+          this.stopLockstep()
+          this.peer?.applyConfig({
+            ...this.currentConfig(),
+            constant: this.store.getState().compareConstant ?? 'e',
+          })
+        }
+      })
+    }
+    this.store.setState({ compareConstant: constantId })
+    peer.applyConfig({ ...this.currentConfig(), constant: constantId })
+    // restart the main lane too, so both start from step 0 under identical conditions
+    this.initSimulation()
+    return peer
+  }
+
+  disableCompare(): void {
+    this.stopLockstep()
+    this.unsubscribeMirror?.()
+    this.unsubscribeMirror = null
+    const peer = this.peer
+    this.peer = null
+    peer?.dispose()
+    this.store.setState({ compareConstant: null })
+  }
+
+  private startLockstep(): void {
+    const peer = this.peer
+    if (!peer || this.clockFrame !== null) return
+    const a = this.store.getState()
+    const b = peer.store.getState()
+    if (a.phase !== 'ready' || b.phase !== 'ready') return
+    const limit = Math.min(a.totalSteps, b.totalSteps)
+    let target = Math.max(a.currentStep, b.currentStep)
+    if (target >= limit) return
+    // bring a lagging lane (e.g. after a restore that only moved one lane) to the common start
+    if (a.currentStep < target || a.viewStep !== null) this.seekLane(target)
+    if (b.currentStep < target || b.viewStep !== null) peer.seekLane(target)
+    let last = performance.now()
+    let carry = 0
+    this.store.setState({ lockstepPlaying: true })
+    const tick = () => {
+      if (!this.peer) return this.stopLockstep()
+      const now = performance.now()
+      const dt = now - last
+      last = now
+      const sa = this.store.getState()
+      const sb = this.peer.store.getState()
+      if (sa.phase !== 'ready' || sb.phase !== 'ready') return this.stopLockstep()
+      // advance only when both lanes have reached the previous target (natural back-pressure)
+      if (sa.currentStep >= target && sb.currentStep >= target) {
+        if (target >= limit) return this.stopLockstep()
+        const sps = SPEEDS[sa.speedIndex]!.stepsPerSecond
+        let inc: number
+        if (Number.isFinite(sps)) {
+          carry = Math.min(carry + (sps * dt) / 1000, sps * 0.25 + 1)
+          inc = Math.floor(carry)
+          carry -= inc
+        } else inc = 5000
+        if (inc > 0) {
+          target = Math.min(limit, target + inc)
+          this.seekLane(target)
+          this.peer.seekLane(target)
+        }
+      }
+      this.clockFrame = requestAnimationFrame(tick)
+    }
+    this.clockFrame = requestAnimationFrame(tick)
+  }
+
+  private stopLockstep(): void {
+    if (this.clockFrame !== null) cancelAnimationFrame(this.clockFrame)
+    this.clockFrame = null
+    if (this.store.getState().lockstepPlaying) this.store.setState({ lockstepPlaying: false })
+  }
+
   clearInspection(): void {
-    const s = useLab.getState()
+    const s = this.store.getState()
     if (s.viewStep !== null) {
       // keep showing the viewed step
       this.inspect(s.viewStep)
       return
     }
-    useLab.setState({ inspected: null })
+    this.store.setState({ inspected: null })
     this.renderer.setHighlight(s.currentTrace?.instructions ?? null)
   }
 
@@ -272,7 +434,7 @@ export class LabController {
   fitAll(): void {
     this.renderer.follow = true
     this.renderer.fitAll()
-    useLab.setState({ follow: true })
+    this.store.setState({ follow: true })
   }
 
   center(): void {
@@ -280,7 +442,80 @@ export class LabController {
   }
 
   setScientific(scientific: boolean): void {
-    useLab.setState({ scientific })
+    this.store.setState({ scientific })
+  }
+
+  /** Infinite Mode (spec §37): continuous computation until paused (up to MAX_PRECISION digits). */
+  setContinuous(on: boolean): void {
+    this.store.setState({ continuous: on })
+    this.postSim({ type: 'setContinuous', on })
+    if (on) this.maybeExtend()
+  }
+
+  /** Start computing more digits once half of the current ones are used (or playback waits). */
+  private maybeExtend(): void {
+    const s = this.store.getState()
+    const loaded = this.loaded
+    if (!s.continuous || s.phase !== 'ready' || this.extendRequestId !== null || !loaded) return
+    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) {
+      // No extension can come: let a waiting worker finish instead of waiting forever.
+      if (s.waiting) this.postSim({ type: 'setContinuous', on: false })
+      return
+    }
+    if (!s.waiting && s.currentStep < s.totalSteps / 2) return
+    const to = nextPrecision(loaded.precision)
+    const requestId = ++this.mathRequestId
+    this.extendRequestId = requestId
+    this.store.setState({ extending: { from: loaded.precision, to } })
+    this.postMath({ type: 'compute', requestId, constantId: loaded.constantId, precision: to })
+  }
+
+  private onExtension(msg: MathResponse): void {
+    this.extendRequestId = null
+    this.store.setState({ extending: null })
+    if (msg.type === 'error') {
+      this.endContinuous(`extension failed: ${msg.message}`)
+      return
+    }
+    const s = this.store.getState()
+    const old = this.digits
+    if (!old || !this.loaded || msg.constantId !== this.loaded.constantId || msg.constantId !== s.constantId)
+      return
+    for (let i = 0; i < old.length; i++) {
+      if (msg.digits[i] !== old[i]) {
+        this.endContinuous(`extension changed digit ${i}; refusing to continue`)
+        return
+      }
+    }
+    this.digits = msg.digits
+    this.loaded = { constantId: msg.constantId, precision: msg.precision }
+    this.store.setState({
+      precision: msg.precision,
+      constant: s.constant && {
+        ...s.constant,
+        value: msg.value,
+        digits: msg.value.replace('.', ''),
+        precision: msg.precision,
+        computeTimeMs: msg.computeTimeMs,
+      },
+    })
+    const copy = msg.digits.slice()
+    this.postSim({ type: 'extend', digits: copy }, [copy.buffer])
+  }
+
+  /** Leave Infinite Mode after a failed extension (no retry loop, no endless waiting). */
+  private endContinuous(error: string): void {
+    this.store.setState({ continuous: false, error })
+    this.postSim({ type: 'setContinuous', on: false })
+  }
+
+  setLayerMode(layerMode: 'instanced' | 'graphics'): void {
+    this.renderer.setLayerMode(layerMode)
+    // report what is actually used (instanced falls back to Graphics without WebGL)
+    this.store.setState({
+      layerMode: this.renderer.layerName.startsWith('Instanced') ? 'instanced' : 'graphics',
+    })
+    this.peer?.setLayerMode(layerMode)
   }
 
   // ---- history / export / import --------------------------------------------------------
@@ -294,13 +529,13 @@ export class LabController {
   }
 
   private reportError(what: string, err: unknown): void {
-    useLab.setState({
+    this.store.setState({
       verify: { status: 'error', message: `${what}: ${err instanceof Error ? err.message : String(err)}` },
     })
   }
 
   private async saveToHistoryUnsafe(): Promise<void> {
-    const s = useLab.getState()
+    const s = this.store.getState()
     const entry: HistoryEntry = {
       id: `${Date.now().toString(36)}-${Math.floor(performance.now()).toString(36)}`,
       timestamp: new Date().toISOString(),
@@ -308,21 +543,21 @@ export class LabController {
       steps: s.currentStep,
       digest: await geometryDigest(this.renderer.store, this.renderer.store.count),
     }
-    useLab.setState({ history: addHistory(browserStorage(), entry) })
+    this.store.setState({ history: addHistory(browserStorage(), entry) })
   }
 
   restoreHistory(id: string): void {
-    const entry = useLab.getState().history.find((e) => e.id === id)
+    const entry = this.store.getState().history.find((e) => e.id === id)
     if (entry) this.applyConfig(entry.config, entry.steps, entry.digest)
   }
 
   deleteHistory(id: string): void {
-    useLab.setState({ history: removeHistory(browserStorage(), id) })
+    this.store.setState({ history: removeHistory(browserStorage(), id) })
   }
 
   /** Build the reproducible JSON record of the current experiment (spec §28). */
   async buildExport(): Promise<ExperimentFile> {
-    const s = useLab.getState()
+    const s = this.store.getState()
     const def = getExperiment(s.experimentId)
     return {
       format: FILE_FORMAT,
@@ -362,20 +597,62 @@ export class LabController {
   private async exportJsonUnsafe(): Promise<void> {
     const file = await this.buildExport()
     const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
+    this.download(
+      blob,
+      `pi-infinite-lab_${file.config.experiment}_${file.config.constant}_${file.steps}.json`,
+    )
+  }
+
+  private fileStem(): string {
+    const s = this.store.getState()
+    const step = s.viewStep ?? s.currentStep
+    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${step}`
+  }
+
+  private download(blob: Blob, name: string): void {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pi-infinite-lab_${file.config.experiment}_${file.config.constant}_${file.steps}.json`
+    a.download = name
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  /** Export the view as PNG, or the (Timeline-visible) geometry as SVG / CSV with exact values. */
+  async exportAs(format: 'png' | 'svg' | 'csv'): Promise<void> {
+    try {
+      const s = this.store.getState()
+      const count = this.renderer.visibleRecords
+      if (format === 'png') {
+        this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
+      } else if (format === 'csv') {
+        this.download(
+          new Blob(geometryCsv(this.renderer.store, count), { type: 'text/csv' }),
+          `${this.fileStem()}.csv`,
+        )
+      } else {
+        const def = getExperiment(s.experimentId)
+        const symbol = s.constant?.symbol ?? 'C'
+        const desc = [
+          `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
+          `${def.name}, step ${s.viewStep ?? s.currentStep}`,
+          ...formulaLines(def, symbol),
+          `parameters ${JSON.stringify(s.params)}`,
+        ].join('\n')
+        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc)
+        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
+      }
+    } catch (err) {
+      this.reportError(`${format.toUpperCase()} export failed`, err)
+    }
   }
 
   importJson(text: string): void {
     try {
       const parsed = parseImport(text)
-      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest)
+      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest, parsed.compatibilityNote)
     } catch (err) {
-      useLab.setState({
+      this.store.setState({
         verify: { status: 'error', message: err instanceof Error ? err.message : String(err) },
       })
     }
@@ -386,7 +663,10 @@ export class LabController {
     if (!expected) return
     this.pendingVerify = null
     const actual = await geometryDigest(this.renderer.store, this.renderer.store.count)
-    useLab.setState({ verify: { status: actual === expected ? 'verified' : 'mismatch', expected, actual } })
+    const status = actual === expected ? 'verified' : 'mismatch'
+    const note = status === 'mismatch' ? this.verifyNote : undefined
+    this.verifyNote = undefined
+    this.store.setState({ verify: { status, expected, actual, note } })
   }
 
   // ---- worker plumbing ---------------------------------------------------------
@@ -400,7 +680,7 @@ export class LabController {
   }
 
   private initSimulation(): void {
-    const s = useLab.getState()
+    const s = this.store.getState()
     // While new digits are being computed, keep the choice in the store only;
     // onMath() starts the simulation with the new digits and the current settings.
     if (!this.digits || !s.constant || s.phase === 'computing') return
@@ -420,15 +700,20 @@ export class LabController {
       },
       [digits.buffer],
     )
+    this.postSim({ type: 'setContinuous', on: s.continuous })
   }
 
   private onMath(msg: MathResponse): void {
-    if (msg.requestId !== this.mathRequestId) return // superseded
-    if (msg.type === 'error') {
-      useLab.setState({ phase: 'error', error: msg.message })
+    if (msg.requestId === this.extendRequestId) {
+      this.onExtension(msg)
       return
     }
-    const want = useLab.getState()
+    if (msg.requestId !== this.mathRequestId) return // superseded
+    if (msg.type === 'error') {
+      this.store.setState({ phase: 'error', error: msg.message })
+      return
+    }
+    const want = this.store.getState()
     if (msg.constantId !== want.constantId || msg.precision !== want.precision) {
       this.computeConstant() // selection changed without a new request: never show mismatched digits
       return
@@ -436,7 +721,7 @@ export class LabController {
     const c = CONSTANTS[msg.constantId]!
     this.digits = msg.digits
     this.loaded = { constantId: msg.constantId, precision: msg.precision }
-    useLab.setState({
+    this.store.setState({
       phase: 'ready',
       constant: {
         id: c.id,
@@ -456,7 +741,7 @@ export class LabController {
   private resetView(): void {
     this.renderer.clear()
     this.seekTarget = null
-    useLab.setState({
+    this.store.setState({
       currentStep: 0,
       objects: 0,
       currentTrace: null,
@@ -464,6 +749,7 @@ export class LabController {
       viewStep: null,
       finished: false,
       playing: false,
+      waiting: false,
       follow: true,
       stepsPerSecond: 0,
     })
@@ -473,12 +759,15 @@ export class LabController {
     switch (msg.type) {
       case 'ready': {
         // Only the ready of the latest init counts (config changes may be queued behind it).
-        if (msg.initId !== this.initId || useLab.getState().phase === 'computing') return
+        if (msg.initId !== this.initId || this.store.getState().phase === 'computing') return
         this.resetView()
-        useLab.setState({ phase: 'ready', totalSteps: msg.totalSteps })
+        this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps })
         const pending = this.pending
         this.pending = null
-        if (pending?.verify) this.pendingVerify = pending.verify
+        if (pending?.verify) {
+          this.pendingVerify = pending.verify
+          this.verifyNote = pending.note
+        }
         if (pending?.seek) this.seek(pending.seek)
         else void this.verifyIfPending() // e.g. a 0-step file
         break
@@ -489,17 +778,18 @@ export class LabController {
       case 'batch': {
         this.renderer.append({ data: msg.data, count: msg.count })
         this.postSim({ type: 'ack', generation: msg.generation })
-        const inspected = useLab.getState().inspected
+        const inspected = this.store.getState().inspected
         if (msg.trace && !inspected) this.renderer.setHighlight(msg.trace.instructions)
-        useLab.setState({
+        this.store.setState({
           currentStep: msg.currentStep,
           totalSteps: msg.totalSteps,
           objects: this.renderer.objectCount,
-          currentTrace: msg.trace ?? useLab.getState().currentTrace,
+          currentTrace: msg.trace ?? this.store.getState().currentTrace,
           finished: msg.finished,
           stepsPerSecond: msg.stepsPerSecond,
           lastBatchMs: msg.computeMs,
         })
+        this.maybeExtend()
         if (this.seekTarget !== null && (msg.currentStep >= this.seekTarget || msg.finished)) {
           const target = this.seekTarget
           this.seekTarget = null
@@ -510,7 +800,13 @@ export class LabController {
         break
       }
       case 'status':
-        useLab.setState({ playing: msg.playing, finished: msg.finished, currentStep: msg.currentStep })
+        this.store.setState({
+          playing: msg.playing,
+          finished: msg.finished,
+          currentStep: msg.currentStep,
+          waiting: msg.waiting ?? false,
+        })
+        if (msg.waiting) this.maybeExtend()
         if (this.seekTarget !== null && !msg.playing && msg.currentStep >= this.seekTarget) {
           // seekTo found the worker already at / past the target (no batch was needed)
           const target = this.seekTarget
@@ -522,12 +818,15 @@ export class LabController {
       case 'inspect':
         if (msg.requestId !== this.inspectRequestId) return
         if (msg.trace) {
-          useLab.setState({ inspected: msg.trace })
+          this.store.setState({ inspected: msg.trace })
           this.renderer.setHighlight(msg.trace.instructions)
         }
         break
+      case 'extended':
+        this.store.setState({ totalSteps: msg.totalSteps, finished: false })
+        break
       case 'error':
-        useLab.setState({ phase: 'error', error: msg.message, playing: false })
+        this.store.setState({ phase: 'error', error: msg.message, playing: false })
         break
     }
   }

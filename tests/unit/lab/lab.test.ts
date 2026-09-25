@@ -37,7 +37,7 @@ describe('parseConfig', () => {
   it.each([
     [{ experiment: 'nope' }, /unknown experiment/],
     [{ experiment: 'circle-chain', constant: 'tau' }, /unknown constant/],
-    [{ experiment: 'circle-chain', precision: 123 }, /precision/],
+    [{ experiment: 'circle-chain', precision: 0 }, /precision/],
     [{ experiment: 'circle-chain', digitStart: 'middle' }, /digitStart/],
     [{ experiment: 'circle-chain', parameters: { radiusScale: 'big' } }, /radiusScale/],
     [{ experiment: 'circle-chain', parameters: { radiusScale: 1e9 } }, /radiusScale/],
@@ -132,7 +132,7 @@ describe('experiment file import', () => {
 
   it('rejects malformed files', () => {
     expect(() => parseImport('nope')).toThrow(/JSON/)
-    expect(() => parseImport(JSON.stringify({ ...file, version: 2 }))).toThrow(/version/)
+    expect(() => parseImport(JSON.stringify({ ...file, version: 99 }))).toThrow(/version/)
     expect(() => parseImport(JSON.stringify({ ...file, steps: -5 }))).toThrow(/steps/)
     expect(() => parseImport(JSON.stringify({ ...file, result: { geometrySha256: 'xyz' } }))).toThrow(
       /Sha256/,
@@ -150,5 +150,30 @@ describe('parseConfig rejects inherited / non-string ids', () => {
     [{ experiment: 'circle-chain', parameters: [1] }, /parameters must be an object/],
   ])('%j', (input, message) => {
     expect(() => parseConfig(input)).toThrow(message)
+  })
+})
+
+describe('file format versions', () => {
+  const base = {
+    format: FILE_FORMAT,
+    steps: 10,
+    result: { geometrySha256: 'b'.repeat(64) },
+  }
+  it('reads v1 (v0.2) files and explains possible Pi Rotation differences below 120 digits', () => {
+    const v1 = parseImport(
+      JSON.stringify({ ...base, version: 1, config: { experiment: 'pi-rotation', precision: 100 } }),
+    )
+    expect(v1.compatibilityNote).toMatch(/120/)
+    const v1ok = parseImport(
+      JSON.stringify({ ...base, version: 1, config: { experiment: 'pi-rotation', precision: 1000 } }),
+    )
+    expect(v1ok.compatibilityNote).toBeUndefined()
+    const v2 = parseImport(
+      JSON.stringify({ ...base, version: 2, config: { experiment: 'pi-rotation', precision: 100 } }),
+    )
+    expect(v2.compatibilityNote).toBeUndefined()
+    expect(() =>
+      parseImport(JSON.stringify({ ...base, version: 3, config: { experiment: 'pi-rotation' } })),
+    ).toThrow(/version/)
   })
 })

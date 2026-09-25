@@ -36,6 +36,10 @@ export type SimRequest =
   | { type: 'setSpeed'; stepsPerSecond: number }
   | { type: 'pause' }
   | { type: 'step'; count: number }
+  /** Continuous computation: wait for more digits instead of stopping at the end. */
+  | { type: 'setContinuous'; on: boolean }
+  /** Longer digits of the same constant (prefix-checked). */
+  | { type: 'extend'; digits: Uint8Array }
   /** Stop and compute exactly up to `step` (no-op if already there or beyond). */
   | { type: 'seekTo'; step: number }
   | { type: 'reset' }
@@ -59,7 +63,15 @@ export type SimResponse =
       stepsPerSecond: number
       computeMs: number
     }
-  | { type: 'status'; playing: boolean; currentStep: number; finished: boolean }
+  | {
+      type: 'status'
+      playing: boolean
+      currentStep: number
+      finished: boolean
+      /** Playing, but paused at the end of the digits until more arrive (continuous mode). */
+      waiting?: boolean
+    }
+  | { type: 'extended'; totalSteps: number }
   | { type: 'reset'; currentStep: 0 }
   | { type: 'inspect'; requestId: number; trace: StepTrace | null; error?: string }
   | { type: 'error'; message: string }

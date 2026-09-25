@@ -67,18 +67,23 @@ interface StepContext {
 
 ## GeometryBatch
 
-`src/geometry/batch.ts` — 1 レコード = float64 × 7 `[kind, step, a, b, c, d, e]`。Worker → main は `Float64Array` を transfer。float32 への丸めは GPU に渡す直前まで行わない。
+`src/geometry/batch.ts` — 1 レコード = float64 × 7 `[kind, step, a, b, c, d, e]`。円・点・線・弧の 4 種類。弧は **開始角 + 反時計回りの回転量（0〜2π）** で持ち、終了角では持たない（向きや 2π をまたぐ場合の解釈が描画・クリック判定・SVG で食い違わないようにするため）。Worker → main は `Float64Array` を transfer。float32 への丸めは GPU に渡す直前まで行わない。
 
 ## Renderer
 
 `src/renderer/PixiRenderer.ts`（`Renderer` interface を実装）
 
-- `GeometryStore` の 2,000 レコード単位のチャンクごとに 1 つの `Graphics` を構築し、以後は変換行列だけで表示（append-only）。
-- 1px の線は `pixelLine`、描画は加算合成（重なりが淡く発光）。現在 step / Inspect 中の step はアクセント色でハイライト。
+- 図形の GPU 化は `GeometryLayer`（`src/renderer/layers/`）が担当し、カメラ・入力・ピッキング・ハイライトは共通。
+  - **InstancedLayer（既定）**: 円・点・弧・線を 1 オブジェクト = 1 インスタンスの四角形として描き、フラグメントシェーダで 1px のリング・点・アンチエイリアス線を解析的に塗る。テッセレーションしない。16,384 レコード単位の GPU チャンクで、追記中のチャンクだけ再転送する。
+  - WebGL が使えない環境では Pixi が WebGPU / Canvas 2D に切り替わるため、その場合は自動で GraphicsLayer を使う（Scientific Mode の `Renderer backend` に表示。CI で WebGL なしの Chromium でも E2E を実行）。
+  - **GraphicsLayer（フォールバック）**: Pixi の `Graphics` を 2,000 レコード単位で構築（v0.2 までの方式）。Scientific Mode で切り替え可能。
+  - 実測（200,000 オブジェクト）: JS ヒープ増加 Instanced +0.7 MB / Graphics +147 MB。
+- 描画は加算合成（重なりが淡く発光）。現在 step / Inspect 中の step はアクセント色でハイライト。
 - **float32 対策**: GPU 頂点は float32 のため、チャンクは「ビュー付近の原点からの相対座標 × 2 のべき乗のズームバケット」で構築し、ズームがバケットの 0.5〜2 倍を外れるか、原点から画面 10⁶ px 以上離れたら再構築する。world 座標自体は float64 のまま。
 - **オンデマンド描画**: 図形・カメラ・ハイライトが変化したフレームだけ `app.render()` を呼ぶ。Scientific Mode の FPS は「直近 1 秒に実際に描画したフレーム数」。
 - **Timeline**: `setVisibleStep(n)` で step ≤ n のレコードだけを表示する（`GeometryStore.countUpToStep` の二分探索。境界のチャンクだけ再構築）。過去への移動は再計算しない。未計算の先への移動は worker に `step(count)` を送る。
-- **Picking**: クリック位置から許容 6px 以内の図形を線形走査で探す（円は円周または中心、線は線分への距離。円・点を線より優先）。見つかった step を `inspect` する。
+- **Picking**: クリック位置から許容 6px 以内の図形を探す（円は円周または中心、線は線分への距離。円・点を線より優先）。`GeometryStore.chunkBounds`（2,000 レコードごとの外接矩形）で遠いチャンクを飛ばす。連続する step は空間的に近いため、100 万レコードで 43 ms → 0.13 ms（全走査と同じ結果になることをテスト）。
+- **入力**: マウス（ホイール・ドラッグ・ダブルクリック）とタッチ（1 本指でパン、2 本指でピンチ `Camera.pinch`）。2 本目の指が触れた操作はクリックとして扱わない。
 - ResizeObserver でホスト要素のサイズ変化時に `app.resize()` を呼ぶ（Pixi の `resizeTo` はウィンドウのリサイズにしか反応しないため。v0.1 ではレイアウト変化後に描画中心がずれていた）。
 - Camera（`Camera.ts`）: world（y 上向き）↔ screen。ホイールはカーソル位置固定ズーム、ドラッグでパン、ダブルクリックで中心移動、Fit All で bounds に合わせ自動追従。
 
@@ -92,8 +97,25 @@ interface StepContext {
 | 100,000 step（MAX, 描画込み） | ~7.5 s                                     |
 
 ヘッドレス環境の WebGL はソフトウェアラスタライザ（SwiftShader）であり、描画時間は実 GPU より桁違いに遅い。
-**「10,000 objects @ 60fps」の目標は実 GPU 環境で確認すること**（Scientific Mode の `Renderer FPS` と `Last render call`）。
-100k〜1M objects は v0.3 で SDF インスタンス描画へ置き換えて対応する（ROADMAP 参照）。
+**フレームレート（10,000 objects @ 60fps、100 万 objects）は実 GPU 環境で確認すること**（Scientific Mode の `Renderer FPS` と `Geometry layer`）。メモリ・構築コスト・クリック判定はこの環境で測定済み（上記）。
+
+### CI（エンジン間の決定性）
+
+GitHub Actions で同じ E2E を Chromium（V8）に加えて Firefox（SpiderMonkey）と WebKit（JavaScriptCore、Safari のエンジン）で実行する。
+Node で固定したジオメトリの SHA-256 とブラウザでの Export が一致することを確認するテストを含むため、3 つの JS エンジンでビット単位の一致を検証できる。
+
+## Infinite Mode（Continuous computation）
+
+- 使用 step が桁数の半分を超えたら、`nextPrecision`（2 倍、最低 10,000、上限 1,000,000）で同じ定数を math.worker に再計算させる。
+- 結果は **既存の桁で始まること** をコントローラと `ExperimentRunner.extendDigits` の両方で検査し、simulation.worker に渡す（`extend`）。計算済みの状態・チェックポイントはそのまま使う。
+- 再生が追いついた場合、worker は停止せず `waiting` 状態で待ち、桁が届くと再開する。
+- 上限はジオメトリのメモリで決めている（1 step あたり float64 × 7 × 2 レコード ≈ 112 バイト、100 万 step で ≈ 112 MB）。
+
+## Compare Mode
+
+- `LabController` はストアを引数に取る。Compare Mode では 2 つ目の `LabController`（独自の worker・renderer・ストア）を作り、実験・パラメータ・精度・読み始め位置をメインから反映する。
+- 再生はメインスレッドの時計が両方に `seekTo(target)` を送り、両方が target に到達してから次へ進む（ロックステップ）。どちらのレーンも常に同じ step にいる。
+- 片方でクリックした step を両方で inspect する（同じ step・別の定数の比較）。
 
 ## Lab 機能（`src/lab/`）
 
@@ -103,7 +125,8 @@ interface StepContext {
 | `presets.ts`         | 組み込み Preset                                                                                                                                      |
 | `history.ts`         | localStorage 上の履歴（壊れたエントリは信頼せず捨てる）                                                                                              |
 | `experimentFile.ts`  | Export 形式 `pi-infinite-lab/experiment` v1 と Import の解析（完全な記録と、仕様 §24 形式の素の Preset の両方を受け付ける）                          |
-| `geometry/digest.ts` | ジオメトリの SHA-256                                                                                                                                 |
+| `exporters.ts`       | CSV / SVG（float64 の値をそのまま出力）                                                                                                              |
+| `geometry/digest.ts` | ジオメトリの SHA-256（WebCrypto がない環境では純 JS 実装）                                                                                           |
 
 ## ディレクトリ
 
@@ -117,8 +140,8 @@ src/
   geometry/       types.ts (instructions), batch.ts (encoding), GeometryStore.ts, digest.ts
   simulation/     Simulation.ts（再生クロック）
   workers/        math.worker.ts, simulation.worker.ts, protocol.ts
-  renderer/       Renderer.ts, PixiRenderer.ts, Camera.ts
-  components/     Canvas, Controls, Timeline, DigitStream, Inspector, FormulaViewer, Panel, History, Status
+  renderer/       Renderer.ts, PixiRenderer.ts, Camera.ts, hitTest.ts, layers/ (GeometryLayer, InstancedLayer, GraphicsLayer)
+  components/     Canvas, Compare, Controls, Timeline, DigitStream, Inspector, FormulaViewer, Panel, History, Status
   state/          labStore.ts (Zustand)
   utils/          format.ts
 tests/

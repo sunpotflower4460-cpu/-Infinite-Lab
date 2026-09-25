@@ -43,6 +43,11 @@ Inspector には、実行された式そのもの（表示用に別途書かれ�
 - **Presets**: Pi Walk / Pi Circle Chain / Pi Flower / Pi Orbit / Pi Spiral（名前はラベル、説明に規則を明記）
 - **History**: 状態をブラウザ（localStorage）に保存し、復元時に再計算してジオメトリの SHA-256 一致を検証
 - **JSON Export / Import**: 設定・step 数・式・ジオメトリの SHA-256 を含む再現可能な記録。Import すると再計算して **ビット単位で一致するか検証** し、結果（✓ / ✗）を表示
+- **PNG / SVG / CSV Export**: 表示中の画像、または Timeline 位置までの図形（SVG・CSV は float64 の値をそのまま出力）
+- **Infinite Mode（Continuous computation）**: 桁を使い切る前に倍の桁数を裏で計算して継続（最大 1,000,000 桁）。延長した桁は既存の桁と一致することを検査し、途中で過去が変わることはない
+- **Compare Mode**: 同じ実験・パラメータ・精度を別の定数（例: π と e）で並べて、同じ step で揃えて実行。片方の図形をクリックすると両方で同じ step を表示
+- **モバイル**: キャンバス優先の 1 画面レイアウト、Setup / Inspector は下から出るシート、2 本指でピンチズーム
+- **描画**: 既定は GPU インスタンス描画（SDF）。20 万オブジェクトで JS メモリ +0.7 MB（テッセレーション方式は +147 MB）。Scientific Mode で切り替え可能
 
 ## 使い方
 
@@ -51,18 +56,24 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-| 操作                                 |                                                     |
-| ------------------------------------ | --------------------------------------------------- |
-| ▶ / ⏸ (Space)                        | 再生 / 一時停止                                     |
-| ⏭ (→)                                | 1 ステップ実行                                      |
-| ⏮ (R)                                | リセット                                            |
-| 1x / 10x / 100x / 1,000x / MAX       | 10 / 100 / 1,000 / 10,000 steps/s / 可能な限り速く  |
-| ホイール / ドラッグ / ダブルクリック | ズーム / パン / その位置を中心に                    |
-| Fit All                              | 全体表示 + 自動追従                                 |
-| Inspector の `Inspect`               | 任意の実行済みステップを再実行して説明を表示        |
-| Scientific Mode                      | アルゴリズム・精度・計算時間・FPS・演算の種類を表示 |
+| 操作                                             |                                                                      |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| ▶ / ⏸ (Space)                                    | 再生 / 一時停止                                                      |
+| ⏭ (→)                                            | 1 ステップ実行                                                       |
+| ⏮ (R)                                            | リセット                                                             |
+| 1x / 10x / 100x / 1,000x / MAX                   | 10 / 100 / 1,000 / 10,000 steps/s / 可能な限り速く                   |
+| ∞ Infinite                                       | 桁を使い切ったら追加で計算して続ける（最大 1,000,000 桁）            |
+| Timeline / `go to step`                          | 過去の状態を表示（再計算なし）、または指定 step まで計算             |
+| ホイール / ドラッグ / ダブルクリック             | ズーム / パン / その位置を中心に                                     |
+| 2 本指（スマホ）                                 | ピンチでズーム・移動                                                 |
+| Canvas の図形をクリック / Inspector の `Inspect` | その step を再実行して digit・式・値を表示                           |
+| Fit All                                          | 全体表示 + 自動追従                                                  |
+| Compare                                          | 別の定数で同じ実験を並べて、同じ step で揃えて実行                   |
+| Preset / History                                 | 組み込み設定の読み込み / 状態の保存と復元（復元時に SHA-256 で検証） |
+| Export JSON / PNG / SVG / CSV, Import JSON       | 再現可能な記録・画像・図形データ / 読み込んで再計算・検証            |
+| Scientific Mode                                  | アルゴリズム・精度・計算時間・FPS・演算の種類・描画方式を表示        |
 
-定数は π / e / √2 / φ、Precision は 100 / 1,000 / 10,000 / 100,000 桁。計算した桁を使い切ると停止し、その旨を表示します（桁を捏造して続けることはしません）。
+定数は π / e / √2 / φ、Precision は 100 / 1,000 / 10,000 / 100,000 桁。計算した桁を使い切ると停止し、その旨を表示します（桁を捏造して続けることはしません）。Infinite Mode では、実際に追加で計算した桁で続けます。
 
 ## 数学的真正性の方針
 
@@ -79,7 +90,8 @@ npm run dev          # http://localhost:5173
 
 ```bash
 npm run test        # unit tests (Vitest)
-npm run test:e2e    # E2E (Playwright)
+npm run test:e2e    # E2E (Playwright, Chromium)
+PW_ALL_BROWSERS=1 npx playwright test   # Firefox / WebKit も（CI で実行）
 npm run typecheck
 npm run lint
 npm run build

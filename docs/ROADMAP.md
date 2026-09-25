@@ -41,14 +41,23 @@
 
 設計メモ: クリック判定は空間索引ではなく線形走査にした（20 万レコードでもクリック 1 回あたり数 ms）。1M objects 規模では v0.3 でグリッド索引を追加する。
 
-## v0.3 — スケールとモバイル
+## v0.3 — スケールとモバイル ✅
 
-- SDF 円のインスタンス描画シェーダ（100k → 1M objects）、カメラ相対座標
-- Continuous computation（Infinite Mode）: 桁を使い切ったら追加計算して継続
-- クリック判定の空間索引（グリッドハッシュ）
-- Compare Mode（π vs e を同一条件で並列表示）
-- モバイル: Inspector を Bottom Sheet に
-- PNG / SVG / CSV Export
+| 項目                                                       | 状態 | 根拠                                                      |
+| ---------------------------------------------------------- | ---- | --------------------------------------------------------- |
+| SDF インスタンス描画（既定）+ Graphics フォールバック      | ✅   | `src/renderer/layers/`, E2E（両方式で同じ図形）           |
+| クリック判定の空間索引（チャンク外接矩形）                 | ✅   | 100 万レコードで 43 ms → 0.13 ms, `geometryStore.test.ts` |
+| Infinite Mode（Continuous computation、最大 1,000,000 桁） | ✅   | `continuous.test.ts`, E2E（延長後の Export を再現検証）   |
+| Compare Mode（ロックステップ）                             | ✅   | E2E                                                       |
+| モバイル（Bottom Sheet、1 画面、ピンチ）                   | ✅   | E2E（390×844 タッチ）, `camera.test.ts`                   |
+| PNG / SVG / CSV Export                                     | ✅   | `exporters.test.ts`, E2E                                  |
+| Firefox / WebKit での E2E（エンジン間の決定性）            | ✅   | CI `cross-engine` ジョブ                                  |
+
+### 実機でのみ確認できること
+
+- 実 GPU でのフレームレート（10,000 / 100,000 / 1,000,000 objects）
+- スマートフォンでの操作感（ピンチ、シート）、発熱・電池
+- iOS Safari 実機（WebKit エンジンでの一致は CI で確認）
 
 ## v0.4+ — 研究機能
 
@@ -56,5 +65,6 @@
 - Mathematical Microscope（step 範囲の拡大表示）
 - Pattern Detection（周期性・対称性・密度・クラスタ）
 - Reference Reconstruction（候補式の実行と比較、検証されるまで「再現」と断定しない）
-- AI Mathematical Observer（AI の推測と数学的証明を明確に区別して表示）
+- AI Mathematical Observer（AI の推測と数学的証明を明確に区別して表示）: DeepSeek API（OpenAI 互換）。キーは利用者が入力し、その端末のブラウザにだけ保存（サーバー不要・アプリに埋め込まない）
+- Reference Reconstruction の素材: 動画をリポジトリの `reference/` に置いてもらい、フレームを切り出して配置規則を推定する
 - MP4 / WebM Export、クラウド保存

@@ -55,7 +55,7 @@ export function Inspector() {
                   `line(${formatExact(g.x1)}, ${formatExact(g.y1)} → ${formatExact(g.x2)}, ${formatExact(g.y2)})`}
                 {g.type === 'point' && `point(${formatExact(g.x)}, ${formatExact(g.y)})`}
                 {g.type === 'arc' &&
-                  `arc(${formatExact(g.x)}, ${formatExact(g.y)}, r=${formatExact(g.radius)})`}
+                  `arc(${formatExact(g.x)}, ${formatExact(g.y)}, r=${formatExact(g.radius)}, start=${formatExact(g.startAngle)}, sweep=${formatExact(g.sweep)})`}
               </li>
             ))}
           </ul>

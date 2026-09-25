@@ -32,7 +32,7 @@ export type Phase = 'idle' | 'computing' | 'ready' | 'error'
 export type VerifyState =
   | { status: 'idle' }
   | { status: 'running'; expected: string }
-  | { status: 'verified' | 'mismatch'; expected: string; actual: string }
+  | { status: 'verified' | 'mismatch'; expected: string; actual: string; note?: string }
   | { status: 'error'; message: string }
 
 export interface LabState {
@@ -40,6 +40,8 @@ export interface LabState {
   error: string | null
   constantId: string
   precision: number
+  /** The precision the user picked (Infinite Mode may extend `precision` beyond it). */
+  chosenPrecision: number
   constant: ConstantInfo | null
   experimentId: string
   params: ParamValues
@@ -59,6 +61,22 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** Narrow screens: which bottom sheet is open. */
+  sheet: 'setup' | 'inspector' | null
+  /** Compare Mode: constant of the second lane (null = off). Main lab only. */
+  compareConstant: string | null
+  /** Compare Mode playback (both lanes advanced in lockstep by the main thread). */
+  lockstepPlaying: boolean
+  /** Infinite Mode: keep computing more digits instead of stopping at the end. */
+  continuous: boolean
+  /** A longer computation of the constant is in progress (continuous mode). */
+  extending: { from: number; to: number } | null
+  /** Playing but paused at the end of the digits until the extension arrives. */
+  waiting: boolean
+  /** GPU geometry layer: instanced SDF (default) or tessellated Graphics. */
+  layerMode: 'instanced' | 'graphics'
+  /** Pixi backend actually in use ('webgl' | 'webgpu' | 'canvas'). */
+  backend: string | null
   follow: boolean
   fps: number
   renderMs: number
@@ -66,30 +84,50 @@ export interface LabState {
   lastBatchMs: number
 }
 
-export const useLab = create<LabState>(() => ({
-  phase: 'idle',
-  error: null,
-  constantId: 'pi',
-  precision: 1_000,
-  constant: null,
-  experimentId: digitCircleWalk.id,
-  params: defaultParams(digitCircleWalk.parameters),
-  digitStart: 'integer',
-  playing: false,
-  finished: false,
-  currentStep: 0,
-  totalSteps: 0,
-  objects: 0,
-  speedIndex: 1,
-  currentTrace: null,
-  inspected: null,
-  viewStep: null,
-  history: [],
-  verify: { status: 'idle' },
-  scientific: false,
-  follow: true,
-  fps: 0,
-  renderMs: 0,
-  stepsPerSecond: 0,
-  lastBatchMs: 0,
-}))
+function initialState(): LabState {
+  return {
+    phase: 'idle',
+    error: null,
+    constantId: 'pi',
+    precision: 1_000,
+    chosenPrecision: 1_000,
+    constant: null,
+    experimentId: digitCircleWalk.id,
+    params: defaultParams(digitCircleWalk.parameters),
+    digitStart: 'integer',
+    playing: false,
+    finished: false,
+    currentStep: 0,
+    totalSteps: 0,
+    objects: 0,
+    speedIndex: 1,
+    currentTrace: null,
+    inspected: null,
+    viewStep: null,
+    history: [],
+    verify: { status: 'idle' },
+    scientific: false,
+    sheet: null,
+    compareConstant: null,
+    lockstepPlaying: false,
+    continuous: false,
+    extending: null,
+    waiting: false,
+    layerMode: 'instanced',
+    backend: null,
+    follow: true,
+    fps: 0,
+    renderMs: 0,
+    stepsPerSecond: 0,
+    lastBatchMs: 0,
+  }
+}
+
+/** A lab store (one per lane: the main lab, and the second lane of Compare Mode). */
+export function createLabStore() {
+  return create<LabState>(() => initialState())
+}
+export type LabStore = ReturnType<typeof createLabStore>
+
+/** The main lab's store. */
+export const useLab = createLabStore()

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
+import { MAX_PRECISION } from '../../lab/config'
 
 /**
  * Timeline (spec §18): 0 ──●── total. Dragging back hides later geometry without
@@ -13,6 +14,10 @@ export function Timeline() {
   const totalSteps = useLab((s) => s.totalSteps)
   const viewStep = useLab((s) => s.viewStep)
   const finished = useLab((s) => s.finished)
+  const continuous = useLab((s) => s.continuous)
+  const extending = useLab((s) => s.extending)
+  const waiting = useLab((s) => s.waiting)
+  const precision = useLab((s) => s.constant?.precision ?? 0)
   const ready = useLab((s) => s.phase === 'ready')
   const position = viewStep ?? currentStep
   const [drag, setDrag] = useState<number | null>(null)
@@ -77,7 +82,18 @@ export function Timeline() {
           Latest
         </button>
       )}
-      {finished && viewStep === null && <span className="badge">all computed digits consumed</span>}
+      {extending && (
+        <span className="badge" data-testid="extending">
+          {waiting ? 'waiting for digits: ' : ''}computing {formatInt(extending.to)} digits…
+        </span>
+      )}
+      {finished && viewStep === null && !extending && (
+        <span className="badge">
+          {continuous && precision >= MAX_PRECISION
+            ? `${formatInt(MAX_PRECISION)}-digit limit reached`
+            : 'all computed digits consumed'}
+        </span>
+      )}
     </div>
   )
 }

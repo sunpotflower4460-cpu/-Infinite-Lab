@@ -51,3 +51,43 @@ describe('geometryDigest', () => {
 })
 
 const PINNED = 'fb95870d0cff6d0c7913adf09bc10f041a593f29f7a1debe29f3bb2e8edd1d38'
+
+describe('chunk bounding boxes (pick index)', () => {
+  it('visit exactly the records a full scan would find near a point', () => {
+    const store = storeFor(4000) // 8,000 records, 4 chunks
+    for (const [x, y, tol] of [
+      [0, 0, 1],
+      [50, -20, 5],
+      [1e6, 1e6, 1],
+    ] as const) {
+      const near = new Set<number>()
+      store.forEachRecordNear(x, y, tol, store.count, (d, o) => {
+        if (Math.hypot(d[o + 2]! - x, d[o + 3]! - y) <= tol) near.add(d[o + 1]!)
+      })
+      const all = new Set<number>()
+      store.forEachRecord(store.count, (d, o) => {
+        if (Math.hypot(d[o + 2]! - x, d[o + 3]! - y) <= tol) all.add(d[o + 1]!)
+      })
+      expect([...near].sort()).toEqual([...all].sort())
+    }
+    expect(store.chunkBounds).toHaveLength(store.chunks.length)
+  })
+})
+
+describe('boundsUpTo', () => {
+  it('matches a direct scan for every prefix length across chunks', () => {
+    const store = storeFor(2600) // 5,200 records, 3 chunks
+    for (const n of [1, 7, 1999, 2000, 2001, 4000, 4001, 5200]) {
+      let minX = Infinity
+      let maxX = -Infinity
+      store.forEachRecord(n, (d, o) => {
+        const r = d[o] === 1 ? d[o + 4]! : 0 // circle radius
+        const xs = d[o] === 2 ? [d[o + 2]!, d[o + 4]!] : [d[o + 2]! - r, d[o + 2]! + r]
+        minX = Math.min(minX, ...xs)
+        maxX = Math.max(maxX, ...xs)
+      })
+      const b = store.boundsUpTo(n)!
+      expect([b.minX, b.maxX]).toEqual([minX, maxX])
+    }
+  })
+})

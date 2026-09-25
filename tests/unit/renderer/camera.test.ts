@@ -43,3 +43,22 @@ describe('Camera', () => {
     expect([c.cx, c.cy]).toEqual([0, 0])
   })
 })
+
+describe('Camera.pinch', () => {
+  it('keeps the world point under the fingers and zooms by the distance ratio', () => {
+    const c = new Camera()
+    c.setViewport(400, 800)
+    c.zoom = 3
+    c.centerOn(5, 5)
+    const a0 = { x: 100, y: 300 }
+    const b0 = { x: 200, y: 400 }
+    const under = c.screenToWorld(150, 350) // midpoint
+    const a1 = { x: 60, y: 260 } // fingers spread ×1.8 and move by (+10, −5)
+    const b1 = { x: 240, y: 430 }
+    c.pinch(a0, b0, a1, b1)
+    expect(c.zoom).toBeCloseTo(3 * (Math.hypot(180, 170) / Math.hypot(100, 100)), 12)
+    const [wx, wy] = c.screenToWorld(150, 345)
+    expect(wx).toBeCloseTo(under[0], 10)
+    expect(wy).toBeCloseTo(under[1], 10)
+  })
+})

@@ -15,7 +15,9 @@ export function segmentDistance(
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 }
 
-/** Distance to an arc from `start` to `end` (radians, counter-clockwise), or to its nearer end. */
+const TAU = 2 * Math.PI
+
+/** Distance to the arc from `start` counter-clockwise through `sweep` (0…2π), or to its nearer end. */
 export function arcDistance(
   px: number,
   py: number,
@@ -23,14 +25,13 @@ export function arcDistance(
   cy: number,
   r: number,
   start: number,
-  end: number,
+  sweep: number,
 ): number {
-  const sweep = end - start
-  const TAU = 2 * Math.PI
-  if (Math.abs(sweep) >= TAU) return Math.abs(Math.hypot(px - cx, py - cy) - r)
-  const a = Math.atan2(py - cy, px - cx)
-  const rel = (((a - Math.min(start, end)) % TAU) + TAU) % TAU
-  if (rel <= Math.abs(sweep)) return Math.abs(Math.hypot(px - cx, py - cy) - r)
+  const radial = Math.abs(Math.hypot(px - cx, py - cy) - r)
+  if (sweep >= TAU) return radial
+  const rel = (((Math.atan2(py - cy, px - cx) - start) % TAU) + TAU) % TAU
+  if (rel <= sweep) return radial
+  const end = start + sweep
   const d1 = Math.hypot(px - (cx + r * Math.cos(start)), py - (cy + r * Math.sin(start)))
   const d2 = Math.hypot(px - (cx + r * Math.cos(end)), py - (cy + r * Math.sin(end)))
   return Math.min(d1, d2)

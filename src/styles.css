@@ -133,6 +133,8 @@ input:not([type]) {
   grid-area: bottom;
   border-top: 1px solid var(--line);
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* never grow wider than the screen */
+  min-width: 0;
   gap: 8px;
   padding: 10px 16px 12px;
 }
@@ -406,6 +408,7 @@ input:not([type]) {
   font-size: 15px;
 }
 .digit-stream {
+  min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -524,28 +527,200 @@ input:not([type]) {
 
 /* ---- narrow screens: canvas first, panels below --------------------------- */
 
+.infinite {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* ---- lanes / compare --------------------------------------------------------- */
+
+.lanes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.lanes > .stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.lanes > .stage + .stage {
+  border-left: 1px solid var(--line);
+}
+.lane-readout {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  padding: 8px 10px;
+  background: rgba(10, 12, 20, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
+  pointer-events: auto;
+}
+.lane-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lane-head select {
+  width: auto;
+}
+.lane-symbol {
+  font-family: serif;
+  font-size: 18px;
+  color: var(--accent);
+}
+.lane-trace {
+  display: grid;
+  gap: 1px;
+  color: var(--muted);
+}
+.lane-eval {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- narrow screens (spec §30): canvas first, panels as bottom sheets ---------- */
+
+.mobile-only {
+  display: none;
+}
+
 @media (max-width: 900px) {
-  .lab {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto 56vh auto auto auto;
-    grid-template-areas: 'top' 'center' 'bottom' 'right' 'left';
-    height: auto;
-    min-height: 100%;
+  .mobile-only {
+    display: flex;
   }
-  .left,
-  .right {
-    border: 0;
-    border-top: 1px solid var(--line);
+  .lab {
+    /* exactly one screen: the canvas takes whatever the controls leave */
+    height: 100dvh;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'top' 'center' 'bottom';
+  }
+  .topbar {
+    overflow-x: auto;
+    gap: 8px;
+    padding: 8px 12px;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .topbar button,
+  .topbar .toggle {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .file-actions {
+    flex-wrap: nowrap;
+    margin-left: 0;
+  }
+  .topbar h1 {
+    white-space: nowrap;
   }
   .topbar .tagline {
     display: none;
   }
+  .lanes {
+    flex-direction: column;
+  }
+  .lanes > .stage + .stage {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .bottom {
+    padding: 8px 12px 10px;
+  }
+  .bottom-formula {
+    display: none;
+  }
   .status-strip {
-    gap: 16px;
+    gap: 14px;
+  }
+  .reading-value {
+    font-size: 13px;
+  }
+  .mobile-bar {
+    gap: 6px;
+  }
+  .mobile-bar button {
+    flex: 1;
+  }
+  /* bottom sheets */
+  .left,
+  .right {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    max-height: 72vh;
+    overflow: auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+    transform: translateY(105%);
+    transition: transform 0.2s ease;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.5);
+  }
+  .lab[data-sheet='setup'] .left,
+  .lab[data-sheet='inspector'] .right {
+    transform: none;
+  }
+  .sheet-header {
+    position: relative;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px 6px;
+    background: var(--panel);
+    z-index: 1;
+  }
+  .sheet-header button {
+    margin-left: auto;
+  }
+  .sheet-handle {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    width: 36px;
+    height: 3px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    background: rgba(0, 0, 0, 0.35);
   }
   .scientific {
     min-width: 0;
     right: 10px;
     top: 48px;
+  }
+  .topbar {
+    min-width: 0;
+  }
+  .controls {
+    gap: 8px;
+  }
+  .timeline {
+    flex-basis: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .timeline-track {
+    flex-basis: 100%;
+  }
+  .timeline-goto input {
+    width: 96px;
+  }
+  .digit-place {
+    display: none;
   }
 }

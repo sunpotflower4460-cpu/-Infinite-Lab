@@ -1,24 +1,23 @@
-import { Application, Container, Graphics } from 'pixi.js'
-import { KIND, STRIDE, type GeometryBatch } from '../geometry/batch'
-import { CHUNK_RECORDS, GeometryStore } from '../geometry/GeometryStore'
+import { Application, Container, Graphics, Rectangle } from 'pixi.js'
+import { KIND, type GeometryBatch } from '../geometry/batch'
+import { GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
 import { Camera } from './Camera'
 import { arcDistance, segmentDistance } from './hitTest'
+import { COLORS, type GeometryLayer, type LayerFrame } from './layers/GeometryLayer'
+import { GraphicsLayer } from './layers/GraphicsLayer'
+import { InstancedLayer } from './layers/InstancedLayer'
 import type { Renderer } from './Renderer'
 
-export const COLORS = {
-  background: 0x04050a,
-  line: 0x7f9cff,
-  circle: 0xe8eeff,
-  point: 0xe8eeff,
-  highlight: 0xffc766,
-}
+export { COLORS }
+export type LayerMode = 'instanced' | 'graphics'
 
 /**
  * PixiJS (WebGL) renderer.
  *
- * - Geometry lives in append-only chunks (GeometryStore); each chunk becomes one
- *   Graphics object that is tessellated once and then only transformed.
+ * - Geometry lives in the append-only GeometryStore; a GeometryLayer turns it into GPU
+ *   geometry: instanced SDF quads (default) or tessellated Graphics (fallback).
+ * - Camera, input, picking and highlighting are shared by both layers.
  * - Precision: GPU vertices are float32, so chunks are built relative to an origin near the
  *   view and pre-scaled by a power-of-two "zoom bucket". They are rebuilt when the zoom
  *   leaves the bucket or the view drifts far from the origin. World data stays float64.
@@ -33,11 +32,8 @@ export class PixiRenderer implements Renderer {
 
   private app: Application | undefined
   private world = new Container()
-  private chunkLayer = new Container()
+  private layer: GeometryLayer = new InstancedLayer()
   private highlight = new Graphics()
-  private chunkGraphics: Graphics[] = []
-  /** Records currently tessellated in each chunk Graphics. */
-  private builtLength: number[] = []
   /** Only records with step ≤ visibleStep are shown (Timeline). */
   private visibleStep = Infinity
   private highlightData: GeometryInstruction[] | null = null
@@ -75,12 +71,14 @@ export class PixiRenderer implements Renderer {
       preference: 'webgl',
     })
     this.app = app
+    // Without WebGL, Pixi falls back to WebGPU or Canvas 2D; the instanced layer needs WebGL
+    // shaders, so use the tessellated Graphics layer there.
+    if (!this.instancedSupported && this.layer instanceof InstancedLayer) this.setLayerMode('graphics')
     app.canvas.style.display = 'block'
     app.canvas.setAttribute('data-testid', 'lab-canvas')
     host.appendChild(app.canvas)
 
-    this.chunkLayer.blendMode = 'add'
-    this.world.addChild(this.chunkLayer, this.highlight)
+    this.world.addChild(this.layer.container, this.highlight)
     app.stage.addChild(this.world)
 
     this.camera.setViewport(host.clientWidth, host.clientHeight)
@@ -111,9 +109,7 @@ export class PixiRenderer implements Renderer {
 
   clear(): void {
     this.store.clear()
-    for (const g of this.chunkGraphics) g.destroy()
-    this.chunkGraphics = []
-    this.builtLength = []
+    this.layer.clear()
     this.visibleStep = Infinity
     this.highlightData = null
     this.highlight.clear()
@@ -141,6 +137,7 @@ export class PixiRenderer implements Renderer {
   destroy(): void {
     this.resizeObserver?.disconnect()
     for (const f of this.cleanup) f()
+    this.layer.destroy()
     if (this.rebuildTimer) clearTimeout(this.rebuildTimer)
     this.app?.destroy(true, { children: true })
     this.app = undefined
@@ -148,18 +145,65 @@ export class PixiRenderer implements Renderer {
 
   // ---------------------------------------------------------------------------
 
+  /** The current view (camera, Timeline cut-off, highlight) as a PNG at device resolution. */
+  async snapshotPng(): Promise<Blob> {
+    const app = this.app
+    if (!app) throw new Error('renderer not ready')
+    this.frame() // bring GPU geometry up to date
+    const canvas = app.renderer.extract.canvas({
+      target: app.stage,
+      frame: new Rectangle(0, 0, this.camera.width, this.camera.height),
+      clearColor: COLORS.background,
+    }) as HTMLCanvasElement
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'),
+    )
+  }
+
+  /** Records currently shown (Timeline cut-off applied). */
+  get visibleRecords(): number {
+    return this.visibleCount()
+  }
+
+  /** Name of the active geometry layer (Scientific Mode). */
+  get layerName(): string {
+    return this.layer.name
+  }
+
+  /** Active Pixi backend: 'webgl', 'webgpu' or 'canvas' (null before init). */
+  get backend(): string | null {
+    return this.app ? this.app.renderer.name : null
+  }
+
+  /** The instanced SDF layer uses WebGL shaders. */
+  get instancedSupported(): boolean {
+    return this.backend === null || this.backend === 'webgl'
+  }
+
+  /** Switch between instanced SDF and tessellated Graphics rendering. */
+  setLayerMode(mode: LayerMode): void {
+    const next = mode === 'graphics' || !this.instancedSupported ? new GraphicsLayer() : new InstancedLayer()
+    this.world.removeChild(this.layer.container)
+    this.layer.destroy()
+    this.layer = next
+    this.world.addChildAt(next.container, 0)
+    this.needsFullRebuild = true
+  }
+
+  private layerFrame(): LayerFrame {
+    return {
+      bucket: this.bucket,
+      originX: this.originX,
+      originY: this.originY,
+      pxPerUnit: this.camera.zoom / this.bucket,
+    }
+  }
+
   private frame(): void {
     const full = this.needsFullRebuild
     this.needsFullRebuild = false
     if (full) this.rebuildView()
-    const visible = this.visibleCount()
-    for (let i = 0; i < this.store.chunks.length; i++) {
-      const want = Math.max(0, Math.min(this.store.chunkLength(i), visible - i * CHUNK_RECORDS))
-      if (full || want !== (this.builtLength[i] ?? -1)) {
-        this.buildChunk(i, want)
-        this.needsRender = true
-      }
-    }
+    if (this.layer.sync(this.store, this.visibleCount(), this.layerFrame(), full)) this.needsRender = true
     const now = performance.now()
     if (this.needsRender && this.app) {
       this.needsRender = false
@@ -191,7 +235,7 @@ export class PixiRenderer implements Renderer {
     // Score = distance, with path lines penalised so circles/points win when both are in range.
     let bestScore = Infinity
     let bestStep: number | null = null
-    this.store.forEachRecord(this.visibleCount(), (d, o) => {
+    this.store.forEachRecordNear(wx, wy, tol, this.visibleCount(), (d, o) => {
       const kind = d[o]
       let dist: number
       if (kind === KIND.line) {
@@ -220,6 +264,7 @@ export class PixiRenderer implements Renderer {
     const drift = Math.max(Math.abs(c.cx - this.originX), Math.abs(c.cy - this.originY)) * c.zoom
     if (ratio > 2 || ratio < 0.5 || drift > 1e6) this.scheduleRebuild()
     this.world.scale.set(c.zoom / this.bucket, -c.zoom / this.bucket)
+    this.layer.setPixelScale(c.zoom / this.bucket)
     this.world.position.set(
       c.width / 2 + (this.originX - c.cx) * c.zoom,
       c.height / 2 + (c.cy - this.originY) * c.zoom,
@@ -245,66 +290,6 @@ export class PixiRenderer implements Renderer {
     this.applyCamera()
   }
 
-  private buildChunk(index: number, n: number): void {
-    this.builtLength[index] = n
-    let g = this.chunkGraphics[index]
-    if (!g) {
-      g = new Graphics()
-      this.chunkGraphics[index] = g
-      this.chunkLayer.addChild(g)
-    }
-    g.clear()
-    g.visible = n > 0
-    if (n === 0) return
-    const data = this.store.chunks[index]!
-    const s = this.bucket
-    const ox = this.originX
-    const oy = this.originY
-    const tx = (x: number) => (x - ox) * s
-    const ty = (y: number) => (y - oy) * s
-
-    let hasLines = false
-    for (let i = 0; i < n; i++) {
-      const o = i * STRIDE
-      if (data[o] === KIND.line) {
-        g.moveTo(tx(data[o + 2]!), ty(data[o + 3]!)).lineTo(tx(data[o + 4]!), ty(data[o + 5]!))
-        hasLines = true
-      }
-    }
-    if (hasLines) g.stroke({ width: 1, color: COLORS.line, alpha: 0.28, pixelLine: true })
-
-    let hasCircles = false
-    for (let i = 0; i < n; i++) {
-      const o = i * STRIDE
-      const kind = data[o]
-      if (kind === KIND.circle && data[o + 4]! > 0) {
-        g.circle(tx(data[o + 2]!), ty(data[o + 3]!), data[o + 4]! * s)
-        hasCircles = true
-      } else if (kind === KIND.arc) {
-        const cx = tx(data[o + 2]!)
-        const cy = ty(data[o + 3]!)
-        const r = data[o + 4]! * s
-        g.moveTo(cx + r * Math.cos(data[o + 5]!), cy + r * Math.sin(data[o + 5]!))
-        g.arc(cx, cy, r, data[o + 5]!, data[o + 6]!)
-        hasCircles = true
-      }
-    }
-    if (hasCircles) g.stroke({ width: 1, color: COLORS.circle, alpha: 0.5, pixelLine: true })
-
-    // Points and zero-radius circles: a dot of constant screen size.
-    const dot = (1.2 * s) / this.camera.zoom
-    let hasPoints = false
-    for (let i = 0; i < n; i++) {
-      const o = i * STRIDE
-      const kind = data[o]
-      if (kind === KIND.point || (kind === KIND.circle && data[o + 4]! <= 0)) {
-        g.circle(tx(data[o + 2]!), ty(data[o + 3]!), dot)
-        hasPoints = true
-      }
-    }
-    if (hasPoints) g.fill({ color: COLORS.point, alpha: 0.7 })
-  }
-
   private drawHighlight(): void {
     const g = this.highlight
     g.clear()
@@ -317,8 +302,12 @@ export class PixiRenderer implements Renderer {
     const px = s / this.camera.zoom // one screen pixel in chunk units
     for (const it of items) {
       if (it.type === 'line') g.moveTo(tx(it.x1), ty(it.y1)).lineTo(tx(it.x2), ty(it.y2))
-      else if (it.type === 'circle' || it.type === 'arc') {
+      else if (it.type === 'circle') {
         if (it.radius > 0) g.circle(tx(it.x), ty(it.y), it.radius * s)
+      } else if (it.type === 'arc' && it.radius > 0) {
+        const r = it.radius * s
+        g.moveTo(tx(it.x) + r * Math.cos(it.startAngle), ty(it.y) + r * Math.sin(it.startAngle))
+        g.arc(tx(it.x), ty(it.y), r, it.startAngle, it.startAngle + it.sweep)
       }
     }
     g.stroke({ width: 2 * px, color: COLORS.highlight, alpha: 0.95 })
@@ -336,11 +325,12 @@ export class PixiRenderer implements Renderer {
   }
 
   private bindInput(canvas: HTMLCanvasElement): void {
-    let dragging = false
-    let lastX = 0
-    let lastY = 0
+    // Active pointers (mouse or fingers), in canvas-local coordinates.
+    const pointers = new Map<number, { x: number; y: number }>()
     let downX = 0
     let downY = 0
+    /** A second finger touched during this gesture: never treat it as a click. */
+    let multi = false
     const local = (e: MouseEvent) => {
       const r = canvas.getBoundingClientRect()
       return [e.clientX - r.left, e.clientY - r.top] as const
@@ -357,28 +347,46 @@ export class PixiRenderer implements Renderer {
       this.applyCamera()
     }
     const onDown = (e: PointerEvent) => {
-      dragging = true
-      lastX = downX = e.clientX
-      lastY = downY = e.clientY
+      const [x, y] = local(e)
+      pointers.set(e.pointerId, { x, y })
+      if (pointers.size === 1) {
+        downX = x
+        downY = y
+        multi = false
+      } else multi = true
       canvas.setPointerCapture(e.pointerId)
     }
     const onMove = (e: PointerEvent) => {
-      if (!dragging) return
-      const dx = e.clientX - lastX
-      const dy = e.clientY - lastY
-      if (dx === 0 && dy === 0) return
-      lastX = e.clientX
-      lastY = e.clientY
-      this.camera.panBy(dx, dy)
+      const prev = pointers.get(e.pointerId)
+      if (!prev) return
+      const [x, y] = local(e)
+      if (x === prev.x && y === prev.y) return
+      if (pointers.size >= 2) {
+        const [idA, idB] = [...pointers.keys()]
+        const a0 = { ...pointers.get(idA!)! }
+        const b0 = { ...pointers.get(idB!)! }
+        pointers.set(e.pointerId, { x, y })
+        this.camera.pinch(a0, b0, pointers.get(idA!)!, pointers.get(idB!)!)
+      } else {
+        pointers.set(e.pointerId, { x, y })
+        this.camera.panBy(x - prev.x, y - prev.y)
+      }
       user()
       this.applyCamera()
     }
     const onUp = (e: PointerEvent) => {
-      if (dragging && Math.hypot(e.clientX - downX, e.clientY - downY) < 4 && this.onPick) {
-        const [sx, sy] = local(e)
-        this.onPick(this.pick(sx, sy))
+      if (!pointers.has(e.pointerId)) return
+      const [x, y] = local(e)
+      pointers.delete(e.pointerId)
+      if (pointers.size === 0 && !multi && Math.hypot(x - downX, y - downY) < 4 && this.onPick) {
+        this.onPick(this.pick(x, y))
       }
-      dragging = false
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
+    }
+    const onCancel = (e: PointerEvent) => {
+      // the browser took the gesture over: forget the pointer, never treat it as a click
+      if (!pointers.delete(e.pointerId)) return
+      multi = true
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
     }
     const onDbl = (e: MouseEvent) => {
@@ -392,7 +400,7 @@ export class PixiRenderer implements Renderer {
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('dblclick', onDbl)
     canvas.style.touchAction = 'none'
     this.cleanup.push(() => {
@@ -400,7 +408,7 @@ export class PixiRenderer implements Renderer {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('dblclick', onDbl)
     })
   }

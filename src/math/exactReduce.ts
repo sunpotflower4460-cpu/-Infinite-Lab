@@ -15,6 +15,29 @@ export const CONSTANT_BITS = 448
 /** Decimals of the constant used for exact reduction (≈ 10^-120 relative accuracy). */
 export const CONSTANT_DECIMALS = 120
 
+const cache = new Map<string, BinaryConstant>()
+
+/**
+ * The constant with exactly CONSTANT_DECIMALS certified decimals, independent of the precision
+ * chosen for the digit stream — so rules using C (e.g. Pi Rotation) give the same result at
+ * any precision and across Infinite Mode extensions.
+ */
+export function binaryConstantFor(
+  id: string,
+  compute: (precision: number) => { digits: string; integerPartLength: number },
+): BinaryConstant {
+  let c = cache.get(id)
+  if (!c) {
+    const r = compute(CONSTANT_DECIMALS)
+    c = binaryConstant(
+      Uint8Array.from(r.digits, (ch) => ch.charCodeAt(0) - 48),
+      r.integerPartLength,
+    )
+    cache.set(id, c)
+  }
+  return c
+}
+
 export function binaryConstant(digits: ArrayLike<number>, integerPartLength: number): BinaryConstant {
   const decimals = Math.min(CONSTANT_DECIMALS, digits.length - integerPartLength)
   let s = ''

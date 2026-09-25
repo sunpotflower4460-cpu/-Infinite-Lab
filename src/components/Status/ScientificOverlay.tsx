@@ -1,3 +1,4 @@
+import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
 
@@ -11,6 +12,8 @@ export function ScientificOverlay() {
   const sps = useLab((s) => s.stepsPerSecond)
   const batchMs = useLab((s) => s.lastBatchMs)
   const renderMs = useLab((s) => s.renderMs)
+  const layerMode = useLab((s) => s.layerMode)
+  const backend = useLab((s) => s.backend)
   if (!on) return null
   const rows: [string, string][] = [
     ['Algorithm', constant?.algorithm ?? '—'],
@@ -22,6 +25,7 @@ export function ScientificOverlay() {
     ['Iteration', formatInt(step)],
     ['Steps / s', formatInt(sps)],
     ['Batch compute', `${batchMs.toFixed(2)} ms`],
+    ['Renderer backend', backend ?? '—'],
     ['Renderer FPS (on demand)', String(fps)],
     ['Last render call', `${renderMs.toFixed(1)} ms`],
     ['Objects', formatInt(objects)],
@@ -42,6 +46,19 @@ export function ScientificOverlay() {
           </div>
         ))}
       </dl>
+      <label className="sci-row">
+        <span className="muted">Geometry layer</span>
+        <select
+          value={layerMode}
+          onChange={(e) => getController().setLayerMode(e.target.value as 'instanced' | 'graphics')}
+          aria-label="Geometry layer"
+        >
+          <option value="instanced" disabled={backend !== null && backend !== 'webgl'}>
+            Instanced SDF{backend !== null && backend !== 'webgl' ? ' (needs WebGL)' : ''}
+          </option>
+          <option value="graphics">Graphics (tessellated)</option>
+        </select>
+      </label>
     </div>
   )
 }

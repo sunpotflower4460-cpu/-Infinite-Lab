@@ -94,7 +94,7 @@ y[n]  = y[n−1] + sin(θ[n]) × distance
 | drawPath     | true |            |
 
 **累積誤差を避ける設計**: 仕様の「各 step で angle += π × modifier」をそのまま float64 で足し続けると、丸め誤差が蓄積する（100 万 step で 10⁻⁹ 度以上ずれることをテストで確認）。
-本実装は向き φ[n] を毎回 n から直接求める。n と modifier は float64 の値を **その値が表す有理数として厳密に** 扱い、C は計算済みの桁から 120 桁（448 bit）を BigInt 固定小数点で持つ。積と `mod 360` を BigInt で計算し、最後の結果だけ float64 に丸める（`src/math/exactReduce.ts`、式木ノード `constMod`）。
+本実装は向き φ[n] を毎回 n から直接求める。n と modifier は float64 の値を **その値が表す有理数として厳密に** 扱い、C は（選んだ精度に関係なく）120 桁（448 bit）を BigInt 固定小数点で持つ。積と `mod 360` を BigInt で計算し、最後の結果だけ float64 に丸める（`src/math/exactReduce.ts`、式木ノード `constMod`）。
 C = π, modifier = 1 なら 1 step あたり π 度（≈ 3.14159°）回る。360/π は有理数でないため、軌跡は閉じない。
 
 ## Reference Reconstruction（v0.4+）
