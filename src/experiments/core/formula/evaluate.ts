@@ -1,4 +1,5 @@
 import { detCos, detSin } from '../../../math/detmath'
+import { constantProductMod, type BinaryConstant } from '../../../math/exactReduce'
 import type { Expr, FormulaSet } from './ast'
 
 /**
@@ -10,7 +11,12 @@ export type Env = Record<string, number>
 
 export const FLOAT64_PI = Math.PI
 
-export function evaluate(e: Expr, env: Env): number {
+/** Extra evaluation context: the selected constant in high precision (for `constMod`). */
+export interface EvalContext {
+  constant?: BinaryConstant
+}
+
+export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
   switch (e.kind) {
     case 'num':
       return e.value
@@ -22,14 +28,22 @@ export function evaluate(e: Expr, env: Env): number {
       return value
     }
     case 'neg':
-      return -evaluate(e.arg, env)
+      return -evaluate(e.arg, env, ctx)
+    case 'constMod': {
+      if (!ctx.constant) throw new Error('constMod needs the high-precision constant')
+      return constantProductMod(
+        e.factors.map((f) => evaluate(f, env, ctx)),
+        ctx.constant,
+        e.modulus,
+      )
+    }
     case 'call': {
-      const a = evaluate(e.arg, env)
+      const a = evaluate(e.arg, env, ctx)
       return e.fn === 'sin' ? detSin(a) : detCos(a)
     }
     case 'bin': {
-      const l = evaluate(e.left, env)
-      const r = evaluate(e.right, env)
+      const l = evaluate(e.left, env, ctx)
+      const r = evaluate(e.right, env, ctx)
       switch (e.op) {
         case '+':
           return l + r
@@ -49,7 +63,7 @@ export function evaluate(e: Expr, env: Env): number {
 }
 
 /** Evaluate formulas in order; each result is written back into `env` under its target name. */
-export function evaluateSet(set: FormulaSet, env: Env): Env {
-  for (const f of set) env[f.target] = evaluate(f.expr, env)
+export function evaluateSet(set: FormulaSet, env: Env, ctx: EvalContext = {}): Env {
+  for (const f of set) env[f.target] = evaluate(f.expr, env, ctx)
   return env
 }

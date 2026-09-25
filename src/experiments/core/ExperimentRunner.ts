@@ -1,6 +1,8 @@
 import type { GeometryBatchWriter } from '../../geometry/batch'
+import { binaryConstant } from '../../math/exactReduce'
 import type { FormulaEvaluation } from './formula'
 import type {
+  ConstantHandle,
   DigitStart,
   DigitView,
   ExperimentDefinition,
@@ -33,6 +35,7 @@ export class ExperimentRunner {
   private readonly checkpoints = new Map<number, unknown>()
   private readonly digitView: DigitView
   private readonly startOffset: number
+  private readonly constant: ConstantHandle
   private step = 0
   /** Explanation of the most recent step, filled by `advance(…, traceLast = true)`. */
   lastTrace: StepTrace | undefined
@@ -44,6 +47,10 @@ export class ExperimentRunner {
     const { digits } = config
     this.digitView = { length: digits.length, at: (i) => digits[i]! }
     this.startOffset = config.digitStart === 'fractional' ? config.integerPartLength : 0
+    this.constant = {
+      ...config.constant,
+      binary: binaryConstant(digits, config.integerPartLength),
+    }
     this.experiment = definition.create()
     this.experiment.initialize({ params: config.params })
     this.checkpoints.set(0, this.experiment.snapshot())
@@ -75,7 +82,7 @@ export class ExperimentRunner {
       digit: this.config.digits[digitPosition]!,
       digitPosition,
       previousDigits: this.digitView,
-      constant: this.config.constant,
+      constant: this.constant,
     }
   }
 

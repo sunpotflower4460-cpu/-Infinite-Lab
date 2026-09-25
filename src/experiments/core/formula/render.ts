@@ -46,6 +46,8 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
         return `−${wrap(x.arg, 3, false)}`
       case 'call':
         return `${x.fn}(${go(x.arg)})`
+      case 'constMod':
+        return `(${[...x.factors.map((f) => wrap(f, 2, false)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
       case 'bin': {
         if (isImplicitProduct(x)) return `${go(x.left)}π`
         const p = PRECEDENCE[x.op]
