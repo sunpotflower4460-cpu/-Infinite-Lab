@@ -1,0 +1,471 @@
+:root {
+  --bg: #04050a;
+  --panel: #0a0c14;
+  --panel-2: #0f121c;
+  --line: #1c2130;
+  --text: #d9def0;
+  --muted: #6d758c;
+  --accent: #ffc766; /* the constant, the current digit, the highlighted step */
+  --cool: #7f9cff;
+  --danger: #ff7a7a;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 11px;
+}
+.accent {
+  color: var(--accent);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+button {
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: #33405e;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+select,
+input[type='number'],
+input:not([type]) {
+  padding: 4px 8px;
+  width: 100%;
+}
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- layout ---------------------------------------------------------------- */
+
+.lab {
+  display: grid;
+  height: 100%;
+  grid-template-columns: 240px minmax(0, 1fr) 320px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'top top top'
+    'left center right'
+    'bottom bottom bottom';
+}
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.topbar h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.topbar .tagline {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.left {
+  grid-area: left;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+}
+.center {
+  grid-area: center;
+  position: relative;
+  min-height: 0;
+}
+.right {
+  grid-area: right;
+  border-left: 1px solid var(--line);
+  overflow: auto;
+}
+.bottom {
+  grid-area: bottom;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding: 10px 16px 12px;
+}
+
+/* ---- panels ---------------------------------------------------------------- */
+
+.side-panel,
+.inspector {
+  padding: 12px 14px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.inspector {
+  gap: 10px;
+}
+.side-panel section {
+  display: grid;
+  gap: 6px;
+}
+.side-panel p {
+  margin: 0;
+}
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.panel-subtitle {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.param {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+.param input[type='checkbox'] {
+  justify-self: end;
+}
+.radio-row {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.badge {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--accent);
+  text-transform: none;
+}
+
+.readings {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.readings dt {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  align-self: center;
+}
+.readings dd {
+  margin: 0;
+  word-break: break-all;
+}
+.readings dd.big {
+  font-size: 22px;
+  line-height: 1.1;
+  color: var(--accent);
+}
+.instructions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  display: grid;
+  gap: 4px;
+}
+.inspect-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.inspector p {
+  margin: 0;
+}
+
+/* ---- formulas ------------------------------------------------------------- */
+
+.formulas {
+  display: grid;
+  gap: 6px;
+}
+.formula {
+  display: grid;
+  gap: 1px;
+}
+.formula .symbolic {
+  color: var(--text);
+}
+.formula .substituted {
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+.formula .substituted strong {
+  color: var(--accent);
+  font-weight: 500;
+}
+.formula .note {
+  font-size: 11px;
+}
+.bottom-formula .formulas {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 6px 24px;
+}
+
+/* ---- stage ------------------------------------------------------------------ */
+
+.stage,
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+}
+.stage-canvas {
+  overflow: hidden;
+  cursor: grab;
+}
+.stage-canvas:active {
+  cursor: grabbing;
+}
+.stage-tools {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+.stage-tools button {
+  background: rgba(10, 12, 20, 0.8);
+  font-size: 11px;
+}
+.stage-hint {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 10px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.stage-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  color: var(--muted);
+  pointer-events: none;
+}
+.scientific {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 10px 12px;
+  background: rgba(10, 12, 20, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 300px;
+  font-size: 11px;
+}
+.scientific dl {
+  margin: 6px 0 0;
+  display: grid;
+  gap: 2px;
+}
+.sci-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sci-row dt {
+  color: var(--muted);
+}
+.sci-row dd {
+  margin: 0;
+}
+
+/* ---- bottom ------------------------------------------------------------------ */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.transport {
+  display: flex;
+  gap: 6px;
+}
+.transport button {
+  width: 38px;
+  height: 32px;
+  font-size: 14px;
+}
+.transport button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.speeds {
+  display: flex;
+  gap: 4px;
+}
+.speeds button {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 8px;
+}
+.progress {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.progress-track {
+  flex: 1;
+  height: 2px;
+  background: var(--line);
+  border-radius: 1px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+}
+.status-strip {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+.reading {
+  display: grid;
+}
+.reading-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.reading-value {
+  font-size: 15px;
+}
+.digit-stream {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.constant-symbol {
+  font-family: serif;
+  font-size: 20px;
+  color: var(--accent);
+}
+.digits {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+.digit.consumed {
+  color: #9aa3bd;
+}
+.digit:not(.consumed):not(.current) {
+  color: #3c4458;
+}
+.digit.current {
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.digit-place {
+  font-size: 11px;
+}
+.error {
+  color: var(--danger);
+  font-family: var(--mono);
+}
+
+/* ---- narrow screens: canvas first, panels below --------------------------- */
+
+@media (max-width: 900px) {
+  .lab {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 56vh auto auto auto;
+    grid-template-areas: 'top' 'center' 'bottom' 'right' 'left';
+    height: auto;
+    min-height: 100%;
+  }
+  .left,
+  .right {
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+  .topbar .tagline {
+    display: none;
+  }
+  .status-strip {
+    gap: 16px;
+  }
+  .scientific {
+    min-width: 0;
+    right: 10px;
+    top: 48px;
+  }
+}
