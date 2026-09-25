@@ -71,6 +71,9 @@ export class PixiRenderer implements Renderer {
       preference: 'webgl',
     })
     this.app = app
+    // Without WebGL, Pixi falls back to WebGPU or Canvas 2D; the instanced layer needs WebGL
+    // shaders, so use the tessellated Graphics layer there.
+    if (!this.instancedSupported && this.layer instanceof InstancedLayer) this.setLayerMode('graphics')
     app.canvas.style.display = 'block'
     app.canvas.setAttribute('data-testid', 'lab-canvas')
     host.appendChild(app.canvas)
@@ -167,9 +170,19 @@ export class PixiRenderer implements Renderer {
     return this.layer.name
   }
 
+  /** Active Pixi backend: 'webgl', 'webgpu' or 'canvas' (null before init). */
+  get backend(): string | null {
+    return this.app ? this.app.renderer.name : null
+  }
+
+  /** The instanced SDF layer uses WebGL shaders. */
+  get instancedSupported(): boolean {
+    return this.backend === null || this.backend === 'webgl'
+  }
+
   /** Switch between instanced SDF and tessellated Graphics rendering. */
   setLayerMode(mode: LayerMode): void {
-    const next = mode === 'graphics' ? new GraphicsLayer() : new InstancedLayer()
+    const next = mode === 'graphics' || !this.instancedSupported ? new GraphicsLayer() : new InstancedLayer()
     this.world.removeChild(this.layer.container)
     this.layer.destroy()
     this.layer = next

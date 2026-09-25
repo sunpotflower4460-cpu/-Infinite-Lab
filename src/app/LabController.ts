@@ -67,6 +67,10 @@ export class LabController {
     if (this.mounted) return
     this.mounted = true
     await this.renderer.init(host)
+    this.store.setState({
+      backend: this.renderer.backend,
+      layerMode: this.renderer.layerName.startsWith('Instanced') ? 'instanced' : 'graphics',
+    })
     this.statsTimer = setInterval(
       () => this.store.setState({ fps: this.renderer.fps, renderMs: this.renderer.lastRenderMs }),
       500,
@@ -496,8 +500,11 @@ export class LabController {
   }
 
   setLayerMode(layerMode: 'instanced' | 'graphics'): void {
-    this.store.setState({ layerMode })
     this.renderer.setLayerMode(layerMode)
+    // report what is actually used (instanced falls back to Graphics without WebGL)
+    this.store.setState({
+      layerMode: this.renderer.layerName.startsWith('Instanced') ? 'instanced' : 'graphics',
+    })
     this.peer?.setLayerMode(layerMode)
   }
 

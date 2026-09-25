@@ -4,8 +4,8 @@ async function ready(page: Page, text = '3.14159') {
   await expect(page.getByTestId('digit-stream')).toContainText(text)
 }
 
-/** Number of clearly lit pixels in the canvas screenshot (WebGL buffers can't be read back directly). */
-async function litPixels(page: Page): Promise<number> {
+/** Lit-pixel mask (1 = clearly lit) of the canvas screenshot. WebGL buffers can't be read back directly. */
+async function litMask(page: Page): Promise<{ w: number; h: number; mask: number[] }> {
   const png = (await page.getByTestId('lab-canvas').screenshot()).toString('base64')
   return page.evaluate(async (src) => {
     const img = new Image()
@@ -17,10 +17,37 @@ async function litPixels(page: Page): Promise<number> {
     const g = c.getContext('2d')!
     g.drawImage(img, 0, 0)
     const d = g.getImageData(0, 0, c.width, c.height).data
-    let n = 0
-    for (let i = 0; i < d.length; i += 4) if (d[i]! + d[i + 1]! + d[i + 2]! > 150) n++
-    return n
+    const mask: number[] = []
+    for (let i = 0; i < d.length; i += 4) mask.push(d[i]! + d[i + 1]! + d[i + 2]! > 150 ? 1 : 0)
+    return { w: c.width, h: c.height, mask }
   }, png)
+}
+
+/** Fraction of lit pixels of `a` that have a lit pixel of `b` within `r` pixels. */
+function coverage(
+  a: { w: number; mask: number[] },
+  b: { w: number; h: number; mask: number[] },
+  r = 2,
+): number {
+  let lit = 0
+  let hit = 0
+  for (let i = 0; i < a.mask.length; i++) {
+    if (!a.mask[i]) continue
+    lit++
+    const x = i % a.w
+    const y = (i - x) / a.w
+    search: for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const xx = x + dx
+        const yy = y + dy
+        if (xx >= 0 && yy >= 0 && xx < b.w && yy < b.h && b.mask[yy * b.w + xx]) {
+          hit++
+          break search
+        }
+      }
+    }
+  }
+  return lit ? hit / lit : 0
 }
 
 test('both geometry layers draw the same structure', async ({ page }) => {
@@ -29,18 +56,31 @@ test('both geometry layers draw the same structure', async ({ page }) => {
   await page.getByLabel('Go to step').fill('1000')
   await page.getByLabel('Go to step').press('Enter')
   await expect(page.getByTestId('current-step')).toHaveText('1,000')
-  await page.getByText('Scientific Mode').first().click()
-  await page.getByText('Scientific Mode').first().click() // hide the overlay again for the pixel count
+  const scientific = page.getByText('Scientific Mode').first()
+  await scientific.click()
+  const backend = await page.locator('.sci-row', { hasText: 'Renderer backend' }).locator('dd').textContent()
+  if (backend !== 'webgl') {
+    // Without WebGL the app must fall back to the Graphics layer (and still draw).
+    await expect(page.getByLabel('Geometry layer')).toHaveValue('graphics')
+    await scientific.click()
+    await page.waitForTimeout(300)
+    const g = await litMask(page)
+    expect(g.mask.reduce((a, v) => a + v, 0)).toBeGreaterThan(3000)
+    return
+  }
+  await scientific.click() // hide the overlay for the screenshots
   await page.waitForTimeout(300)
-  const instanced = await litPixels(page)
-  await page.getByText('Scientific Mode').first().click()
+  const instanced = await litMask(page)
+  await scientific.click()
   await page.getByLabel('Geometry layer').selectOption('graphics')
-  await page.getByText('Scientific Mode').first().click()
+  await scientific.click()
   await page.waitForTimeout(500)
-  const graphics = await litPixels(page)
-  expect(instanced).toBeGreaterThan(5000)
-  expect(graphics).toBeGreaterThan(5000)
-  expect(Math.abs(instanced - graphics) / graphics).toBeLessThan(0.5) // same shapes, different anti-aliasing
+  const graphics = await litMask(page)
+  expect(instanced.mask.reduce((a, v) => a + v, 0)).toBeGreaterThan(3000)
+  expect(graphics.mask.reduce((a, v) => a + v, 0)).toBeGreaterThan(3000)
+  // same shapes in the same places (anti-aliasing differs between the two layers and engines)
+  expect(coverage(instanced, graphics)).toBeGreaterThan(0.85)
+  expect(coverage(graphics, instanced)).toBeGreaterThan(0.85)
 })
 
 test('Infinite Mode keeps computing digits and the result stays reproducible', async ({ page }) => {

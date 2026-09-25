@@ -28,6 +28,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], launchOptions: executablePath ? { executablePath } : {} },
     },
+    // Chromium without WebGL (Pixi falls back to another backend): exercises the fallback path.
+    ...(process.env.PW_NO_WEBGL
+      ? [
+          {
+            name: 'chromium-no-webgl',
+            use: {
+              ...devices['Desktop Chrome'],
+              launchOptions: { ...(executablePath ? { executablePath } : {}), args: ['--disable-3d-apis'] },
+            },
+          },
+        ]
+      : []),
     ...(all
       ? [
           { name: 'firefox', use: { ...devices['Desktop Firefox'] } },

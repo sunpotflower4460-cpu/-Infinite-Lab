@@ -75,6 +75,8 @@ export interface LabState {
   waiting: boolean
   /** GPU geometry layer: instanced SDF (default) or tessellated Graphics. */
   layerMode: 'instanced' | 'graphics'
+  /** Pixi backend actually in use ('webgl' | 'webgpu' | 'canvas'). */
+  backend: string | null
   follow: boolean
   fps: number
   renderMs: number
@@ -112,6 +114,7 @@ function initialState(): LabState {
     extending: null,
     waiting: false,
     layerMode: 'instanced',
+    backend: null,
     follow: true,
     fps: 0,
     renderMs: 0,

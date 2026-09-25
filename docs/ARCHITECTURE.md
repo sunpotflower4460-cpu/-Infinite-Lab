@@ -75,6 +75,7 @@ interface StepContext {
 
 - 図形の GPU 化は `GeometryLayer`（`src/renderer/layers/`）が担当し、カメラ・入力・ピッキング・ハイライトは共通。
   - **InstancedLayer（既定）**: 円・点・弧・線を 1 オブジェクト = 1 インスタンスの四角形として描き、フラグメントシェーダで 1px のリング・点・アンチエイリアス線を解析的に塗る。テッセレーションしない。16,384 レコード単位の GPU チャンクで、追記中のチャンクだけ再転送する。
+  - WebGL が使えない環境では Pixi が WebGPU / Canvas 2D に切り替わるため、その場合は自動で GraphicsLayer を使う（Scientific Mode の `Renderer backend` に表示。CI で WebGL なしの Chromium でも E2E を実行）。
   - **GraphicsLayer（フォールバック）**: Pixi の `Graphics` を 2,000 レコード単位で構築（v0.2 までの方式）。Scientific Mode で切り替え可能。
   - 実測（200,000 オブジェクト）: JS ヒープ増加 Instanced +0.7 MB / Graphics +147 MB。
 - 描画は加算合成（重なりが淡く発光）。現在 step / Inspect 中の step はアクセント色でハイライト。
