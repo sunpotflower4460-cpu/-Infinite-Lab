@@ -1,9 +1,16 @@
+import { statSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
-// Uses the system Chromium when available (CI images / cloud containers) so no browser download is needed.
+// Prefer an explicitly given Chromium, or a pre-installed one next to the browsers path whose
+// revision may differ from this Playwright version (e.g. cloud containers). Otherwise use
+// Playwright's own managed browser.
+const preinstalled = process.env.PLAYWRIGHT_BROWSERS_PATH
+  ? join(process.env.PLAYWRIGHT_BROWSERS_PATH, 'chromium')
+  : undefined
 const executablePath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
-  (process.env.PLAYWRIGHT_BROWSERS_PATH ? '/opt/pw-browsers/chromium' : undefined)
+  (preinstalled && statSync(preinstalled, { throwIfNoEntry: false })?.isFile() ? preinstalled : undefined)
 
 export default defineConfig({
   testDir: 'tests/e2e',

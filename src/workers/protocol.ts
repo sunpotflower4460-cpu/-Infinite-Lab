@@ -37,13 +37,15 @@ export type SimRequest =
   | { type: 'step'; count: number }
   | { type: 'reset' }
   | { type: 'inspect'; requestId: number; step: number }
-  /** Main thread finished rendering a batch (flow control). */
-  | { type: 'ack' }
+  /** Main thread finished rendering a batch of the given generation (flow control). */
+  | { type: 'ack'; generation: number }
 
 export type SimResponse =
   | { type: 'ready'; totalSteps: number }
   | {
       type: 'batch'
+      /** Incremented on every init / reset; acks for older generations are ignored. */
+      generation: number
       data: Float64Array
       count: number
       currentStep: number

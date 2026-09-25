@@ -12,6 +12,7 @@ let playing = false
 let timer: ReturnType<typeof setTimeout> | undefined
 let lastTick = 0
 let inFlight = 0
+let generation = 0
 let rateWindow: { t: number; steps: number }[] = []
 
 function post(msg: SimResponse, transfer: Transferable[] = []): void {
@@ -34,6 +35,7 @@ function emit(steps: number): void {
   post(
     {
       type: 'batch',
+      generation,
       data: r.batch.data,
       count: r.batch.count,
       currentStep: sim.runner.currentStep,
@@ -78,6 +80,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
       case 'init':
         stop()
         inFlight = 0
+        generation++
         sim = new Simulation(msg)
         post({ type: 'ready', totalSteps: sim.runner.totalSteps })
         break
@@ -118,6 +121,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
       case 'reset':
         stop()
         inFlight = 0
+        generation++
         sim?.reset()
         post({ type: 'reset', currentStep: 0 })
         break
@@ -130,7 +134,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
         }
         break
       case 'ack':
-        inFlight = Math.max(0, inFlight - 1)
+        if (msg.generation === generation) inFlight = Math.max(0, inFlight - 1)
         break
     }
   } catch (err) {

@@ -142,7 +142,9 @@ export class LabController {
 
   private initSimulation(): void {
     const s = useLab.getState()
-    if (!this.digits || !s.constant) return
+    // While new digits are being computed, keep the choice in the store only;
+    // onMath() starts the simulation with the new digits and the current settings.
+    if (!this.digits || !s.constant || s.phase === 'computing') return
     const c = CONSTANTS[s.constantId]!
     // Copy: the main thread keeps its digits for display; the worker owns its own buffer.
     const digits = this.digits.slice()
@@ -169,6 +171,7 @@ export class LabController {
     const c = CONSTANTS[msg.constantId]!
     this.digits = msg.digits
     useLab.setState({
+      phase: 'ready',
       constant: {
         id: c.id,
         name: c.name,
@@ -201,6 +204,7 @@ export class LabController {
   private onSim(msg: SimResponse): void {
     switch (msg.type) {
       case 'ready':
+        if (useLab.getState().phase === 'computing') return // superseded by a pending computation
         this.resetView()
         useLab.setState({ phase: 'ready', totalSteps: msg.totalSteps })
         break
@@ -209,7 +213,7 @@ export class LabController {
         break
       case 'batch': {
         this.renderer.append({ data: msg.data, count: msg.count })
-        this.postSim({ type: 'ack' })
+        this.postSim({ type: 'ack', generation: msg.generation })
         const inspected = useLab.getState().inspected
         if (msg.trace && !inspected) this.renderer.setHighlight(msg.trace.instructions)
         useLab.setState({

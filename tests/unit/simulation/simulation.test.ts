@@ -25,6 +25,13 @@ describe('Simulation clock', () => {
     expect(total).toBeLessThanOrEqual(10)
   })
 
+  it('caps catch-up after a long pause to 0.25 s of steps', () => {
+    const s = sim()
+    s.stepsPerSecond = 10_000
+    expect(s.stepsDue(10_000)).toBe(2_500)
+    expect(s.stepsDue(0)).toBe(0)
+  })
+
   it('MAX requests the per-tick cap', () => {
     const s = sim()
     s.stepsPerSecond = Infinity

@@ -14,7 +14,10 @@ export function Controls() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return
+      // A focused button already reacts to Space/Enter itself; don't toggle twice.
+      if (t instanceof HTMLButtonElement && (e.code === 'Space' || e.code === 'Enter')) return
       if (e.code === 'Space') {
         e.preventDefault()
         c.togglePlay()

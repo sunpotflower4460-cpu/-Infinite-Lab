@@ -41,11 +41,11 @@ export class Simulation {
   /** Steps due after `dtMs` of playback. */
   stepsDue(dtMs: number): number {
     if (!Number.isFinite(this.stepsPerSecond)) return MAX_STEPS_PER_TICK
-    this.carry += (this.stepsPerSecond * dtMs) / 1000
+    // Avoid a burst after the tab was throttled: never owe more than 0.25 s of steps.
+    const cap = Math.max(1, this.stepsPerSecond * 0.25)
+    this.carry = Math.min(this.carry + (this.stepsPerSecond * dtMs) / 1000, cap)
     const due = Math.floor(this.carry)
     this.carry -= due
-    // Avoid a burst after the tab was throttled: never accumulate more than 0.25 s.
-    this.carry = Math.min(this.carry, this.stepsPerSecond * 0.25)
     return Math.min(due, MAX_STEPS_PER_TICK)
   }
 
