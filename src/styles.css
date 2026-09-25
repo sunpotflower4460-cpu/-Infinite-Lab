@@ -585,6 +585,42 @@ input:not([type]) {
   text-overflow: ellipsis;
 }
 
+/* ---- observer ------------------------------------------------------------------ */
+
+.observer {
+  padding: 4px 14px 16px;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
+.facts {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  word-break: break-all;
+}
+.facts.stale {
+  opacity: 0.6;
+}
+.observer-row {
+  display: flex;
+  gap: 6px;
+}
+.observer-row select {
+  flex: 1;
+}
+.ai-answer {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed #5a4a2c;
+  border-radius: 8px;
+}
+.ai-text {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
 /* ---- narrow screens (spec §30): canvas first, panels as bottom sheets ---------- */
 
 .mobile-only {

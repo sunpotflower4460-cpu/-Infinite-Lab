@@ -28,6 +28,7 @@
 | **01 Digit Circle Walk** | `angle = digit / 10 × 2π`, `x[n] = x[n−1] + cos(angle) × distance`, `radius = radiusBase + digit × radiusScale`                               |
 | **02 Circle Chain**      | `r[n] = digit × radiusScale`, `θ[n] = (cumulative × θ[n−1] + digit / 10 × 2π) mod 2π`, 中心 = 前の円周上 `x[n] = x[n−1] + cos(θ[n]) × r[n−1]` |
 | **03 Pi Rotation**       | `φ[n]° = (n × modifier × C) mod 360`（BigInt で厳密に計算、累積誤差なし）, `x[n] = x[n−1] + cos(φ[n]/180 × π) × distance`                     |
+| **04 Two-Arm Rotation**  | `θ₁ = (n × dt) mod 2π`, `θ₂ = (n × dt × C) mod 2π`（BigInt で厳密）, `x[n] = scale × (r1·cos θ₁ + r2·cos θ₂)` — 参照動画の候補規則            |
 
 C は選択中の定数（既定 π）。詳細は [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)。
 
@@ -47,6 +48,9 @@ Inspector には、実行された式そのもの（表示用に別途書かれ�
 - **Infinite Mode（Continuous computation）**: 桁を使い切る前に倍の桁数を裏で計算して継続（最大 1,000,000 桁）。延長した桁は既存の桁と一致することを検査し、途中で過去が変わることはない
 - **Compare Mode**: 同じ実験・パラメータ・精度を別の定数（例: π と e）で並べて、同じ step で揃えて実行。片方の図形をクリックすると両方で同じ step を表示
 - **モバイル**: キャンバス優先の 1 画面レイアウト、Setup / Inspector は下から出るシート、2 本指でピンチズーム
+- **Reference Reconstruction**: 参照動画（`docs/reference/`）を候補の式と比較し、一致しない候補を棄却（`tools/reference/analyze.py` → `docs/reference/ANALYSIS.md`）。動画は花の段階で 15 回対称が出てその後消える — これと矛盾しないのは速さの比 π（とこの動画では区別できない 355/113）だけ
+- **Patterns（計測）**: 表示中の図形の重心・広がり・回転対称性（有意性つき）・出発点への回帰・消費した桁の頻度と χ² を計算
+- **AI Observer（DeepSeek）**: 計測した事実を DeepSeek に渡し、「観測（事実の言い換え）」と「推測（未検証）」を分けて回答させる。回答は常に「AI の推測（未検証）」として表示。API キーは利用者が入力し、このブラウザにだけ保存（エクスポートや履歴には含めない）。ブラウザから DeepSeek に直接届かない環境（CORS など）では、接続先 URL を中継サーバーに変更できる
 - **描画**: 既定は GPU インスタンス描画（SDF）。20 万オブジェクトで JS メモリ +0.7 MB（テッセレーション方式は +147 MB）。Scientific Mode で切り替え可能
 
 ## 使い方

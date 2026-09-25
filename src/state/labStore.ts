@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { defaultParams, type DigitStart, type ParamValues, type StepTrace } from '../experiments/core/types'
 import { digitCircleWalk } from '../experiments/digit-circle-walk'
 import type { HistoryEntry } from '../lab/history'
+import type { PatternFacts } from '../analysis/patterns'
+import type { ObserverAnswer } from '../ai/deepseek'
 
 export { PRECISIONS } from '../lab/config'
 
@@ -61,6 +63,10 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** Pattern Detection results (measured) and the step they describe. */
+  patterns: { facts: PatternFacts; step: number } | null
+  /** AI Observer state; answers are conjectures, never facts. */
+  ai: { status: 'idle' | 'asking' | 'done' | 'error'; answer?: ObserverAnswer; error?: string }
   /** Narrow screens: which bottom sheet is open. */
   sheet: 'setup' | 'inspector' | null
   /** Compare Mode: constant of the second lane (null = off). Main lab only. */
@@ -107,6 +113,8 @@ function initialState(): LabState {
     history: [],
     verify: { status: 'idle' },
     scientific: false,
+    patterns: null,
+    ai: { status: 'idle' },
     sheet: null,
     compareConstant: null,
     lockstepPlaying: false,

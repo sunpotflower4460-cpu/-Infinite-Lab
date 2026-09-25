@@ -6,6 +6,8 @@ import { geometryDigest } from '../geometry/digest'
 import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
+import { detectPatterns } from '../analysis/patterns'
+import { askObserver, ObserverError, type DeepSeekModel } from '../ai/deepseek'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
@@ -645,6 +647,51 @@ export class LabController {
       }
     } catch (err) {
       this.reportError(`${format.toUpperCase()} export failed`, err)
+    }
+  }
+
+  // ---- Pattern Detection / AI Observer -----------------------------------------------------
+
+  /** Measure the geometry shown now (Timeline-aware). Deterministic facts only. */
+  measurePatterns(): void {
+    const s = this.store.getState()
+    const step = s.viewStep ?? s.currentStep
+    const count = this.renderer.visibleRecords
+    let consumed: Uint8Array | undefined
+    if (this.digits && s.constant) {
+      const start = s.digitStart === 'fractional' ? s.constant.integerPartLength : 0
+      consumed = this.digits.subarray(start, start + step)
+    }
+    this.store.setState({ patterns: { facts: detectPatterns(this.renderer.store, count, consumed), step } })
+  }
+
+  /**
+   * Ask DeepSeek for observations about the measured facts. The answer is stored as a
+   * conjecture; the key is used only for this request and never stored elsewhere.
+   */
+  async askAi(apiKey: string, model: DeepSeekModel, baseUrl?: string): Promise<void> {
+    const s0 = this.store.getState()
+    if (!s0.patterns || s0.patterns.step !== (s0.viewStep ?? s0.currentStep)) this.measurePatterns()
+    const s = this.store.getState()
+    const def = getExperiment(s.experimentId)
+    this.store.setState({ ai: { status: 'asking' } })
+    try {
+      const answer = await askObserver(
+        {
+          experiment: `${def.name} (${def.id})`,
+          constant: `${s.constant?.symbol ?? s.constantId} (${s.constant?.name ?? ''})`,
+          precision: s.constant?.precision ?? s.precision,
+          steps: s.patterns!.step,
+          parameters: s.params,
+          formulas: formulaLines(def, s.constant?.symbol ?? 'C'),
+          facts: s.patterns!.facts,
+        },
+        { apiKey, model, baseUrl },
+      )
+      this.store.setState({ ai: { status: 'done', answer } })
+    } catch (err) {
+      const message = err instanceof ObserverError || err instanceof Error ? err.message : String(err)
+      this.store.setState({ ai: { status: 'error', error: message } })
     }
   }
 
