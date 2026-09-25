@@ -1,0 +1,10 @@
+# Visual reference
+
+`pi-infinite-reference.mp4` is a lightweight repository copy of the user's reference recording for the Infinite Lab experiment.
+
+- Approx. duration: 50 seconds
+- Purpose: give Claude Code and human contributors a stable visual reference inside the repository
+- Use the mathematical/geometric animation as inspiration/specification
+- Ignore the social-media interface surrounding the animation
+
+The original source recording is higher resolution; this repository copy is optimized for code-agent inspection and small Git footprint.
