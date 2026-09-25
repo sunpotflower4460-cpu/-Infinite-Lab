@@ -50,6 +50,26 @@ describe('replay', () => {
     expect(CHECKPOINT_INTERVAL).toBe(1000)
   })
 
+  it('inspect() reproduces every emitted step exactly (all 2,500 steps)', () => {
+    const runner = makeRunner('digit-circle-walk', 5000)
+    const out = new GeometryBatchWriter()
+    runner.advance(2500, out)
+    const { data, count } = out.flush()
+    expect(count).toBe(5000)
+    for (let step = 1; step <= 2500; step++) {
+      const [line, circle] = runner.inspect(step).instructions
+      const o = (step - 1) * 2 * 7
+      expect(line).toEqual({
+        type: 'line',
+        x1: data[o + 2],
+        y1: data[o + 3],
+        x2: data[o + 4],
+        y2: data[o + 5],
+      })
+      expect(circle).toEqual({ type: 'circle', x: data[o + 9], y: data[o + 10], radius: data[o + 11] })
+    }
+  })
+
   it('inspect does not disturb the running state', () => {
     const runner = makeRunner('digit-circle-walk', 3000)
     runner.advance(1200)

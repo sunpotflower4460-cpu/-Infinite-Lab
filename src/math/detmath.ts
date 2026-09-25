@@ -132,7 +132,8 @@ const TWO_120 = 2 ** 120
 function remPio2Big(x: number): number {
   const hp = getHalfPiK()
   const { mant, exp } = decompose(x)
-  const X = mant << BigInt(exp + K) // x · 2^K (exact; exp ≥ 0 here)
+  // x · 2^K, exact. exp may be negative (e.g. −29 for x ≈ 1e7), but exp + K ≥ 0 because |x| ≥ 2^20·π/2.
+  const X = mant << BigInt(exp + K)
   let n = X / hp
   let r = X - n * hp
   // round to nearest multiple: bring r into [-π/4, π/4]
