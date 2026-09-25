@@ -29,7 +29,8 @@ export interface PatternFacts {
   nearReturns: { step: number; distance: number }[]
   returnTolerance: number
   /** Digit frequencies among the consumed digits and Pearson's χ² against uniform (9 degrees of freedom). */
-  digits: { counts: number[]; chiSquare: number } | null
+  /** χ² is null when fewer than 50 digits were consumed (expected count per digit < 5). */
+  digits: { counts: number[]; chiSquare: number | null } | null
 }
 
 const MAX_ORDER = 40
@@ -59,14 +60,17 @@ export function detectPatterns(
 
   let s2 = 0
   let maxR = 0
+  // one anchor per step (its last record); a return is counted when the path *enters* the
+  // tolerance around the first anchor, so one pass near the start is reported once
   let first: [number, number] | null = null
-  let firstStep = 0
-  let lastStepSeen = -1
-  const candidates: { step: number; distance: number }[] = []
-  const extent = store.bounds
-    ? Math.max(store.bounds.maxX - store.bounds.minX, store.bounds.maxY - store.bounds.minY)
+  let prev: { step: number; x: number; y: number } | null = null
+  let inside = true
+  const visibleBounds = n ? store.boundsUpTo(n) : null // Timeline-aware, like everything else here
+  const extent = visibleBounds
+    ? Math.max(visibleBounds.maxX - visibleBounds.minX, visibleBounds.maxY - visibleBounds.minY)
     : 0
   const tol = extent * 0.005
+  const candidates: { step: number; distance: number }[] = []
   store.forEachRecord(n, (d, o) => {
     const [x, y] = anchor(d, o)
     const dx = x - cx
@@ -75,16 +79,21 @@ export function detectPatterns(
     s2 += r2
     if (r2 > maxR * maxR) maxR = Math.sqrt(r2)
     const step = d[o + 1]!
-    if (step === lastStepSeen) return // one anchor per step for returns (the last record of the step wins below)
-    lastStepSeen = step
-    if (!first) {
-      first = [x, y]
-      firstStep = step
-    } else if (step > firstStep + 1) {
-      const dist = Math.hypot(x - first[0], y - first[1])
-      if (dist <= tol && candidates.length < 5) candidates.push({ step, distance: dist })
-    }
+    if (prev && step !== prev.step) closeStep(prev)
+    prev = { step, x, y }
   })
+  if (prev) closeStep(prev)
+
+  function closeStep(p: { step: number; x: number; y: number }) {
+    if (!first) {
+      first = [p.x, p.y]
+      return
+    }
+    const dist = Math.hypot(p.x - first[0], p.y - first[1])
+    const within = dist <= tol
+    if (within && !inside && candidates.length < 5) candidates.push({ step: p.step, distance: dist })
+    inside = within
+  }
 
   const { symmetry, background } = pictureSymmetry(store, n, cx, cy, maxR)
 
@@ -93,14 +102,16 @@ export function detectPatterns(
     const counts = new Array<number>(10).fill(0)
     for (let i = 0; i < consumedDigits.length; i++) counts[consumedDigits[i]!]!++
     const expected = consumedDigits.length / 10
-    const chiSquare = counts.reduce((a, c) => a + ((c - expected) * (c - expected)) / expected, 0)
+    // Pearson's χ² needs expected counts ≥ 5; below that only the counts are reported
+    const chiSquare =
+      expected >= 5 ? counts.reduce((a, c) => a + ((c - expected) * (c - expected)) / expected, 0) : null
     digits = { counts, chiSquare }
   }
 
   return {
     records: n,
     steps,
-    bounds: n ? store.boundsUpTo(n) : null,
+    bounds: visibleBounds,
     centroid: { x: cx, y: cy },
     radiusOfGyration: n ? Math.sqrt(s2 / n) : 0,
     maxRadius: maxR,
@@ -144,7 +155,8 @@ function pictureSymmetry(
       const r = d[o + 4]!
       const start = kind === KIND.arc ? d[o + 5]! : 0
       const sweep = kind === KIND.arc ? d[o + 6]! : 2 * Math.PI
-      const steps = Math.max(8, Math.ceil(sweep * r * scale))
+      // at most ~one sample per grid pixel of circumference (radii are not bounded by maxRadius)
+      const steps = Math.min(4 * GRID, Math.max(8, Math.ceil(sweep * r * scale)))
       for (let i = 0; i <= steps; i++) {
         const a = start + (sweep * i) / steps
         plot(d[o + 2]! + r * Math.cos(a), d[o + 3]! + r * Math.sin(a))

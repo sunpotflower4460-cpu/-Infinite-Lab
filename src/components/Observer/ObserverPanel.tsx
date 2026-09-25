@@ -66,10 +66,17 @@ export function ObserverPanel() {
           </div>
           {f.digits && (
             <div>
-              digits {f.digits.counts.join(' ')} · χ²(9) = {f.digits.chiSquare.toFixed(2)}{' '}
-              <span className="muted">
-                ({f.digits.chiSquare > CHI2_9_05 ? 'above' : 'below'} the 5 % critical value {CHI2_9_05})
-              </span>
+              digits {f.digits.counts.join(' ')} ·{' '}
+              {f.digits.chiSquare === null ? (
+                <span className="muted">too few digits for χ²</span>
+              ) : (
+                <>
+                  χ²(9) = {f.digits.chiSquare.toFixed(2)}{' '}
+                  <span className="muted">
+                    ({f.digits.chiSquare > CHI2_9_05 ? 'above' : 'below'} the 5 % critical value {CHI2_9_05})
+                  </span>
+                </>
+              )}
             </div>
           )}
         </div>

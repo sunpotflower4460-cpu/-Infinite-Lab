@@ -62,7 +62,8 @@ class TwoArm implements GeometryExperiment<PenState> {
     const y = env.y!
     const instructions: GeometryInstruction[] = [line(this.state.x, this.state.y, x, y)]
     let overlay: GeometryInstruction[] | undefined
-    if (this.params.drawArms) {
+    if (this.params.drawArms && trace) {
+      // only traced steps (current / inspected) are ever highlighted
       const s = this.paramEnv.scale!
       const ex = s * this.paramEnv.r1! * detCos(env.theta1!)
       const ey = s * this.paramEnv.r1! * detSin(env.theta1!)

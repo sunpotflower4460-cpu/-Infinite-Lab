@@ -59,8 +59,26 @@ describe('detectPatterns', () => {
   it('reports digit frequencies and χ² against uniform', () => {
     const f = detectPatterns(storeOf([[0, 0]]), Infinity, [3, 1, 4, 1, 5, 9, 2, 6, 5, 3])
     expect(f.digits!.counts).toEqual([0, 2, 1, 2, 1, 2, 1, 0, 0, 1])
-    // expected 1 per digit: χ² = Σ (c − 1)² / 1 = 1+1+0+1+0+1+0+1+1+0 = 6
-    expect(f.digits!.chiSquare).toBe(6)
+    // expected count 1 < 5: the χ² approximation is not valid, so none is reported
+    expect(f.digits!.chiSquare).toBeNull()
+    // 50 digits: 0–4 five times, 5–9 five times, then 5 extra 0s and 5 fewer 9s
+    const digits = [
+      ...Array.from({ length: 45 }, (_, i) => i % 10).filter((d) => d !== 9),
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      2,
+      3,
+      4,
+    ]
+    const g = detectPatterns(storeOf([[0, 0]]), Infinity, digits)
+    // counts: 0→10, 1–4→6, 5–8→4, 9→0 over 50 digits; expected 5 each
+    // χ² = (25 + 4·1 + 4·1 + 25) / 5 = 58 / 5
+    expect(g.digits!.counts).toEqual([10, 6, 6, 6, 6, 4, 4, 4, 4, 0])
+    expect(g.digits!.chiSquare).toBeCloseTo(58 / 5, 12)
   })
 
   it('respects the visible count and handles empty input', () => {

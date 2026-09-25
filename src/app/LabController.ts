@@ -7,7 +7,7 @@ import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { detectPatterns } from '../analysis/patterns'
-import { askObserver, ObserverError, type DeepSeekModel } from '../ai/deepseek'
+import { askObserver, type DeepSeekModel } from '../ai/deepseek'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
@@ -51,6 +51,8 @@ export class LabController {
   private unsubscribeMirror: (() => void) | null = null
   /** Compare Mode playback clock (requestAnimationFrame id). */
   private clockFrame: number | null = null
+  /** Incremented per AI request and per run; stale answers are dropped. */
+  private aiRequestId = 0
   /** Latest requested inspection, posted at most once per frame (Timeline drags). */
   private queuedInspect: number | null = null
 
@@ -670,8 +672,8 @@ export class LabController {
    * conjecture; the key is used only for this request and never stored elsewhere.
    */
   async askAi(apiKey: string, model: DeepSeekModel, baseUrl?: string): Promise<void> {
-    const s0 = this.store.getState()
-    if (!s0.patterns || s0.patterns.step !== (s0.viewStep ?? s0.currentStep)) this.measurePatterns()
+    this.measurePatterns() // always measure what is shown now (never reuse facts of another run)
+    const requestId = ++this.aiRequestId
     const s = this.store.getState()
     const def = getExperiment(s.experimentId)
     this.store.setState({ ai: { status: 'asking' } })
@@ -688,10 +690,12 @@ export class LabController {
         },
         { apiKey, model, baseUrl },
       )
-      this.store.setState({ ai: { status: 'done', answer } })
+      if (requestId === this.aiRequestId) this.store.setState({ ai: { status: 'done', answer } })
     } catch (err) {
-      const message = err instanceof ObserverError || err instanceof Error ? err.message : String(err)
-      this.store.setState({ ai: { status: 'error', error: message } })
+      if (requestId !== this.aiRequestId) return
+      this.store.setState({
+        ai: { status: 'error', error: err instanceof Error ? err.message : String(err) },
+      })
     }
   }
 
@@ -787,6 +791,8 @@ export class LabController {
   }
 
   private resetView(): void {
+    this.aiRequestId++ // an answer still in flight belongs to the previous run
+    this.store.setState({ patterns: null, ai: { status: 'idle' } })
     this.renderer.clear()
     this.seekTarget = null
     this.store.setState({
