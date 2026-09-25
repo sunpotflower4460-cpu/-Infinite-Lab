@@ -12,7 +12,7 @@ const KIND_NAME: Record<number, string> = {
 }
 const ROWS_PER_PART = 10_000
 
-export const CSV_HEADER = 'step,kind,x,y,radius,x2,y2,start_angle,end_angle'
+export const CSV_HEADER = 'step,kind,x,y,radius,x2,y2,start_angle,sweep'
 
 /**
  * Geometry as CSV (spec §28): one row per record, exact float64 values.
@@ -79,13 +79,13 @@ export function geometrySvg(
         `<line data-step="${step}" x1="${num(a)}" y1="${num(bb)}" x2="${num(c)}" y2="${num(e)}" ${lineStyle}/>`,
       )
     } else if ((kind === KIND.circle && c > 0) || kind === KIND.arc) {
-      if (kind === KIND.arc && Math.abs(f - e) < 2 * Math.PI) {
+      const sweep = kind === KIND.arc ? f : 2 * Math.PI // arcs store start + sweep
+      if (sweep < 2 * Math.PI) {
         const [x0, y0] = [a + c * Math.cos(e), bb + c * Math.sin(e)]
-        const [x1, y1] = [a + c * Math.cos(f), bb + c * Math.sin(f)]
-        const large = Math.abs(f - e) > Math.PI ? 1 : 0
-        const sweep = f > e ? 1 : 0
+        const [x1, y1] = [a + c * Math.cos(e + sweep), bb + c * Math.sin(e + sweep)]
+        const large = sweep > Math.PI ? 1 : 0
         rows.push(
-          `<path data-step="${step}" d="M ${num(x0)} ${num(y0)} A ${num(c)} ${num(c)} 0 ${large} ${sweep} ${num(x1)} ${num(y1)}" ${circleStyle}/>`,
+          `<path data-step="${step}" d="M ${num(x0)} ${num(y0)} A ${num(c)} ${num(c)} 0 ${large} 1 ${num(x1)} ${num(y1)}" ${circleStyle}/>`,
         )
       } else {
         rows.push(`<circle data-step="${step}" cx="${num(a)}" cy="${num(bb)}" r="${num(c)}" ${circleStyle}/>`)

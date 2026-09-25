@@ -302,8 +302,12 @@ export class PixiRenderer implements Renderer {
     const px = s / this.camera.zoom // one screen pixel in chunk units
     for (const it of items) {
       if (it.type === 'line') g.moveTo(tx(it.x1), ty(it.y1)).lineTo(tx(it.x2), ty(it.y2))
-      else if (it.type === 'circle' || it.type === 'arc') {
+      else if (it.type === 'circle') {
         if (it.radius > 0) g.circle(tx(it.x), ty(it.y), it.radius * s)
+      } else if (it.type === 'arc' && it.radius > 0) {
+        const r = it.radius * s
+        g.moveTo(tx(it.x) + r * Math.cos(it.startAngle), ty(it.y) + r * Math.sin(it.startAngle))
+        g.arc(tx(it.x), ty(it.y), r, it.startAngle, it.startAngle + it.sweep)
       }
     }
     g.stroke({ width: 2 * px, color: COLORS.highlight, alpha: 0.95 })
@@ -379,6 +383,12 @@ export class PixiRenderer implements Renderer {
       }
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
     }
+    const onCancel = (e: PointerEvent) => {
+      // the browser took the gesture over: forget the pointer, never treat it as a click
+      if (!pointers.delete(e.pointerId)) return
+      multi = true
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
+    }
     const onDbl = (e: MouseEvent) => {
       const [sx, sy] = local(e)
       const [wx, wy] = this.camera.screenToWorld(sx, sy)
@@ -390,7 +400,7 @@ export class PixiRenderer implements Renderer {
     canvas.addEventListener('pointerdown', onDown)
     canvas.addEventListener('pointermove', onMove)
     canvas.addEventListener('pointerup', onUp)
-    canvas.addEventListener('pointercancel', onUp)
+    canvas.addEventListener('pointercancel', onCancel)
     canvas.addEventListener('dblclick', onDbl)
     canvas.style.touchAction = 'none'
     this.cleanup.push(() => {
@@ -398,7 +408,7 @@ export class PixiRenderer implements Renderer {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('dblclick', onDbl)
     })
   }

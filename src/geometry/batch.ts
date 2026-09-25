@@ -1,4 +1,4 @@
-import type { GeometryInstruction } from './types'
+import { clampSweep, type GeometryInstruction } from './types'
 
 /**
  * Compact transferable encoding of geometry instructions:
@@ -7,7 +7,7 @@ import type { GeometryInstruction } from './types'
  *   point  : a=x  b=y
  *   circle : a=x  b=y  c=radius
  *   line   : a=x1 b=y1 c=x2 d=y2
- *   arc    : a=x  b=y  c=radius d=startAngle e=endAngle
+ *   arc    : a=x  b=y  c=radius d=startAngle e=sweep (counter-clockwise, 0…2π)
  *
  * Float64 end-to-end: nothing is rounded to float32 before it reaches the renderer.
  */
@@ -70,7 +70,7 @@ export class GeometryBatchWriter {
         d[o + 3] = g.y
         d[o + 4] = g.radius
         d[o + 5] = g.startAngle
-        d[o + 6] = g.endAngle
+        d[o + 6] = clampSweep(g.sweep)
         break
     }
     this.count++
@@ -99,6 +99,6 @@ export function decodeRecord(
     case KIND.line:
       return { step, instruction: { type: 'line', x1: a, y1: b, x2: c, y2: d } }
     default:
-      return { step, instruction: { type: 'arc', x: a, y: b, radius: c, startAngle: d, endAngle: e } }
+      return { step, instruction: { type: 'arc', x: a, y: b, radius: c, startAngle: d, sweep: e } }
   }
 }

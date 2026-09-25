@@ -20,13 +20,25 @@ export interface PointInstruction {
   x: number
   y: number
 }
+/**
+ * Arc: starts at `startAngle` and runs counter-clockwise (mathematical orientation) through
+ * `sweep` radians, 0 ≤ sweep ≤ 2π. Stored as start + sweep — never start + end — so no
+ * consumer has to guess the direction or wrap-around (renderers, picking, SVG all agree).
+ */
 export interface ArcInstruction {
   type: 'arc'
   x: number
   y: number
   radius: number
   startAngle: number
-  endAngle: number
+  sweep: number
+}
+
+export const FULL_TURN = 2 * Math.PI
+
+/** Clamp a sweep into [0, 2π] (NaN → 0). */
+export function clampSweep(sweep: number): number {
+  return Number.isNaN(sweep) ? 0 : Math.min(FULL_TURN, Math.max(0, sweep))
 }
 
 export type GeometryInstruction = CircleInstruction | LineInstruction | PointInstruction | ArcInstruction
@@ -50,12 +62,12 @@ export const arc = (
   y: number,
   radius: number,
   startAngle: number,
-  endAngle: number,
+  sweep: number,
 ): ArcInstruction => ({
   type: 'arc',
   x,
   y,
   radius,
   startAngle,
-  endAngle,
+  sweep: clampSweep(sweep),
 })

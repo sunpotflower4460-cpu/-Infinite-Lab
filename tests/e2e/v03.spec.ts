@@ -180,7 +180,7 @@ test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
   const csv = await get('CSV')
   expect(csv.name).toBe('pi-infinite-lab_digit-circle-walk_pi_50.csv')
   const rows = csv.data.toString('utf8').trim().split('\n')
-  expect(rows[0]).toBe('step,kind,x,y,radius,x2,y2,start_angle,end_angle')
+  expect(rows[0]).toBe('step,kind,x,y,radius,x2,y2,start_angle,sweep')
   expect(rows).toHaveLength(1 + 100) // 50 steps × (line + circle)
   // digit 3: angle 0.6π, distance 10 — computed with the same deterministic cos/sin the app uses
   const { detCos, detSin } = await import('../../src/math/detmath')

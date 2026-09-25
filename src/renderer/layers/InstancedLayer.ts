@@ -7,7 +7,7 @@ import { COLORS, type GeometryLayer, type LayerFrame } from './GeometryLayer'
 export const INSTANCED_CHUNK_RECORDS = 16384
 const CIRCLE_FLOATS = 5 // cx, cy, r, arcStart, arcEnd
 const LINE_FLOATS = 4 // x0, y0, x1, y1
-const FULL_TURN = 7 // any sweep ≥ 2π means "full circle"
+const FULL_CIRCLE_SWEEP = 7 // > 2π even in float32: a full circle
 
 // Shared transform: Pixi's global/local matrices map layer units to clip space.
 const TRANSFORM = /* glsl */ `
@@ -40,7 +40,11 @@ void main() {
 }
 `
 
-const CIRCLE_FRAGMENT = /* glsl */ `
+// highp: Pixi defaults fragments to mediump, which is 16-bit on many phones and would make
+// rings of large circles jagged. Pixi falls back to mediump itself where highp is unsupported.
+const CIRCLE_FRAGMENT = /* glsl */ `precision highp float;
+const float TAU = 6.28318530718;
+// aArc = (start, sweep): counter-clockwise from start; a sweep within 1e-6 of 2π (float32) is full
 in vec2 vPx;
 in float vRadiusPx;
 in vec2 vArc;
@@ -54,9 +58,9 @@ void main() {
     a = clamp(1.7 - d, 0.0, 1.0) * uDotAlpha;          // point / radius-0 circle: 1.2 px dot
   } else {
     a = clamp(1.0 - abs(d - vRadiusPx), 0.0, 1.0) * uTint.a; // 1 px anti-aliased ring
-    float sweep = vArc.y - vArc.x;
-    if (sweep < 6.2831) {
-      float rel = mod(atan(vPx.y, vPx.x) - vArc.x, 6.28318530718);
+    float sweep = vArc.y;
+    if (sweep < TAU - 1e-6) {
+      float rel = mod(atan(vPx.y, vPx.x) - vArc.x, TAU);
       if (rel > sweep) a = 0.0;
     }
   }
@@ -84,7 +88,7 @@ void main() {
 }
 `
 
-const LINE_FRAGMENT = /* glsl */ `
+const LINE_FRAGMENT = /* glsl */ `precision highp float;
 in float vAcrossPx;
 uniform vec4 uTint;
 out vec4 finalColor;
@@ -243,7 +247,7 @@ export class InstancedLayer implements GeometryLayer {
         ])
       } else {
         const r = kind === KIND.point ? 0 : Math.max(0, d[o + 4]!) * s
-        const [a0, a1] = kind === KIND.arc ? [d[o + 5]!, d[o + 6]!] : [0, FULL_TURN]
+        const [a0, a1] = kind === KIND.arc ? [d[o + 5]!, d[o + 6]!] : [0, FULL_CIRCLE_SWEEP]
         chunk.circles.push(index, [(d[o + 2]! - ox) * s, (d[o + 3]! - oy) * s, r, a0, a1])
       }
       chunk.filled++

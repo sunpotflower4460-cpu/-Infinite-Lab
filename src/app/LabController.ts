@@ -200,10 +200,20 @@ export class LabController {
     this.peer?.postSim({ type: 'pause' })
   }
 
+  /** Whether Play would start anything (also covers Compare Mode's lockstep limits). */
+  canPlay(): boolean {
+    const a = this.store.getState()
+    if (a.phase !== 'ready') return false
+    if (!this.peer) return !a.finished
+    const b = this.peer.store.getState()
+    if (b.phase !== 'ready') return false
+    return Math.max(a.currentStep, b.currentStep) < Math.min(a.totalSteps, b.totalSteps)
+  }
+
   togglePlay(): void {
     const s = this.store.getState()
     if (s.playing || s.lockstepPlaying) this.pause()
-    else this.play()
+    else if (this.canPlay()) this.play()
   }
 
   step(count = 1): void {

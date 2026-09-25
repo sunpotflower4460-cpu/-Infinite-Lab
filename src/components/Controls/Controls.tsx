@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useStore } from 'zustand'
 import { getController } from '../../app/LabController'
 import { SPEEDS, useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
@@ -8,6 +9,10 @@ export function Controls() {
   const c = getController()
   const playing = useLab((s) => s.playing || s.lockstepPlaying)
   const comparing = useLab((s) => s.compareConstant !== null)
+  // Compare Mode plays both lanes in lockstep: wait until the second lane is ready too
+  const peerStore = comparing ? c.peer?.store : undefined
+  // re-render when the second lane changes; the rule itself lives in LabController.canPlay()
+  useStore(peerStore ?? c.store, (s) => `${s.phase}:${s.currentStep}:${s.totalSteps}`)
   const finished = useLab((s) => s.finished)
   const ready = useLab((s) => s.phase === 'ready')
   const speedIndex = useLab((s) => s.speedIndex)
@@ -38,7 +43,7 @@ export function Controls() {
         <button
           className="primary"
           onClick={() => c.togglePlay()}
-          disabled={!ready || (finished && !playing)}
+          disabled={!playing && !c.canPlay()}
           title="Play / Pause (Space)"
           aria-label={playing ? 'Pause' : 'Play'}
         >

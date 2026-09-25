@@ -57,4 +57,14 @@ describe('SVG export', () => {
     expect(svg).toContain('transform="scale(1,-1)"')
     expect(svg.match(/data-step=/g)).toHaveLength(4)
   })
+
+  it('writes arcs as start + counter-clockwise sweep', () => {
+    const w = new GeometryBatchWriter()
+    w.push(1, arc(0, 0, 2, Math.PI / 2, (3 * Math.PI) / 2))
+    const store = new GeometryStore()
+    store.append(w.flush())
+    const svg = geometrySvg(store, 1, 't', 'd').join('')
+    // from (0, 2) sweeping 3π/2 counter-clockwise ends at (2, 0): large-arc flag 1
+    expect(svg).toMatch(/d="M [^ ]+ 2 A 2 2 0 1 1 2 [^"]+"/)
+  })
 })

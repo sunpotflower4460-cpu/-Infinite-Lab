@@ -70,8 +70,9 @@ export class GraphicsLayer implements GeometryLayer {
         const cx = tx(data[o + 2]!)
         const cy = ty(data[o + 3]!)
         const r = data[o + 4]! * s
-        g.moveTo(cx + r * Math.cos(data[o + 5]!), cy + r * Math.sin(data[o + 5]!))
-        g.arc(cx, cy, r, data[o + 5]!, data[o + 6]!)
+        const start = data[o + 5]!
+        g.moveTo(cx + r * Math.cos(start), cy + r * Math.sin(start))
+        g.arc(cx, cy, r, start, start + data[o + 6]!) // sweep ≥ 0: counter-clockwise in layer (y-up) space
         hasCircles = true
       }
     }

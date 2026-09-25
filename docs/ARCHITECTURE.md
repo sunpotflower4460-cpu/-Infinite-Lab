@@ -67,7 +67,7 @@ interface StepContext {
 
 ## GeometryBatch
 
-`src/geometry/batch.ts` — 1 レコード = float64 × 7 `[kind, step, a, b, c, d, e]`。Worker → main は `Float64Array` を transfer。float32 への丸めは GPU に渡す直前まで行わない。
+`src/geometry/batch.ts` — 1 レコード = float64 × 7 `[kind, step, a, b, c, d, e]`。円・点・線・弧の 4 種類。弧は **開始角 + 反時計回りの回転量（0〜2π）** で持ち、終了角では持たない（向きや 2π をまたぐ場合の解釈が描画・クリック判定・SVG で食い違わないようにするため）。Worker → main は `Float64Array` を transfer。float32 への丸めは GPU に渡す直前まで行わない。
 
 ## Renderer
 
