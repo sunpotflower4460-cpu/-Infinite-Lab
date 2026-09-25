@@ -83,6 +83,9 @@ export function ExperimentPanel() {
               {formatInt(p)} digits
             </option>
           ))}
+          {!(PRECISIONS as readonly number[]).includes(precision) && (
+            <option value={precision}>{formatInt(precision)} digits (extended)</option>
+          )}
         </select>
         <div className="radio-row">
           <label>

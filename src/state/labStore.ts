@@ -59,6 +59,12 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** Infinite Mode: keep computing more digits instead of stopping at the end. */
+  continuous: boolean
+  /** A longer computation of the constant is in progress (continuous mode). */
+  extending: { from: number; to: number } | null
+  /** Playing but paused at the end of the digits until the extension arrives. */
+  waiting: boolean
   /** GPU geometry layer: instanced SDF (default) or tessellated Graphics. */
   layerMode: 'instanced' | 'graphics'
   follow: boolean
@@ -89,6 +95,9 @@ export const useLab = create<LabState>(() => ({
   history: [],
   verify: { status: 'idle' },
   scientific: false,
+  continuous: false,
+  extending: null,
+  waiting: false,
   layerMode: 'instanced',
   follow: true,
   fps: 0,

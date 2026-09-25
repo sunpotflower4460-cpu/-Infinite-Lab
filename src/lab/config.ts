@@ -3,6 +3,13 @@ import { EXPERIMENTS } from '../experiments/registry'
 import { CONSTANTS } from '../math/constants'
 
 export const PRECISIONS = [100, 1_000, 10_000, 100_000] as const
+/** Upper limit of computed digits (Infinite Mode extends up to here; ~112 MB of exact geometry). */
+export const MAX_PRECISION = 1_000_000
+
+/** Next precision for continuous computation: double, at least 10,000, capped at MAX_PRECISION. */
+export function nextPrecision(current: number): number {
+  return Math.min(MAX_PRECISION, Math.max(current * 2, 10_000))
+}
 
 /** Everything that determines the geometry (together with a step count). */
 export interface LabConfig {
@@ -30,8 +37,14 @@ export function parseConfig(input: unknown): LabConfig {
     throw new Error(`unknown experiment "${String(experiment)}"`)
   }
   const precision = o.precision === undefined ? 1_000 : o.precision
-  if (!PRECISIONS.includes(precision as (typeof PRECISIONS)[number]))
-    throw new Error(`unsupported precision ${String(precision)}`)
+  if (
+    typeof precision !== 'number' ||
+    !Number.isInteger(precision) ||
+    precision < 1 ||
+    precision > MAX_PRECISION
+  ) {
+    throw new Error(`unsupported precision ${String(precision)} (1 – ${MAX_PRECISION})`)
+  }
   const digitStart = o.digitStart === undefined ? 'integer' : o.digitStart
   if (digitStart !== 'integer' && digitStart !== 'fractional')
     throw new Error(`invalid digitStart ${String(digitStart)}`)
@@ -59,5 +72,5 @@ export function parseConfig(input: unknown): LabConfig {
       parameters[p.key] = value
     }
   }
-  return { constant, precision: precision as number, experiment, digitStart, parameters }
+  return { constant, precision, experiment, digitStart, parameters }
 }

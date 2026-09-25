@@ -13,6 +13,9 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let lastTick = 0
 let inFlight = 0
 let generation = 0
+let continuous = false
+/** Playing but out of digits; resumes when `extend` arrives. */
+let waiting = false
 let rateWindow: { t: number; steps: number }[] = []
 
 function post(msg: SimResponse, transfer: Transferable[] = []): void {
@@ -51,6 +54,7 @@ function emit(steps: number, budgeted = false): void {
 
 function stop(): void {
   playing = false
+  waiting = false
   if (timer !== undefined) clearTimeout(timer)
   timer = undefined
 }
@@ -66,6 +70,19 @@ function tick(): void {
     if (due > 0) emit(due, !Number.isFinite(sim.stepsPerSecond))
   }
   if (sim.runner.finished) {
+    if (continuous) {
+      // keep "playing"; resume as soon as more digits arrive
+      waiting = true
+      timer = undefined
+      post({
+        type: 'status',
+        playing: true,
+        currentStep: sim.runner.currentStep,
+        finished: false,
+        waiting: true,
+      })
+      return
+    }
     stop()
     post({ type: 'status', playing: false, currentStep: sim.runner.currentStep, finished: true })
     return
@@ -85,8 +102,26 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
         sim = new Simulation(msg)
         post({ type: 'ready', initId: msg.initId, totalSteps: sim.runner.totalSteps })
         break
+      case 'setContinuous':
+        continuous = msg.on
+        if (!continuous && waiting && sim) {
+          stop()
+          post({ type: 'status', playing: false, currentStep: sim.runner.currentStep, finished: true })
+        }
+        break
+      case 'extend':
+        if (!sim) return
+        sim.runner.extendDigits(msg.digits)
+        post({ type: 'extended', totalSteps: sim.runner.totalSteps })
+        if (waiting && playing) {
+          waiting = false
+          lastTick = performance.now()
+          post({ type: 'status', playing: true, currentStep: sim.runner.currentStep, finished: false })
+          timer = setTimeout(tick, 0)
+        }
+        break
       case 'play':
-        if (!sim || sim.runner.finished) return
+        if (!sim || (sim.runner.finished && !continuous)) return
         sim.stepsPerSecond = msg.stepsPerSecond
         if (!playing) {
           playing = true

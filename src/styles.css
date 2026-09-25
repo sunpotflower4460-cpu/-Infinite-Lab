@@ -549,3 +549,8 @@ input:not([type]) {
     top: 48px;
   }
 }
+
+.infinite {
+  font-family: var(--mono);
+  font-size: 11px;
+}

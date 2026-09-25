@@ -2,7 +2,7 @@ import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment } from '../experiments/registry'
 import { defaultParams, type DigitStart, type ParamValue } from '../experiments/core/types'
 import { geometryDigest } from '../geometry/digest'
-import type { LabConfig } from '../lab/config'
+import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
@@ -38,6 +38,8 @@ export class LabController {
   private pendingVerify: string | null = null
   /** Forward seek in progress: the step we are computing up to. */
   private seekTarget: number | null = null
+  /** Request id of an in-flight continuous-computation extension (null = none). */
+  private extendRequestId: number | null = null
   /** Latest requested inspection, posted at most once per frame (Timeline drags). */
   private queuedInspect: number | null = null
 
@@ -76,8 +78,9 @@ export class LabController {
   computeConstant(): void {
     const { constantId, precision } = useLab.getState()
     const requestId = ++this.mathRequestId
+    this.extendRequestId = null // a new computation supersedes any extension
     this.pause()
-    useLab.setState({ phase: 'computing', error: null })
+    useLab.setState({ phase: 'computing', error: null, extending: null })
     this.postMath({ type: 'compute', requestId, constantId, precision })
   }
 
@@ -283,6 +286,60 @@ export class LabController {
     useLab.setState({ scientific })
   }
 
+  /** Infinite Mode (spec §37): continuous computation until paused (up to MAX_PRECISION digits). */
+  setContinuous(on: boolean): void {
+    useLab.setState({ continuous: on })
+    this.postSim({ type: 'setContinuous', on })
+    if (on) this.maybeExtend()
+  }
+
+  /** Start computing more digits once half of the current ones are used (or playback waits). */
+  private maybeExtend(): void {
+    const s = useLab.getState()
+    const loaded = this.loaded
+    if (!s.continuous || s.phase !== 'ready' || this.extendRequestId !== null || !loaded) return
+    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) return
+    if (!s.waiting && s.currentStep < s.totalSteps / 2) return
+    const to = nextPrecision(loaded.precision)
+    const requestId = ++this.mathRequestId
+    this.extendRequestId = requestId
+    useLab.setState({ extending: { from: loaded.precision, to } })
+    this.postMath({ type: 'compute', requestId, constantId: loaded.constantId, precision: to })
+  }
+
+  private onExtension(msg: MathResponse): void {
+    this.extendRequestId = null
+    useLab.setState({ extending: null })
+    if (msg.type === 'error') {
+      useLab.setState({ error: `extension failed: ${msg.message}` })
+      return
+    }
+    const s = useLab.getState()
+    const old = this.digits
+    if (!old || !this.loaded || msg.constantId !== this.loaded.constantId || msg.constantId !== s.constantId)
+      return
+    for (let i = 0; i < old.length; i++) {
+      if (msg.digits[i] !== old[i]) {
+        useLab.setState({ error: `extension changed digit ${i}; refusing to continue` })
+        return
+      }
+    }
+    this.digits = msg.digits
+    this.loaded = { constantId: msg.constantId, precision: msg.precision }
+    useLab.setState({
+      precision: msg.precision,
+      constant: s.constant && {
+        ...s.constant,
+        value: msg.value,
+        digits: msg.value.replace('.', ''),
+        precision: msg.precision,
+        computeTimeMs: msg.computeTimeMs,
+      },
+    })
+    const copy = msg.digits.slice()
+    this.postSim({ type: 'extend', digits: copy }, [copy.buffer])
+  }
+
   setLayerMode(layerMode: 'instanced' | 'graphics'): void {
     useLab.setState({ layerMode })
     this.renderer.setLayerMode(layerMode)
@@ -428,6 +485,10 @@ export class LabController {
   }
 
   private onMath(msg: MathResponse): void {
+    if (msg.requestId === this.extendRequestId) {
+      this.onExtension(msg)
+      return
+    }
     if (msg.requestId !== this.mathRequestId) return // superseded
     if (msg.type === 'error') {
       useLab.setState({ phase: 'error', error: msg.message })
@@ -469,6 +530,7 @@ export class LabController {
       viewStep: null,
       finished: false,
       playing: false,
+      waiting: false,
       follow: true,
       stepsPerSecond: 0,
     })
@@ -505,6 +567,7 @@ export class LabController {
           stepsPerSecond: msg.stepsPerSecond,
           lastBatchMs: msg.computeMs,
         })
+        this.maybeExtend()
         if (this.seekTarget !== null && (msg.currentStep >= this.seekTarget || msg.finished)) {
           const target = this.seekTarget
           this.seekTarget = null
@@ -515,7 +578,13 @@ export class LabController {
         break
       }
       case 'status':
-        useLab.setState({ playing: msg.playing, finished: msg.finished, currentStep: msg.currentStep })
+        useLab.setState({
+          playing: msg.playing,
+          finished: msg.finished,
+          currentStep: msg.currentStep,
+          waiting: msg.waiting ?? false,
+        })
+        if (msg.waiting) this.maybeExtend()
         if (this.seekTarget !== null && !msg.playing && msg.currentStep >= this.seekTarget) {
           // seekTo found the worker already at / past the target (no batch was needed)
           const target = this.seekTarget
@@ -530,6 +599,9 @@ export class LabController {
           useLab.setState({ inspected: msg.trace })
           this.renderer.setHighlight(msg.trace.instructions)
         }
+        break
+      case 'extended':
+        useLab.setState({ totalSteps: msg.totalSteps, finished: false })
         break
       case 'error':
         useLab.setState({ phase: 'error', error: msg.message, playing: false })

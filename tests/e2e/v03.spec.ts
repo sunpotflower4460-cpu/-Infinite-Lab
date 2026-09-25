@@ -42,3 +42,40 @@ test('both geometry layers draw the same structure', async ({ page }) => {
   expect(graphics).toBeGreaterThan(5000)
   expect(Math.abs(instanced - graphics) / graphics).toBeLessThan(0.5) // same shapes, different anti-aliasing
 })
+
+test('Infinite Mode keeps computing digits and the result stays reproducible', async ({ page }) => {
+  test.setTimeout(120_000)
+  await page.goto('/')
+  await ready(page)
+  await page.getByTestId('precision').selectOption('100')
+  await expect(page.getByTestId('status')).toContainText('100 digits')
+  await page.getByRole('button', { name: '∞ Infinite' }).click()
+  await page.getByRole('radio', { name: 'MAX' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  // 101 steps from 100 digits, then continues on 10,000 → 20,000 digits…
+  await expect
+    .poll(async () => Number((await page.getByTestId('current-step').textContent())!.replace(/,/g, '')), {
+      timeout: 60_000,
+    })
+    .toBeGreaterThan(12_000)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible()
+  await expect(page.getByTestId('status')).not.toContainText(/Precision\s*100 digits/)
+  await expect(page.getByTestId('precision')).toContainText('(extended)')
+
+  // Export, then re-import: recomputing with the extended precision in one go must give the same SHA-256.
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export JSON' }).click(),
+  ])
+  const { readFileSync } = await import('node:fs')
+  const file = JSON.parse(readFileSync(await download.path(), 'utf8'))
+  expect(file.config.precision).toBeGreaterThanOrEqual(20_000)
+  await page.getByRole('button', { name: '∞ Infinite' }).click() // off
+  await page.getByTestId('import-file').setInputFiles({
+    name: 'x.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(file)),
+  })
+  await expect(page.getByTestId('verify')).toContainText('reproduced', { timeout: 60_000 })
+})

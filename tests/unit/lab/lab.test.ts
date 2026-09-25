@@ -37,7 +37,7 @@ describe('parseConfig', () => {
   it.each([
     [{ experiment: 'nope' }, /unknown experiment/],
     [{ experiment: 'circle-chain', constant: 'tau' }, /unknown constant/],
-    [{ experiment: 'circle-chain', precision: 123 }, /precision/],
+    [{ experiment: 'circle-chain', precision: 0 }, /precision/],
     [{ experiment: 'circle-chain', digitStart: 'middle' }, /digitStart/],
     [{ experiment: 'circle-chain', parameters: { radiusScale: 'big' } }, /radiusScale/],
     [{ experiment: 'circle-chain', parameters: { radiusScale: 1e9 } }, /radiusScale/],

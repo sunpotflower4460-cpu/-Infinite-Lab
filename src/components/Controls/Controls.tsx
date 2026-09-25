@@ -10,6 +10,7 @@ export function Controls() {
   const finished = useLab((s) => s.finished)
   const ready = useLab((s) => s.phase === 'ready')
   const speedIndex = useLab((s) => s.speedIndex)
+  const continuous = useLab((s) => s.continuous)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -64,6 +65,14 @@ export function Controls() {
           </button>
         ))}
       </div>
+      <button
+        className={`infinite${continuous ? ' active' : ''}`}
+        aria-pressed={continuous}
+        onClick={() => c.setContinuous(!continuous)}
+        title="Infinite Mode: keep computing more digits until paused (continuous computation, up to 1,000,000 digits)"
+      >
+        ∞ Infinite
+      </button>
       <Timeline />
     </div>
   )
