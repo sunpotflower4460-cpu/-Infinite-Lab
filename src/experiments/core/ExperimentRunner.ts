@@ -34,6 +34,8 @@ export class ExperimentRunner {
   private readonly digitView: DigitView
   private readonly startOffset: number
   private step = 0
+  /** Explanation of the most recent step, filled by `advance(…, traceLast = true)`. */
+  lastTrace: StepTrace | undefined
 
   constructor(
     readonly definition: ExperimentDefinition,
@@ -79,15 +81,19 @@ export class ExperimentRunner {
 
   /**
    * Execute up to `maxSteps` steps, appending geometry to `out`.
+   * With `traceLast`, the final step is explained into `lastTrace` (at no extra re-execution cost).
    * Returns the number of steps executed.
    */
-  advance(maxSteps: number, out?: GeometryBatchWriter): number {
+  advance(maxSteps: number, out?: GeometryBatchWriter, traceLast = false): number {
     const target = Math.min(this.totalSteps, this.step + maxSteps)
     const start = this.step
     while (this.step < target) {
       const n = this.step + 1
-      const { instructions } = this.experiment.step(this.context(n))
+      const ctx = this.context(n)
+      const evaluations: FormulaEvaluation[] | undefined = traceLast && n === target ? [] : undefined
+      const { instructions, env } = this.experiment.step(ctx, evaluations)
       if (out) for (const g of instructions) out.push(n, g)
+      if (evaluations) this.lastTrace = this.buildTrace(ctx, evaluations, env, instructions)
       this.step = n
       if (n % CHECKPOINT_INTERVAL === 0) this.checkpoints.set(n, this.experiment.snapshot())
     }
@@ -110,8 +116,17 @@ export class ExperimentRunner {
     const evaluations: FormulaEvaluation[] = []
     const ctx = this.context(step)
     const { instructions, env } = shadow.step(ctx, evaluations)
+    return this.buildTrace(ctx, evaluations, env, instructions)
+  }
+
+  private buildTrace(
+    ctx: StepContext,
+    evaluations: FormulaEvaluation[],
+    env: StepTrace['env'],
+    instructions: StepTrace['instructions'],
+  ): StepTrace {
     return {
-      step,
+      step: ctx.index,
       digit: ctx.digit,
       digitPosition: ctx.digitPosition,
       digitPlace:
@@ -119,7 +134,7 @@ export class ExperimentRunner {
           ? 'integer'
           : ctx.digitPosition - this.config.integerPartLength + 1,
       evaluations,
-      env,
+      env: { ...env },
       instructions,
     }
   }
@@ -130,6 +145,7 @@ export class ExperimentRunner {
     this.checkpoints.clear()
     this.checkpoints.set(0, this.experiment.snapshot())
     this.step = 0
+    this.lastTrace = undefined
   }
 
   /** Current experiment state (for replay tests). */

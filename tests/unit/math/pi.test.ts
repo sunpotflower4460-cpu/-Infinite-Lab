@@ -15,8 +15,9 @@ describe('π (Chudnovsky, BigInt)', () => {
     expect(computePi(10).value).toBe('3.1415926535')
   })
 
-  it('truncates rather than rounds (digit 6 then 5 → "3.14159", not "3.14160")', () => {
-    expect(computePi(5).value).toBe('3.14159')
+  it('truncates rather than rounds (3.1415|9… → "3.1415", not "3.1416")', () => {
+    expect(computePi(4).value).toBe('3.1415')
+    expect(computePi(1).value).toBe('3.1')
   })
 
   it.each([1, 2, 3, 13, 14, 15, 28, 100, 997, 1000, 1001, 4321, 10000])(

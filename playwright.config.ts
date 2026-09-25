@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Uses the system Chromium when available (CI images / cloud containers) so no browser download is needed.
-const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? (process.env.PLAYWRIGHT_BROWSERS_PATH ? '/opt/pw-browsers/chromium' : undefined)
+const executablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_PATH ??
+  (process.env.PLAYWRIGHT_BROWSERS_PATH ? '/opt/pw-browsers/chromium' : undefined)
 
 export default defineConfig({
   testDir: 'tests/e2e',

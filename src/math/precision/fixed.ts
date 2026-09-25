@@ -15,7 +15,8 @@ export interface FixedDecimal {
  * Truncation is used on purpose: rounding could turn a correct digit into an incorrect one.
  */
 export function toDecimalString(value: FixedDecimal, digits: number): string {
-  if (digits > value.scale) throw new RangeError(`requested ${digits} digits but only ${value.scale} available`)
+  if (digits > value.scale)
+    throw new RangeError(`requested ${digits} digits but only ${value.scale} available`)
   const negative = value.raw < 0n
   const abs = negative ? -value.raw : value.raw
   const truncated = abs / pow10(value.scale - digits)

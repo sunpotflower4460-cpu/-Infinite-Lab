@@ -60,3 +60,11 @@ describe('replay', () => {
     expect(() => runner.inspect(1201)).toThrow(RangeError)
   })
 })
+
+describe('traceLast', () => {
+  it('explains the last step identically to inspect()', () => {
+    const runner = makeRunner('digit-circle-walk', 3000)
+    runner.advance(1234, undefined, true)
+    expect(runner.lastTrace).toEqual(runner.inspect(1234))
+  })
+})

@@ -31,7 +31,12 @@ export interface ArcInstruction {
 
 export type GeometryInstruction = CircleInstruction | LineInstruction | PointInstruction | ArcInstruction
 
-export const circle = (x: number, y: number, radius: number): CircleInstruction => ({ type: 'circle', x, y, radius })
+export const circle = (x: number, y: number, radius: number): CircleInstruction => ({
+  type: 'circle',
+  x,
+  y,
+  radius,
+})
 export const line = (x1: number, y1: number, x2: number, y2: number): LineInstruction => ({
   type: 'line',
   x1,
@@ -40,7 +45,13 @@ export const line = (x1: number, y1: number, x2: number, y2: number): LineInstru
   y2,
 })
 export const point = (x: number, y: number): PointInstruction => ({ type: 'point', x, y })
-export const arc = (x: number, y: number, radius: number, startAngle: number, endAngle: number): ArcInstruction => ({
+export const arc = (
+  x: number,
+  y: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+): ArcInstruction => ({
   type: 'arc',
   x,
   y,

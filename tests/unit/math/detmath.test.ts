@@ -13,7 +13,21 @@ function ulpDiff(a: number, b: number): number {
 
 // Deterministic sample inputs (no Math.random: tests must be reproducible too).
 function samples(): number[] {
-  const xs: number[] = [0, -0, 1e-300, 1e-9, 0.5, 0.785398163, Math.PI / 4, 1, 2, 3, Math.PI, 4, 6.283185307179586]
+  const xs: number[] = [
+    0,
+    -0,
+    1e-300,
+    1e-9,
+    0.5,
+    0.785398163,
+    Math.PI / 4,
+    1,
+    2,
+    3,
+    Math.PI,
+    4,
+    6.283185307179586,
+  ]
   for (let d = 0; d <= 9; d++) xs.push((d / 10) * 2 * Math.PI)
   let s = 0x9e3779b9
   for (let k = 0; k < 20000; k++) {

@@ -84,7 +84,10 @@ export class GeometryBatchWriter {
   }
 }
 
-export function decodeRecord(data: Float64Array, index: number): { step: number; instruction: GeometryInstruction } {
+export function decodeRecord(
+  data: Float64Array,
+  index: number,
+): { step: number; instruction: GeometryInstruction } {
   const o = index * STRIDE
   const step = data[o + 1]!
   const [a, b, c, d, e] = [data[o + 2]!, data[o + 3]!, data[o + 4]!, data[o + 5]!, data[o + 6]!]

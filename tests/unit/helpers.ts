@@ -5,7 +5,10 @@ import { getExperiment } from '../../src/experiments/registry'
 
 export function piDigits(precision: number): { digits: Uint8Array; integerPartLength: number } {
   const r = computePi(precision)
-  return { digits: Uint8Array.from(r.digits, (c) => c.charCodeAt(0) - 48), integerPartLength: r.integerPartLength }
+  return {
+    digits: Uint8Array.from(r.digits, (c) => c.charCodeAt(0) - 48),
+    integerPartLength: r.integerPartLength,
+  }
 }
 
 export function makeRunner(

@@ -46,7 +46,7 @@ describe('formula evaluation', () => {
   it('computes digit / 10 × 2π in float64', () => {
     const angle = mul(div(v('digit'), num(10)), mul(num(2), PI))
     expect(evaluate(angle, { digit: 7 })).toBe((7 / 10) * (2 * Math.PI))
-    expect(evaluate(angle, { digit: 7 })).toBeCloseTo(4.398229715025710, 15)
+    expect(evaluate(angle, { digit: 7 })).toBeCloseTo(4.39822971502571, 15)
   })
 
   it('uses deterministic cos', () => {

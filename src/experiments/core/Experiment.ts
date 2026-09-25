@@ -23,6 +23,7 @@ export function runFormulas(set: FormulaSet, env: Env, symbols: SymbolTable, tra
 /** Numeric parameters as formula variables (booleans become 1 / 0). */
 export function paramsToEnv(params: ParamValues): Env {
   const env: Env = {}
-  for (const [k, value] of Object.entries(params)) env[k] = typeof value === 'boolean' ? (value ? 1 : 0) : value
+  for (const [k, value] of Object.entries(params))
+    env[k] = typeof value === 'boolean' ? (value ? 1 : 0) : value
   return env
 }
