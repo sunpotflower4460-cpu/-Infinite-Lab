@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { computePi } from '../../../src/math/constants/pi'
+import { certainTruncation, computePi, RAW_ERROR_ULPS } from '../../../src/math/constants/pi'
+import { chudnovskyPi } from '../../../src/math/algorithms/chudnovsky'
 import { machinPi } from '../../../src/math/algorithms/machin'
 import { toDecimalString } from '../../../src/math/precision/fixed'
 
@@ -42,5 +43,29 @@ describe('π (Chudnovsky, BigInt)', () => {
   it('rejects invalid precision', () => {
     expect(() => computePi(0)).toThrow(RangeError)
     expect(() => computePi(1.5)).toThrow(RangeError)
+  })
+
+  it.each([1, 5, 14, 15, 29, 100, 1000, 5000])(
+    'raw Chudnovsky error at scale %i is well within RAW_ERROR_ULPS',
+    (scale) => {
+      const raw = chudnovskyPi(scale).raw
+      const truth = BigInt(REFERENCE.replace('.', '').slice(0, scale + 1)) // floor(π·10^scale)
+      const err = raw > truth ? raw - truth : truth - raw
+      expect(err).toBeLessThanOrEqual(3n)
+      expect(err).toBeLessThan(RAW_ERROR_ULPS)
+    },
+  )
+
+  describe('certain truncation', () => {
+    it('accepts values far from a digit boundary', () => {
+      expect(certainTruncation({ raw: 314159265358979n, scale: 14 }, 5)).toBe('3.14159')
+    })
+
+    it('rejects values whose error interval straddles a digit boundary', () => {
+      // 3.14999999999999 ± 16e-14 could be 3.14… or 3.15…
+      expect(certainTruncation({ raw: 314999999999999n, scale: 14 }, 2)).toBeNull()
+      expect(certainTruncation({ raw: 315000000000000n, scale: 14 }, 2)).toBeNull()
+      expect(certainTruncation({ raw: 315000000000000n + RAW_ERROR_ULPS, scale: 14 }, 2)).toBe('3.15')
+    })
   })
 })

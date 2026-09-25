@@ -81,6 +81,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
         stop()
         inFlight = 0
         generation++
+        rateWindow = []
         sim = new Simulation(msg)
         post({ type: 'ready', totalSteps: sim.runner.totalSteps })
         break
@@ -122,6 +123,7 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
         stop()
         inFlight = 0
         generation++
+        rateWindow = []
         sim?.reset()
         post({ type: 'reset', currentStep: 0 })
         break

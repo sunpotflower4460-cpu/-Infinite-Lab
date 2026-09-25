@@ -24,6 +24,8 @@ test('vertical slice: compute π → play → pause → step → inspect → res
   await page.getByRole('button', { name: 'Play' }).click()
   await expect.poll(async () => num(await page.getByTestId('current-step').textContent())).toBeGreaterThan(50)
   await page.getByRole('button', { name: 'Pause' }).click()
+  // The Play button returns only after the worker's pause status, which follows every earlier batch.
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible()
   const paused = num(await page.getByTestId('current-step').textContent())
   await page.waitForTimeout(300)
   expect(num(await page.getByTestId('current-step').textContent())).toBe(paused)
@@ -67,4 +69,27 @@ test('MAX speed consumes all digits and stops', async ({ page }) => {
   await expect(page.getByTestId('current-step')).toHaveText('1,001') // "3" + 1,000 decimals
   await expect(page.getByText('all computed digits consumed')).toBeVisible()
   await expect(page.getByTestId('objects')).toHaveText('2,002')
+})
+
+test('parameter edits apply on Enter, are clamped, and restart the experiment', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByTestId('digit-stream')).toContainText('3.14159')
+  await page.getByRole('button', { name: 'Step' }).click()
+  await expect(page.getByTestId('current-step')).toHaveText('1')
+
+  const distance = page.getByLabel('DISTANCE')
+  await distance.fill('')
+  // An empty draft must not snap to the minimum or restart anything.
+  await expect(page.getByTestId('current-step')).toHaveText('1')
+  await distance.fill('25')
+  await distance.press('Enter')
+  await expect(page.getByTestId('current-step')).toHaveText('0')
+  await expect(distance).toHaveValue('25')
+
+  await page.getByRole('button', { name: 'Step' }).click()
+  await expect(page.getByTestId('inspector')).toContainText('× 25')
+
+  await distance.fill('100000')
+  await distance.press('Enter')
+  await expect(distance).toHaveValue('100') // clamped to max
 })

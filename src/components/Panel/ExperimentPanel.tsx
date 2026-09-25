@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { getController } from '../../app/LabController'
 import { EXPERIMENTS, getExperiment } from '../../experiments/registry'
 import { PRECISIONS, useLab } from '../../state/labStore'
@@ -89,21 +90,15 @@ export function ExperimentPanel() {
         <div className="panel-title">Parameters</div>
         {def.parameters.map((p) =>
           p.type === 'number' ? (
-            <label key={p.key} className="param">
-              <span>{p.label}</span>
-              <input
-                type="number"
-                className="mono"
-                min={p.min}
-                max={p.max}
-                step={p.step}
-                value={params[p.key] as number}
-                onChange={(e) => {
-                  const v = Number(e.target.value)
-                  if (Number.isFinite(v)) c.setParam(p.key, Math.min(p.max, Math.max(p.min, v)))
-                }}
-              />
-            </label>
+            <NumberParam
+              key={`${experimentId}:${p.key}`}
+              label={p.label}
+              min={p.min}
+              max={p.max}
+              step={p.step}
+              value={params[p.key] as number}
+              onCommit={(v) => c.setParam(p.key, v)}
+            />
           ) : (
             <label key={p.key} className="param">
               <span>{p.label}</span>
@@ -115,8 +110,54 @@ export function ExperimentPanel() {
             </label>
           ),
         )}
-        <p className="muted small">Changing parameters restarts the experiment from step 0.</p>
+        <p className="muted small">
+          Press Enter to apply. Changing parameters restarts the experiment from step 0.
+        </p>
       </section>
     </div>
+  )
+}
+
+/**
+ * Numeric parameter field. Typing edits a local draft; the value is validated, clamped and
+ * applied (restarting the experiment) only on Enter or blur, and only if it changed.
+ */
+function NumberParam(props: {
+  label: string
+  min: number
+  max: number
+  step: number
+  value: number
+  onCommit: (value: number) => void
+}) {
+  const { label, min, max, step, value, onCommit } = props
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const v = Number(draft)
+    setDraft(null)
+    if (draft.trim() === '' || !Number.isFinite(v)) return // invalid → keep the current value
+    const clamped = Math.min(max, Math.max(min, v))
+    if (clamped !== value) onCommit(clamped)
+  }
+  return (
+    <label className="param" title={`${min} – ${max}`}>
+      <span>{label}</span>
+      <input
+        type="number"
+        className="mono"
+        min={min}
+        max={max}
+        step={step}
+        value={draft ?? String(value)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          else if (e.key === 'Escape') setDraft(null)
+        }}
+        aria-label={label}
+      />
+    </label>
   )
 }

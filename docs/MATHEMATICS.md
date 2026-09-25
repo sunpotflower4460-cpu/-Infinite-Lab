@@ -18,7 +18,7 @@ $$\frac{1}{\pi} = 12 \sum_{k=0}^{\infty} \frac{(-1)^k (6k)!\,(13591409 + 5451401
 
 `computePi(precision)` は `precision + 20` 桁で計算し、`precision` 桁へ **切り捨て** る（`src/math/precision/fixed.ts`）。
 丸めると正しい桁が誤った桁に変わる（例: `3.1415|9…` を 4 桁で丸めると `3.1416` となり、小数第 4 位が π の実際の桁 `5` ではなくなる）ため、丸めは行わない。
-固定小数点の最終数桁は `isqrt` と整数除算の切り捨て誤差を含むが、20 桁の guard がそれを吸収する。
+さらに **確実な切り捨て** を行う: Chudnovsky の生の固定小数点値 `raw` の誤差上界 `E`（isqrt の floor < 1 ulp、最終除算の floor < 1 ulp、級数の打ち切り ≪ 1 ulp → 保守的に `E = 16 ulp`）に対し、`raw − E` と `raw + E` を要求桁数へ切り捨てた結果が一致する場合のみ採用する。一致しない（真値が桁の境界の両側にありうる、例: `…4999999|…`）場合は guard を 2 倍にして再計算する。これにより、表示される全桁は誤差解析上正しいことが保証される（`certainTruncation`, `src/math/constants/pi.ts`）。実測の raw 誤差は ≤ 3 ulp（テストで確認）。
 
 ### Precision の定義
 
