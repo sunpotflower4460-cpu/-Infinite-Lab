@@ -202,7 +202,7 @@ export class PixiRenderer implements Renderer {
     // Score = distance, with path lines penalised so circles/points win when both are in range.
     let bestScore = Infinity
     let bestStep: number | null = null
-    this.store.forEachRecord(this.visibleCount(), (d, o) => {
+    this.store.forEachRecordNear(wx, wy, tol, this.visibleCount(), (d, o) => {
       const kind = d[o]
       let dist: number
       if (kind === KIND.line) {

@@ -16,6 +16,8 @@ export interface Bounds {
  */
 export class GeometryStore {
   readonly chunks: Float64Array[] = []
+  /** Bounding box of each chunk: a coarse spatial index (consecutive steps are close together). */
+  readonly chunkBounds: Bounds[] = []
   count = 0
   bounds: Bounds | null = null
 
@@ -31,12 +33,12 @@ export class GeometryStore {
       const so = i * STRIDE
       const o = (this.count % CHUNK_RECORDS) * STRIDE
       for (let k = 0; k < STRIDE; k++) chunk[o + k] = src[so + k]!
-      this.extendBounds(src, so)
+      this.extendBounds(src, so, chunkIndex)
       this.count++
     }
   }
 
-  private extendBounds(d: Float64Array, o: number): void {
+  private extendBounds(d: Float64Array, o: number, chunkIndex: number): void {
     const kind = d[o]
     let minX: number, maxX: number, minY: number, maxY: number
     if (kind === KIND.line) {
@@ -51,14 +53,11 @@ export class GeometryStore {
       minY = d[o + 3]! - r
       maxY = d[o + 3]! + r
     }
-    const b = this.bounds
-    if (!b) this.bounds = { minX, minY, maxX, maxY }
-    else {
-      if (minX < b.minX) b.minX = minX
-      if (minY < b.minY) b.minY = minY
-      if (maxX > b.maxX) b.maxX = maxX
-      if (maxY > b.maxY) b.maxY = maxY
-    }
+    if (!this.bounds) this.bounds = { minX, minY, maxX, maxY }
+    else grow(this.bounds, minX, minY, maxX, maxY)
+    const cb = this.chunkBounds[chunkIndex]
+    if (!cb) this.chunkBounds[chunkIndex] = { minX, minY, maxX, maxY }
+    else grow(cb, minX, minY, maxX, maxY)
   }
 
   /** Step of record `index`. Records are appended in step order. */
@@ -90,6 +89,27 @@ export class GeometryStore {
     }
   }
 
+  /**
+   * Visit the first `count` records whose chunk bounding box is within `margin` of (x, y);
+   * whole chunks far from the point are skipped.
+   */
+  forEachRecordNear(
+    x: number,
+    y: number,
+    margin: number,
+    count: number,
+    fn: (data: Float64Array, offset: number) => void,
+  ): void {
+    const n = Math.min(count, this.count)
+    for (let c = 0; c * CHUNK_RECORDS < n; c++) {
+      const b = this.chunkBounds[c]!
+      if (x < b.minX - margin || x > b.maxX + margin || y < b.minY - margin || y > b.maxY + margin) continue
+      const data = this.chunks[c]!
+      const end = Math.min(CHUNK_RECORDS, n - c * CHUNK_RECORDS)
+      for (let i = 0; i < end; i++) fn(data, i * STRIDE)
+    }
+  }
+
   /** Visit the first `count` records: (chunk, offset into chunk). */
   forEachRecord(count: number, fn: (data: Float64Array, offset: number) => void): void {
     const n = Math.min(count, this.count)
@@ -118,7 +138,15 @@ export class GeometryStore {
 
   clear(): void {
     this.chunks.length = 0
+    this.chunkBounds.length = 0
     this.count = 0
     this.bounds = null
   }
+}
+
+function grow(b: Bounds, minX: number, minY: number, maxX: number, maxY: number): void {
+  if (minX < b.minX) b.minX = minX
+  if (minY < b.minY) b.minY = minY
+  if (maxX > b.maxX) b.maxX = maxX
+  if (maxY > b.maxY) b.maxY = maxY
 }

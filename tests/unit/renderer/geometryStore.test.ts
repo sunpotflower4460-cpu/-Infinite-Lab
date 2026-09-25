@@ -51,3 +51,21 @@ describe('geometryDigest', () => {
 })
 
 const PINNED = 'fb95870d0cff6d0c7913adf09bc10f041a593f29f7a1debe29f3bb2e8edd1d38'
+
+describe('chunk bounding boxes (pick index)', () => {
+  it('visit exactly the records a full scan would find near a point', () => {
+    const store = storeFor(4000) // 8,000 records, 4 chunks
+    for (const [x, y, tol] of [[0, 0, 1], [50, -20, 5], [1e6, 1e6, 1]] as const) {
+      const near = new Set<number>()
+      store.forEachRecordNear(x, y, tol, store.count, (d, o) => {
+        if (Math.hypot(d[o + 2]! - x, d[o + 3]! - y) <= tol) near.add(d[o + 1]!)
+      })
+      const all = new Set<number>()
+      store.forEachRecord(store.count, (d, o) => {
+        if (Math.hypot(d[o + 2]! - x, d[o + 3]! - y) <= tol) all.add(d[o + 1]!)
+      })
+      expect([...near].sort()).toEqual([...all].sort())
+    }
+    expect(store.chunkBounds).toHaveLength(store.chunks.length)
+  })
+})
