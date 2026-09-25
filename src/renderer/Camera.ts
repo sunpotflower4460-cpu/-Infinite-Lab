@@ -9,6 +9,11 @@ export interface Bounds {
   maxY: number
 }
 
+export interface Point {
+  x: number
+  y: number
+}
+
 export const MIN_ZOOM = 1e-4
 export const MAX_ZOOM = 1e5
 
@@ -45,6 +50,19 @@ export class Camera {
   panBy(dxScreen: number, dyScreen: number): void {
     this.cx -= dxScreen / this.zoom
     this.cy += dyScreen / this.zoom
+  }
+
+  /**
+   * Two-finger gesture from (a0, b0) to (a1, b1), screen coordinates: zoom by the change in
+   * finger distance and pan with the midpoint, so the world point under the fingers stays there.
+   */
+  pinch(a0: Point, b0: Point, a1: Point, b1: Point): void {
+    const m0x = (a0.x + b0.x) / 2
+    const m0y = (a0.y + b0.y) / 2
+    const d0 = Math.hypot(a0.x - b0.x, a0.y - b0.y)
+    const d1 = Math.hypot(a1.x - b1.x, a1.y - b1.y)
+    if (d0 > 0 && d1 > 0) this.zoomAt(m0x, m0y, d1 / d0)
+    this.panBy((a1.x + b1.x) / 2 - m0x, (a1.y + b1.y) / 2 - m0y)
   }
 
   centerOn(x: number, y: number): void {

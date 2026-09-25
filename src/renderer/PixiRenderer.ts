@@ -308,11 +308,12 @@ export class PixiRenderer implements Renderer {
   }
 
   private bindInput(canvas: HTMLCanvasElement): void {
-    let dragging = false
-    let lastX = 0
-    let lastY = 0
+    // Active pointers (mouse or fingers), in canvas-local coordinates.
+    const pointers = new Map<number, { x: number; y: number }>()
     let downX = 0
     let downY = 0
+    /** A second finger touched during this gesture: never treat it as a click. */
+    let multi = false
     const local = (e: MouseEvent) => {
       const r = canvas.getBoundingClientRect()
       return [e.clientX - r.left, e.clientY - r.top] as const
@@ -329,28 +330,40 @@ export class PixiRenderer implements Renderer {
       this.applyCamera()
     }
     const onDown = (e: PointerEvent) => {
-      dragging = true
-      lastX = downX = e.clientX
-      lastY = downY = e.clientY
+      const [x, y] = local(e)
+      pointers.set(e.pointerId, { x, y })
+      if (pointers.size === 1) {
+        downX = x
+        downY = y
+        multi = false
+      } else multi = true
       canvas.setPointerCapture(e.pointerId)
     }
     const onMove = (e: PointerEvent) => {
-      if (!dragging) return
-      const dx = e.clientX - lastX
-      const dy = e.clientY - lastY
-      if (dx === 0 && dy === 0) return
-      lastX = e.clientX
-      lastY = e.clientY
-      this.camera.panBy(dx, dy)
+      const prev = pointers.get(e.pointerId)
+      if (!prev) return
+      const [x, y] = local(e)
+      if (x === prev.x && y === prev.y) return
+      if (pointers.size >= 2) {
+        const [idA, idB] = [...pointers.keys()]
+        const a0 = { ...pointers.get(idA!)! }
+        const b0 = { ...pointers.get(idB!)! }
+        pointers.set(e.pointerId, { x, y })
+        this.camera.pinch(a0, b0, pointers.get(idA!)!, pointers.get(idB!)!)
+      } else {
+        pointers.set(e.pointerId, { x, y })
+        this.camera.panBy(x - prev.x, y - prev.y)
+      }
       user()
       this.applyCamera()
     }
     const onUp = (e: PointerEvent) => {
-      if (dragging && Math.hypot(e.clientX - downX, e.clientY - downY) < 4 && this.onPick) {
-        const [sx, sy] = local(e)
-        this.onPick(this.pick(sx, sy))
+      if (!pointers.has(e.pointerId)) return
+      const [x, y] = local(e)
+      pointers.delete(e.pointerId)
+      if (pointers.size === 0 && !multi && Math.hypot(x - downX, y - downY) < 4 && this.onPick) {
+        this.onPick(this.pick(x, y))
       }
-      dragging = false
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
     }
     const onDbl = (e: MouseEvent) => {

@@ -59,6 +59,8 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** Narrow screens: which bottom sheet is open. */
+  sheet: 'setup' | 'inspector' | null
   /** Compare Mode: constant of the second lane (null = off). Main lab only. */
   compareConstant: string | null
   /** Compare Mode playback (both lanes advanced in lockstep by the main thread). */
@@ -100,6 +102,7 @@ function initialState(): LabState {
     history: [],
     verify: { status: 'idle' },
     scientific: false,
+    sheet: null,
     compareConstant: null,
     lockstepPlaying: false,
     continuous: false,

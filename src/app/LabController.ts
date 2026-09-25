@@ -288,6 +288,9 @@ export class LabController {
 
   /** A click in either lane inspects that step in both (same step, different constant). */
   private onPicked(step: number | null): void {
+    if (step !== null && typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches) {
+      ;(this.owner ?? this).store.setState({ sheet: 'inspector' })
+    }
     const lanes = this.peer ? [this, this.peer] : this.owner ? [this.owner, this] : [this]
     for (const lane of lanes) {
       if (step === null) lane.clearInspection()

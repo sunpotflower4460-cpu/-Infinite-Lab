@@ -157,3 +157,33 @@ test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
   expect(png.data.subarray(1, 4).toString('latin1')).toBe('PNG')
   expect(png.data.length).toBeGreaterThan(2000)
 })
+
+test.describe('mobile layout (spec §30)', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('canvas first, Setup and Inspector as bottom sheets', async ({ page }) => {
+    await page.goto('/')
+    await ready(page)
+    const canvas = page.getByTestId('lab-canvas')
+    const box = (await canvas.boundingBox())!
+    expect(box.width).toBeGreaterThan(350)
+    expect(box.height).toBeGreaterThan(300)
+    await expect(page.getByRole('complementary', { name: 'Setup' })).not.toBeInViewport()
+
+    await page.getByRole('button', { name: '⚙ Setup' }).click()
+    await expect(page.getByRole('complementary', { name: 'Setup' })).toBeInViewport()
+    await page.getByLabel('Experiment').selectOption('circle-chain')
+    await page.getByRole('button', { name: 'Close Setup' }).click()
+    await expect(page.getByRole('complementary', { name: 'Setup' })).not.toBeInViewport()
+    await page.screenshot({ path: 'test-results/mobile-canvas.png' })
+
+    // tapping the geometry opens the Inspector sheet on that step
+    await page.getByRole('button', { name: 'Step' }).click()
+    await expect(page.getByTestId('current-step')).toHaveText('1')
+    const b = (await canvas.boundingBox())!
+    await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2) // circle 1 is centred by Fit All
+    await expect(page.getByRole('complementary', { name: 'Inspector' })).toBeInViewport()
+    await expect(page.getByTestId('inspector')).toContainText('pinned')
+    await page.screenshot({ path: 'test-results/mobile-inspector.png' })
+  })
+})
