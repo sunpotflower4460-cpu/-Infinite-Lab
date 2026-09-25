@@ -57,6 +57,7 @@ describe('presets', () => {
       'Pi Flower',
       'Pi Orbit',
       'Pi Spiral',
+      'Pi Two-Arm (reference candidate)',
     ])
     for (const p of PRESETS) expect(EXPERIMENTS[p.config.experiment]).toBeDefined()
   })

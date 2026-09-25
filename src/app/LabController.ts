@@ -1,6 +1,7 @@
 import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment } from '../experiments/registry'
-import { defaultParams, type DigitStart, type ParamValue } from '../experiments/core/types'
+import { defaultParams, type DigitStart, type ParamValue, type StepTrace } from '../experiments/core/types'
+import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
 import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
@@ -426,7 +427,7 @@ export class LabController {
       return
     }
     this.store.setState({ inspected: null })
-    this.renderer.setHighlight(s.currentTrace?.instructions ?? null)
+    this.renderer.setHighlight(highlightOf(s.currentTrace))
   }
 
   // ---- view ---------------------------------------------------------------------------
@@ -779,7 +780,7 @@ export class LabController {
         this.renderer.append({ data: msg.data, count: msg.count })
         this.postSim({ type: 'ack', generation: msg.generation })
         const inspected = this.store.getState().inspected
-        if (msg.trace && !inspected) this.renderer.setHighlight(msg.trace.instructions)
+        if (msg.trace && !inspected) this.renderer.setHighlight(highlightOf(msg.trace))
         this.store.setState({
           currentStep: msg.currentStep,
           totalSteps: msg.totalSteps,
@@ -819,7 +820,7 @@ export class LabController {
         if (msg.requestId !== this.inspectRequestId) return
         if (msg.trace) {
           this.store.setState({ inspected: msg.trace })
-          this.renderer.setHighlight(msg.trace.instructions)
+          this.renderer.setHighlight(highlightOf(msg.trace))
         }
         break
       case 'extended':
@@ -836,4 +837,9 @@ let instance: LabController | undefined
 export function getController(): LabController {
   instance ??= new LabController()
   return instance
+}
+
+/** Geometry of a step plus its transient overlay (e.g. the arms of Two-Arm Rotation). */
+function highlightOf(trace: StepTrace | null | undefined): GeometryInstruction[] | null {
+  return trace ? [...trace.instructions, ...(trace.overlay ?? [])] : null
 }

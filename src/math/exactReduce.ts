@@ -94,3 +94,32 @@ export function constantProductMod(factors: number[], c: BinaryConstant, modulus
   const shift = Math.max(0, bitLength(r) - 64)
   return Number(r >> BigInt(shift)) * 2 ** (E + shift)
 }
+
+/**
+ * (f₁ × … × fₖ [× C]) mod 2π, with the float64 factors taken exactly, C and π as 448-bit
+ * binary constants (≈ 120 decimals). The product and reduction are BigInt; only the result is
+ * rounded to float64. Used for angles like n·dt·C that must not drift over millions of steps.
+ */
+export function productModTau(
+  factors: number[],
+  constant: BinaryConstant | null,
+  pi: BinaryConstant,
+): number {
+  let M = constant ? constant.raw : 1n
+  let E = constant ? -constant.bits : 0
+  for (const f of factors) {
+    const d = decomposeDouble(f)
+    M *= d.mant
+    E += d.exp
+  }
+  if (M === 0n) return 0
+  const B = pi.bits
+  const tau = 2n * pi.raw // 2π · 2^B
+  const shift = E + B
+  const V = shift >= 0 ? M << BigInt(shift) : M >> BigInt(-shift) // value · 2^B (floor below 2^-B)
+  let r = V % tau
+  if (r < 0n) r += tau
+  if (r === 0n) return 0
+  const s = Math.max(0, bitLength(r) - 64)
+  return Number(r >> BigInt(s)) * 2 ** (s - B)
+}

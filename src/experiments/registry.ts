@@ -3,12 +3,14 @@ import { renderFormula, withConstantSymbol, type SymbolTable } from './core/form
 import type { ExperimentDefinition } from './core/types'
 import { digitCircleWalk } from './digit-circle-walk'
 import { piRotation } from './pi-rotation'
+import { twoArm } from './two-arm'
 
 /** Available experiments, in display order. */
 export const EXPERIMENTS: Record<string, ExperimentDefinition> = {
   [digitCircleWalk.id]: digitCircleWalk,
   [circleChain.id]: circleChain,
   [piRotation.id]: piRotation,
+  [twoArm.id]: twoArm,
 }
 
 export function getExperiment(id: string): ExperimentDefinition {
