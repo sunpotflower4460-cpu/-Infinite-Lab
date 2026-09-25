@@ -49,10 +49,14 @@ export class Simulation {
     return Math.min(due, MAX_STEPS_PER_TICK)
   }
 
-  run(steps: number): TickResult {
+  /**
+   * Execute up to `steps` steps. With `budgeted` (MAX playback), stop early once the
+   * per-tick time budget is used; otherwise always execute exactly min(steps, remaining).
+   */
+  run(steps: number, budgeted = false): TickResult {
     const t0 = performance.now()
     let executed = 0
-    if (!Number.isFinite(this.stepsPerSecond) && steps === MAX_STEPS_PER_TICK) {
+    if (budgeted) {
       // MAX: run in slices until the time budget is used.
       while (executed < steps && !this.runner.finished && performance.now() - t0 < MAX_TICK_BUDGET_MS) {
         const slice = Math.min(1000, steps - executed)

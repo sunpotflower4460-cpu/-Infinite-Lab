@@ -26,19 +26,26 @@
 
 性能目標「10,000 objects @ 60fps」は実 GPU 環境での確認が必要（開発コンテナはソフトウェア WebGL）。
 
-## v0.2 — 実験の拡充
+## v0.2 — 実験の拡充 ✅
 
-- Experiment 02 Circle Chain、Experiment 03 Pi Rotation（BigInt による厳密な角度剰余）
-- Timeline: 任意 step へのシーク（巻き戻し = 表示数の切り詰め、前進 = 計算）
-- Canvas 上の図形クリック → その step を Inspector に表示（グリッドハッシュによる空間索引）
-- Preset（JSON）: Pi Flower / Pi Orbit / Pi Circle Chain / Pi Spiral / Pi Walk
-- History（localStorage）、JSON Export（再現可能な実験記述）
-- 定数 e（Σ1/k!, binary splitting）/ √2（isqrt）/ φ（(1+√5)/2）
+| 項目                                                     | 状態 | 根拠                                                                                             |
+| -------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------ |
+| Experiment 02 Circle Chain                               | ✅   | `src/experiments/circle-chain/`, `tests/unit/experiments/circle-chain.test.ts`                   |
+| Experiment 03 Pi Rotation（BigInt による厳密な角度剰余） | ✅   | `src/experiments/pi-rotation/`, `src/math/exactReduce.ts`, `tests/unit/math/exactReduce.test.ts` |
+| 定数 e / √2 / φ（表示桁の正しさを保証）                  | ✅   | `src/math/constants/`, `tests/unit/math/constants.test.ts`                                       |
+| Timeline（過去の表示・先への計算）                       | ✅   | `src/components/Timeline/`, E2E                                                                  |
+| Canvas クリック → Inspector                              | ✅   | `PixiRenderer.pick`, E2E                                                                         |
+| Presets（仕様 §24 の JSON 形式）                         | ✅   | `src/lab/presets.ts`                                                                             |
+| History（localStorage、復元時に digest 検証）            | ✅   | `src/lab/history.ts`, E2E                                                                        |
+| JSON Export / Import（SHA-256 による再現検証）           | ✅   | `src/lab/experimentFile.ts`, `src/geometry/digest.ts`, E2E                                       |
+
+設計メモ: クリック判定は空間索引ではなく線形走査にした（20 万レコードでもクリック 1 回あたり数 ms）。1M objects 規模では v0.3 でグリッド索引を追加する。
 
 ## v0.3 — スケールとモバイル
 
 - SDF 円のインスタンス描画シェーダ（100k → 1M objects）、カメラ相対座標
 - Continuous computation（Infinite Mode）: 桁を使い切ったら追加計算して継続
+- クリック判定の空間索引（グリッドハッシュ）
 - Compare Mode（π vs e を同一条件で並列表示）
 - モバイル: Inspector を Bottom Sheet に
 - PNG / SVG / CSV Export

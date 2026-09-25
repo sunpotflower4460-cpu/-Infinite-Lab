@@ -46,6 +46,8 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
         return `−${wrap(x.arg, 3, false)}`
       case 'call':
         return `${x.fn}(${go(x.arg)})`
+      case 'constMod':
+        return `(${[...x.factors.map((f) => wrap(f, 2, false)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
       case 'bin': {
         if (isImplicitProduct(x)) return `${go(x.left)}π`
         const p = PRECEDENCE[x.op]
@@ -61,6 +63,16 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
     return cp < parentPrec || (strict && cp === parentPrec) ? `(${inner})` : inner
   }
   return go(e)
+}
+
+/** Symbol table with `C` bound to the constant's symbol (π, e, √2, φ). */
+export function withConstantSymbol(symbols: SymbolTable, constantSymbol: string): SymbolTable {
+  return { ...symbols, C: constantSymbol }
+}
+
+/** "target = expression" as displayed in the UI and written to exports. */
+export function renderFormula(f: Formula, symbols?: SymbolTable): string {
+  return `${symbols?.[f.target] ?? f.target} = ${renderExpr(f.expr, { symbols })}`
 }
 
 export interface FormulaEvaluation {
@@ -84,10 +96,9 @@ export function explainFormula(
   value: number,
   symbols?: SymbolTable,
 ): FormulaEvaluation {
-  const lhs = symbols?.[f.target] ?? f.target
   return {
     target: f.target,
-    symbolic: `${lhs} = ${renderExpr(f.expr, { symbols })}`,
+    symbolic: renderFormula(f, symbols),
     substituted: renderExpr(f.expr, { symbols, values: envBefore }),
     value,
     note: f.note,

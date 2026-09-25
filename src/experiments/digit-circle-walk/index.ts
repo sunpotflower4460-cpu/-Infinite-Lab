@@ -1,7 +1,13 @@
 import { circle, line, type GeometryInstruction } from '../../geometry/types'
 import { paramsToEnv, runFormulas } from '../core/Experiment'
 import { add, assign, cos, div, mul, num, PI, sin, v } from '../core/formula'
-import type { ExperimentDefinition, GeometryExperiment, ParamValues } from '../core/types'
+import type {
+  ExperimentDefinition,
+  GeometryExperiment,
+  ParamValues,
+  StepContext,
+  TraceSink,
+} from '../core/types'
 
 /**
  * Experiment 01 — Digit Circle Walk.
@@ -40,7 +46,7 @@ class DigitCircleWalk implements GeometryExperiment<WalkState> {
     this.state = { x: 0, y: 0 }
   }
 
-  step(ctx: { index: number; digit: number }, trace?: Parameters<GeometryExperiment['step']>[1]) {
+  step(ctx: StepContext, trace?: TraceSink) {
     const env = runFormulas(
       formulas,
       { ...this.paramEnv, n: ctx.index, digit: ctx.digit, x_prev: this.state.x, y_prev: this.state.y },
@@ -72,7 +78,7 @@ class DigitCircleWalk implements GeometryExperiment<WalkState> {
 export const digitCircleWalk: ExperimentDefinition = {
   id: 'digit-circle-walk',
   name: 'Digit Circle Walk',
-  description: 'π digit driven circle walk',
+  description: '{C} digit driven circle walk',
   parameters: [
     { key: 'distance', label: 'DISTANCE', type: 'number', default: 10, min: 0.5, max: 100, step: 0.5 },
     { key: 'radiusBase', label: 'RADIUS BASE', type: 'number', default: 2, min: 0, max: 50, step: 0.5 },

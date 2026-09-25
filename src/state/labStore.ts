@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { defaultParams, type DigitStart, type ParamValues, type StepTrace } from '../experiments/core/types'
 import { digitCircleWalk } from '../experiments/digit-circle-walk'
+import type { HistoryEntry } from '../lab/history'
 
-export const PRECISIONS = [100, 1_000, 10_000, 100_000] as const
+export { PRECISIONS } from '../lab/config'
 
 /** Playback speeds. 1x = 10 steps per second. */
 export const SPEEDS = [
@@ -27,6 +28,13 @@ export interface ConstantInfo {
 
 export type Phase = 'idle' | 'computing' | 'ready' | 'error'
 
+/** Result of re-running an imported / restored experiment and comparing its geometry digest. */
+export type VerifyState =
+  | { status: 'idle' }
+  | { status: 'running'; expected: string }
+  | { status: 'verified' | 'mismatch'; expected: string; actual: string }
+  | { status: 'error'; message: string }
+
 export interface LabState {
   phase: Phase
   error: string | null
@@ -46,6 +54,10 @@ export interface LabState {
   currentTrace: StepTrace | null
   /** Explanation of a step the user asked about; overrides currentTrace in the Inspector. */
   inspected: StepTrace | null
+  /** Timeline position when looking at the past (null = following the computed head). */
+  viewStep: number | null
+  history: HistoryEntry[]
+  verify: VerifyState
   scientific: boolean
   follow: boolean
   fps: number
@@ -71,6 +83,9 @@ export const useLab = create<LabState>(() => ({
   speedIndex: 1,
   currentTrace: null,
   inspected: null,
+  viewStep: null,
+  history: [],
+  verify: { status: 'idle' },
   scientific: false,
   follow: true,
   fps: 0,

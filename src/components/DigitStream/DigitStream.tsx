@@ -7,7 +7,8 @@ const AFTER = 36
 /** The constant's digit string with the digit consumed by the current step highlighted. */
 export function DigitStream() {
   const constant = useLab((s) => s.constant)
-  const trace = useLab((s) => s.currentTrace)
+  // Follows the Timeline when looking at the past, otherwise the running step.
+  const trace = useLab((s) => (s.viewStep !== null ? (s.inspected ?? s.currentTrace) : s.currentTrace))
   if (!constant) return <div className="digit-stream mono muted">computing…</div>
 
   const digits = constant.digits

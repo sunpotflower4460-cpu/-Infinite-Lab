@@ -1,4 +1,5 @@
 import type { GeometryInstruction } from '../../geometry/types'
+import type { BinaryConstant } from '../../math/exactReduce'
 import type { Env, FormulaEvaluation, FormulaSet, SymbolTable } from './formula'
 
 export type ParamValue = number | boolean
@@ -39,8 +40,15 @@ export interface StepContext {
   digitPosition: number
   /** Every digit up to (and beyond) this one; experiments may look back via `previousDigits.at(i)`. */
   previousDigits: DigitView
-  /** Constant identity, e.g. { id: 'pi', symbol: 'π' }. */
-  constant: { id: string; symbol: string }
+  /** The constant: identity, e.g. { id: 'pi', symbol: 'π' }, plus its value in high precision. */
+  constant: ConstantHandle
+}
+
+export interface ConstantHandle {
+  id: string
+  symbol: string
+  /** First ~120 decimals as binary fixed point (for exact reductions such as `constMod`). */
+  binary: BinaryConstant
 }
 
 export interface StepResult {
@@ -68,7 +76,7 @@ export interface GeometryExperiment<S = unknown> {
 export interface ExperimentDefinition {
   id: string
   name: string
-  /** Precise one-line description, e.g. "π digit driven circle walk". */
+  /** Precise one-line description; "{C}" is replaced by the constant's symbol, e.g. "{C} digit driven circle walk". */
   description: string
   parameters: ParameterDef[]
   /** The executed rule (single source of truth for evaluation and display). */

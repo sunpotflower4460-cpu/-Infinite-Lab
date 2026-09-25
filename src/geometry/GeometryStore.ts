@@ -18,8 +18,6 @@ export class GeometryStore {
   readonly chunks: Float64Array[] = []
   count = 0
   bounds: Bounds | null = null
-  /** Index of the lowest chunk modified since the last `consumeDirty()`. */
-  private dirtyFrom = Infinity
 
   append(batch: GeometryBatch): void {
     const src = batch.data
@@ -34,7 +32,6 @@ export class GeometryStore {
       const o = (this.count % CHUNK_RECORDS) * STRIDE
       for (let k = 0; k < STRIDE; k++) chunk[o + k] = src[so + k]!
       this.extendBounds(src, so)
-      this.dirtyFrom = Math.min(this.dirtyFrom, chunkIndex)
       this.count++
     }
   }
@@ -64,21 +61,52 @@ export class GeometryStore {
     }
   }
 
+  /** Step of record `index`. Records are appended in step order. */
+  stepAt(index: number): number {
+    return this.chunks[Math.floor(index / CHUNK_RECORDS)]![(index % CHUNK_RECORDS) * STRIDE + 1]!
+  }
+
+  /** Number of leading records whose step is ≤ `step` (binary search). */
+  countUpToStep(step: number): number {
+    let lo = 0
+    let hi = this.count
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1
+      if (this.stepAt(mid) <= step) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+
+  /** Visit the first `count` records: (chunk, offset into chunk). */
+  forEachRecord(count: number, fn: (data: Float64Array, offset: number) => void): void {
+    const n = Math.min(count, this.count)
+    for (let i = 0; i < n; i++) fn(this.chunks[Math.floor(i / CHUNK_RECORDS)]!, (i % CHUNK_RECORDS) * STRIDE)
+  }
+
+  /**
+   * The first `count` records as little-endian IEEE-754 bytes (STRIDE float64 each) —
+   * a platform-independent serialization used for geometry digests.
+   */
+  bytes(count: number): Uint8Array<ArrayBuffer> {
+    const n = Math.min(count, this.count)
+    const out = new Uint8Array(n * STRIDE * 8)
+    const view = new DataView(out.buffer)
+    let p = 0
+    this.forEachRecord(n, (d, o) => {
+      for (let k = 0; k < STRIDE; k++, p += 8) view.setFloat64(p, d[o + k]!, true)
+    })
+    return out
+  }
+
   /** Records held by chunk `i`. */
   chunkLength(i: number): number {
     return Math.min(CHUNK_RECORDS, this.count - i * CHUNK_RECORDS)
-  }
-
-  consumeDirty(): number {
-    const d = this.dirtyFrom
-    this.dirtyFrom = Infinity
-    return d
   }
 
   clear(): void {
     this.chunks.length = 0
     this.count = 0
     this.bounds = null
-    this.dirtyFrom = Infinity
   }
 }
