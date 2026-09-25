@@ -78,6 +78,18 @@ export class GeometryStore {
     return lo
   }
 
+  /** Visit records [from, to): (chunk, offset into chunk, record index). */
+  forEachRecordFrom(
+    from: number,
+    to: number,
+    fn: (data: Float64Array, offset: number, index: number) => void,
+  ): void {
+    const end = Math.min(to, this.count)
+    for (let i = Math.max(0, from); i < end; i++) {
+      fn(this.chunks[Math.floor(i / CHUNK_RECORDS)]!, (i % CHUNK_RECORDS) * STRIDE, i)
+    }
+  }
+
   /** Visit the first `count` records: (chunk, offset into chunk). */
   forEachRecord(count: number, fn: (data: Float64Array, offset: number) => void): void {
     const n = Math.min(count, this.count)

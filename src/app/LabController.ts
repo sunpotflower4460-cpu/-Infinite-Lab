@@ -283,6 +283,11 @@ export class LabController {
     useLab.setState({ scientific })
   }
 
+  setLayerMode(layerMode: 'instanced' | 'graphics'): void {
+    useLab.setState({ layerMode })
+    this.renderer.setLayerMode(layerMode)
+  }
+
   // ---- history / export / import --------------------------------------------------------
 
   async saveToHistory(): Promise<void> {

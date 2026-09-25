@@ -59,6 +59,8 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** GPU geometry layer: instanced SDF (default) or tessellated Graphics. */
+  layerMode: 'instanced' | 'graphics'
   follow: boolean
   fps: number
   renderMs: number
@@ -87,6 +89,7 @@ export const useLab = create<LabState>(() => ({
   history: [],
   verify: { status: 'idle' },
   scientific: false,
+  layerMode: 'instanced',
   follow: true,
   fps: 0,
   renderMs: 0,
