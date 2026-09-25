@@ -525,6 +525,13 @@ input:not([type]) {
 /* ---- narrow screens: canvas first, panels below --------------------------- */
 
 @media (max-width: 900px) {
+  .lanes {
+    flex-direction: column;
+  }
+  .lanes > .stage + .stage {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
   .lab {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 56vh auto auto auto;
@@ -553,4 +560,57 @@ input:not([type]) {
 .infinite {
   font-family: var(--mono);
   font-size: 11px;
+}
+
+/* ---- lanes / compare --------------------------------------------------------- */
+
+.lanes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.lanes > .stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.lanes > .stage + .stage {
+  border-left: 1px solid var(--line);
+}
+.lane-readout {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  padding: 8px 10px;
+  background: rgba(10, 12, 20, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
+  pointer-events: auto;
+}
+.lane-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lane-head select {
+  width: auto;
+}
+.lane-symbol {
+  font-family: serif;
+  font-size: 18px;
+  color: var(--accent);
+}
+.lane-trace {
+  display: grid;
+  gap: 1px;
+  color: var(--muted);
+}
+.lane-eval {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

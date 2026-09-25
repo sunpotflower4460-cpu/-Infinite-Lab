@@ -1,22 +1,34 @@
 import { useEffect, useRef } from 'react'
-import { getController } from '../../app/LabController'
-import { useLab } from '../../state/labStore'
+import { useStore } from 'zustand'
+import { getController, type LabController } from '../../app/LabController'
 import { ScientificOverlay } from '../Status/ScientificOverlay'
+import { LaneReadout } from '../Compare/LaneReadout'
 
-export function LabCanvas() {
+/**
+ * One canvas lane. The main lab always renders lane 0 in the same place in the tree (so its
+ * WebGL canvas is never re-created); Compare Mode adds a second lane next to it.
+ */
+export function LabCanvas({
+  controller = getController(),
+  lane = 0,
+}: {
+  controller?: LabController
+  lane?: 0 | 1
+}) {
   const host = useRef<HTMLDivElement>(null)
-  const follow = useLab((s) => s.follow)
-  const phase = useLab((s) => s.phase)
-  const controller = getController()
+  const follow = useStore(controller.store, (s) => s.follow)
+  const phase = useStore(controller.store, (s) => s.phase)
+  const comparing = useStore(getController().store, (s) => s.compareConstant !== null)
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
   }, [controller])
 
   return (
-    <div className="stage">
+    <div className="stage" data-testid={`lane-${lane}`}>
       <div className="stage-canvas" ref={host} />
-      <ScientificOverlay />
+      {lane === 0 && <ScientificOverlay />}
+      {comparing && <LaneReadout controller={controller} lane={lane} />}
       <div className="stage-tools">
         <button
           onClick={() => controller.fitAll()}
@@ -29,7 +41,7 @@ export function LabCanvas() {
           Center
         </button>
       </div>
-      <div className="stage-hint">wheel: zoom · drag: pan · double-click: center</div>
+      {lane === 0 && <div className="stage-hint">wheel: zoom · drag: pan · double-click: center</div>}
       {phase === 'computing' && <div className="stage-busy">computing digits…</div>}
     </div>
   )

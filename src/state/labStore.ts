@@ -59,6 +59,10 @@ export interface LabState {
   history: HistoryEntry[]
   verify: VerifyState
   scientific: boolean
+  /** Compare Mode: constant of the second lane (null = off). Main lab only. */
+  compareConstant: string | null
+  /** Compare Mode playback (both lanes advanced in lockstep by the main thread). */
+  lockstepPlaying: boolean
   /** Infinite Mode: keep computing more digits instead of stopping at the end. */
   continuous: boolean
   /** A longer computation of the constant is in progress (continuous mode). */
@@ -74,34 +78,47 @@ export interface LabState {
   lastBatchMs: number
 }
 
-export const useLab = create<LabState>(() => ({
-  phase: 'idle',
-  error: null,
-  constantId: 'pi',
-  precision: 1_000,
-  constant: null,
-  experimentId: digitCircleWalk.id,
-  params: defaultParams(digitCircleWalk.parameters),
-  digitStart: 'integer',
-  playing: false,
-  finished: false,
-  currentStep: 0,
-  totalSteps: 0,
-  objects: 0,
-  speedIndex: 1,
-  currentTrace: null,
-  inspected: null,
-  viewStep: null,
-  history: [],
-  verify: { status: 'idle' },
-  scientific: false,
-  continuous: false,
-  extending: null,
-  waiting: false,
-  layerMode: 'instanced',
-  follow: true,
-  fps: 0,
-  renderMs: 0,
-  stepsPerSecond: 0,
-  lastBatchMs: 0,
-}))
+function initialState(): LabState {
+  return {
+    phase: 'idle',
+    error: null,
+    constantId: 'pi',
+    precision: 1_000,
+    constant: null,
+    experimentId: digitCircleWalk.id,
+    params: defaultParams(digitCircleWalk.parameters),
+    digitStart: 'integer',
+    playing: false,
+    finished: false,
+    currentStep: 0,
+    totalSteps: 0,
+    objects: 0,
+    speedIndex: 1,
+    currentTrace: null,
+    inspected: null,
+    viewStep: null,
+    history: [],
+    verify: { status: 'idle' },
+    scientific: false,
+    compareConstant: null,
+    lockstepPlaying: false,
+    continuous: false,
+    extending: null,
+    waiting: false,
+    layerMode: 'instanced',
+    follow: true,
+    fps: 0,
+    renderMs: 0,
+    stepsPerSecond: 0,
+    lastBatchMs: 0,
+  }
+}
+
+/** A lab store (one per lane: the main lab, and the second lane of Compare Mode). */
+export function createLabStore() {
+  return create<LabState>(() => initialState())
+}
+export type LabStore = ReturnType<typeof createLabStore>
+
+/** The main lab's store. */
+export const useLab = createLabStore()

@@ -6,7 +6,8 @@ import { Timeline } from '../Timeline/Timeline'
 
 export function Controls() {
   const c = getController()
-  const playing = useLab((s) => s.playing)
+  const playing = useLab((s) => s.playing || s.lockstepPlaying)
+  const comparing = useLab((s) => s.compareConstant !== null)
   const finished = useLab((s) => s.finished)
   const ready = useLab((s) => s.phase === 'ready')
   const speedIndex = useLab((s) => s.speedIndex)
@@ -69,6 +70,7 @@ export function Controls() {
         className={`infinite${continuous ? ' active' : ''}`}
         aria-pressed={continuous}
         onClick={() => c.setContinuous(!continuous)}
+        disabled={comparing}
         title="Infinite Mode: keep computing more digits until paused (continuous computation, up to 1,000,000 digits)"
       >
         ∞ Infinite

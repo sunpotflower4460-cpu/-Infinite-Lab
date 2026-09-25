@@ -79,3 +79,42 @@ test('Infinite Mode keeps computing digits and the result stays reproducible', a
   })
   await expect(page.getByTestId('verify')).toContainText('reproduced', { timeout: 60_000 })
 })
+
+test('Compare Mode runs π and e in lockstep under identical conditions', async ({ page }) => {
+  await page.goto('/')
+  await ready(page)
+  await page.getByLabel('Experiment').selectOption('circle-chain')
+  await page.getByRole('button', { name: 'Compare' }).click()
+  await expect(page.getByTestId('lane-1')).toBeVisible()
+  await expect(page.getByLabel('Compare constant')).toHaveValue('e')
+  await expect(page.getByTestId('lane-readout-0')).toContainText('π')
+
+  await page.getByRole('radio', { name: '100x' }).click()
+  await page.getByRole('button', { name: 'Play' }).click()
+  await expect
+    .poll(async () => Number((await page.getByTestId('current-step').textContent())!.replace(/,/g, '')))
+    .toBeGreaterThan(100)
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await expect(page.getByRole('button', { name: 'Play' })).toBeVisible()
+
+  // both lanes stopped at exactly the same step
+  const stepOf = async (lane: number) =>
+    (await page.getByTestId(`lane-readout-${lane}`).locator('.lane-head .mono').textContent())!
+  await expect.poll(async () => (await stepOf(0)) === (await stepOf(1))).toBe(true)
+
+  // same step, different digit: π's 2nd digit is 1, e's is 7
+  await page.getByLabel('Go to step').fill('2')
+  await page.getByLabel('Go to step').press('Enter')
+  await expect(page.getByTestId('lane-readout-0')).toContainText('STEP 2 · DIGIT 1')
+  await expect(page.getByTestId('lane-readout-1')).toContainText('STEP 2 · DIGIT 7')
+
+  // the second lane follows parameter changes
+  await page.getByLabel('Compare constant').selectOption('phi')
+  await expect(page.getByTestId('lane-readout-1')).toContainText('step 0')
+  await page.getByRole('button', { name: 'Step' }).click()
+  await expect(page.getByTestId('lane-readout-1')).toContainText('STEP 1 · DIGIT 1') // φ = 1.618…
+  await expect(page.getByTestId('lane-readout-1')).toContainText('radius = 1 × 2')
+
+  await page.getByRole('button', { name: 'Compare' }).click()
+  await expect(page.getByTestId('lane-1')).toHaveCount(0)
+})

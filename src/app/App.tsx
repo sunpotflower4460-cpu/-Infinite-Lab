@@ -1,6 +1,7 @@
 import { getController } from './LabController'
 import { useLab } from '../state/labStore'
 import { LabCanvas } from '../components/Canvas/LabCanvas'
+import { CompareToggle } from '../components/Compare/CompareToggle'
 import { Controls } from '../components/Controls/Controls'
 import { DigitStream } from '../components/DigitStream/DigitStream'
 import { FormulaViewer } from '../components/FormulaViewer/FormulaViewer'
@@ -13,6 +14,8 @@ export function App() {
   const scientific = useLab((s) => s.scientific)
   const error = useLab((s) => s.error)
   const c = getController()
+  const comparing = useLab((s) => s.compareConstant !== null)
+  const peer = comparing ? c.peer : null
   return (
     <div className="lab">
       <header className="topbar">
@@ -20,6 +23,7 @@ export function App() {
           <span className="accent">π</span> Infinite Lab
         </h1>
         <span className="tagline muted">computation → digits → rule → geometry</span>
+        <CompareToggle />
         <FileActions />
         <label className="toggle">
           <input type="checkbox" checked={scientific} onChange={(e) => c.setScientific(e.target.checked)} />
@@ -30,7 +34,10 @@ export function App() {
         <ExperimentPanel />
       </aside>
       <main className="center">
-        <LabCanvas />
+        <div className="lanes">
+          <LabCanvas />
+          {peer && <LabCanvas controller={peer} lane={1} />}
+        </div>
       </main>
       <aside className="right">
         <Inspector />
