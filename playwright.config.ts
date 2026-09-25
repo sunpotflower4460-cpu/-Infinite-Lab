@@ -12,14 +12,29 @@ const executablePath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
   (preinstalled && statSync(preinstalled, { throwIfNoEntry: false })?.isFile() ? preinstalled : undefined)
 
+/**
+ * Chromium always; Firefox and WebKit (Safari's engine) when PW_ALL_BROWSERS is set (CI).
+ * Running the same suite on three engines checks that the geometry digest is identical
+ * across JavaScript engines — the determinism guarantee, not just V8's behaviour.
+ */
+const all = !!process.env.PW_ALL_BROWSERS
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
-  use: {
-    baseURL: 'http://localhost:4173',
-    ...devices['Desktop Chrome'],
-    launchOptions: executablePath ? { executablePath } : {},
-  },
+  use: { baseURL: 'http://localhost:4173' },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], launchOptions: executablePath ? { executablePath } : {} },
+    },
+    ...(all
+      ? [
+          { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+          { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+        ]
+      : []),
+  ],
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173',

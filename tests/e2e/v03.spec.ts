@@ -159,6 +159,7 @@ test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
 })
 
 test.describe('mobile layout (spec §30)', () => {
+  test.skip(({ browserName }) => browserName === 'firefox', 'Playwright cannot emulate mobile in Firefox')
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 
   test('canvas first, Setup and Inspector as bottom sheets', async ({ page }) => {

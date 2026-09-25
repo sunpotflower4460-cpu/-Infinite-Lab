@@ -43,6 +43,11 @@ Inspector には、実行された式そのもの（表示用に別途書かれ�
 - **Presets**: Pi Walk / Pi Circle Chain / Pi Flower / Pi Orbit / Pi Spiral（名前はラベル、説明に規則を明記）
 - **History**: 状態をブラウザ（localStorage）に保存し、復元時に再計算してジオメトリの SHA-256 一致を検証
 - **JSON Export / Import**: 設定・step 数・式・ジオメトリの SHA-256 を含む再現可能な記録。Import すると再計算して **ビット単位で一致するか検証** し、結果（✓ / ✗）を表示
+- **PNG / SVG / CSV Export**: 表示中の画像、または Timeline 位置までの図形（SVG・CSV は float64 の値をそのまま出力）
+- **Infinite Mode（Continuous computation）**: 桁を使い切る前に倍の桁数を裏で計算して継続（最大 1,000,000 桁）。延長した桁は既存の桁と一致することを検査し、途中で過去が変わることはない
+- **Compare Mode**: 同じ実験・パラメータ・精度を別の定数（例: π と e）で並べて、同じ step で揃えて実行。片方の図形をクリックすると両方で同じ step を表示
+- **モバイル**: キャンバス優先の 1 画面レイアウト、Setup / Inspector は下から出るシート、2 本指でピンチズーム
+- **描画**: 既定は GPU インスタンス描画（SDF）。20 万オブジェクトで JS メモリ +0.7 MB（テッセレーション方式は +147 MB）。Scientific Mode で切り替え可能
 
 ## 使い方
 

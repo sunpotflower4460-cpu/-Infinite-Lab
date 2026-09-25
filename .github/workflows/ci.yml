@@ -22,3 +22,24 @@ jobs:
       - run: npm run test:e2e
         env:
           CI: true
+
+  # Same E2E suite on the other engines: the pinned geometry SHA-256 must match on
+  # SpiderMonkey (Firefox) and JavaScriptCore (WebKit / Safari) too.
+  cross-engine:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npx playwright test --project=${{ matrix.browser }}
+        env:
+          CI: true
+          PW_ALL_BROWSERS: 1
