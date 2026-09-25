@@ -4,6 +4,7 @@ import { defaultParams, type DigitStart, type ParamValue } from '../experiments/
 import { geometryDigest } from '../geometry/digest'
 import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
+import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
@@ -556,12 +557,54 @@ export class LabController {
   private async exportJsonUnsafe(): Promise<void> {
     const file = await this.buildExport()
     const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' })
+    this.download(
+      blob,
+      `pi-infinite-lab_${file.config.experiment}_${file.config.constant}_${file.steps}.json`,
+    )
+  }
+
+  private fileStem(): string {
+    const s = this.store.getState()
+    const step = s.viewStep ?? s.currentStep
+    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${step}`
+  }
+
+  private download(blob: Blob, name: string): void {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pi-infinite-lab_${file.config.experiment}_${file.config.constant}_${file.steps}.json`
+    a.download = name
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  /** Export the view as PNG, or the (Timeline-visible) geometry as SVG / CSV with exact values. */
+  async exportAs(format: 'png' | 'svg' | 'csv'): Promise<void> {
+    try {
+      const s = this.store.getState()
+      const count = this.renderer.visibleRecords
+      if (format === 'png') {
+        this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
+      } else if (format === 'csv') {
+        this.download(
+          new Blob(geometryCsv(this.renderer.store, count), { type: 'text/csv' }),
+          `${this.fileStem()}.csv`,
+        )
+      } else {
+        const def = getExperiment(s.experimentId)
+        const symbol = s.constant?.symbol ?? 'C'
+        const desc = [
+          `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
+          `${def.name}, step ${s.viewStep ?? s.currentStep}`,
+          ...formulaLines(def, symbol),
+          `parameters ${JSON.stringify(s.params)}`,
+        ].join('\n')
+        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc)
+        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
+      }
+    } catch (err) {
+      this.reportError(`${format.toUpperCase()} export failed`, err)
+    }
   }
 
   importJson(text: string): void {

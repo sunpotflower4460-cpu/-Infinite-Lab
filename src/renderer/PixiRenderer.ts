@@ -1,4 +1,4 @@
-import { Application, Container, Graphics } from 'pixi.js'
+import { Application, Container, Graphics, Rectangle } from 'pixi.js'
 import { KIND, type GeometryBatch } from '../geometry/batch'
 import { GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
@@ -141,6 +141,26 @@ export class PixiRenderer implements Renderer {
   }
 
   // ---------------------------------------------------------------------------
+
+  /** The current view (camera, Timeline cut-off, highlight) as a PNG at device resolution. */
+  async snapshotPng(): Promise<Blob> {
+    const app = this.app
+    if (!app) throw new Error('renderer not ready')
+    this.frame() // bring GPU geometry up to date
+    const canvas = app.renderer.extract.canvas({
+      target: app.stage,
+      frame: new Rectangle(0, 0, this.camera.width, this.camera.height),
+      clearColor: COLORS.background,
+    }) as HTMLCanvasElement
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'),
+    )
+  }
+
+  /** Records currently shown (Timeline cut-off applied). */
+  get visibleRecords(): number {
+    return this.visibleCount()
+  }
 
   /** Name of the active geometry layer (Scientific Mode). */
   get layerName(): string {

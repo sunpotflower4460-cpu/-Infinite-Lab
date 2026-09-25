@@ -13,6 +13,20 @@ export function FileActions() {
       <button onClick={() => void c.exportJson()} disabled={!ready} title="Reproducible experiment record">
         Export JSON
       </button>
+      {(['png', 'svg', 'csv'] as const).map((f) => (
+        <button
+          key={f}
+          onClick={() => void c.exportAs(f)}
+          disabled={!ready}
+          title={
+            f === 'png'
+              ? 'Image of the current view'
+              : `Geometry up to the Timeline position, exact float64 values (${f.toUpperCase()})`
+          }
+        >
+          {f.toUpperCase()}
+        </button>
+      ))}
       <button onClick={() => input.current?.click()} title="Load a preset or experiment file">
         Import JSON
       </button>

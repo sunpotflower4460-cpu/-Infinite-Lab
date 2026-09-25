@@ -118,3 +118,42 @@ test('Compare Mode runs π and e in lockstep under identical conditions', async 
   await page.getByRole('button', { name: 'Compare' }).click()
   await expect(page.getByTestId('lane-1')).toHaveCount(0)
 })
+
+test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
+  const { readFileSync } = await import('node:fs')
+  await page.goto('/')
+  await ready(page)
+  await page.getByLabel('Go to step').fill('200')
+  await page.getByLabel('Go to step').press('Enter')
+  await expect(page.getByTestId('current-step')).toHaveText('200')
+  await page.getByLabel('Go to step').fill('50') // Timeline: only steps 1–50 are visible / exported
+  await page.getByLabel('Go to step').press('Enter')
+  await expect(page.getByTestId('timeline')).toContainText('viewing')
+
+  const get = async (name: string) => {
+    const [d] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name, exact: true }).click(),
+    ])
+    return { name: d.suggestedFilename(), data: readFileSync(await d.path()) }
+  }
+  const csv = await get('CSV')
+  expect(csv.name).toBe('pi-infinite-lab_digit-circle-walk_pi_50.csv')
+  const rows = csv.data.toString('utf8').trim().split('\n')
+  expect(rows[0]).toBe('step,kind,x,y,radius,x2,y2,start_angle,end_angle')
+  expect(rows).toHaveLength(1 + 100) // 50 steps × (line + circle)
+  // digit 3: angle 0.6π, distance 10 — computed with the same deterministic cos/sin the app uses
+  const { detCos, detSin } = await import('../../src/math/detmath')
+  const angle = (3 / 10) * (2 * Math.PI)
+  expect(rows[1]).toBe(`1,line,0,0,,${0 + detCos(angle) * 10},${0 + detSin(angle) * 10},,`)
+  expect(rows[100]!.startsWith('50,circle,')).toBe(true)
+
+  const svg = await get('SVG')
+  const text = svg.data.toString('utf8')
+  expect(text.match(/data-step=/g)).toHaveLength(100)
+  expect(text).toContain('angle = digit / 10 × 2π')
+
+  const png = await get('PNG')
+  expect(png.data.subarray(1, 4).toString('latin1')).toBe('PNG')
+  expect(png.data.length).toBeGreaterThan(2000)
+})
