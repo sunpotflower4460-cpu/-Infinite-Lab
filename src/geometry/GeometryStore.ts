@@ -131,6 +131,31 @@ export class GeometryStore {
     return out
   }
 
+  /**
+   * Bounding box of the first `count` records: whole chunks from `chunkBounds`,
+   * only the partial last chunk is scanned.
+   */
+  boundsUpTo(count: number): Bounds | null {
+    const n = Math.min(count, this.count)
+    if (n === this.count) return this.bounds && { ...this.bounds }
+    let out: Bounds | null = null
+    const full = Math.floor(n / CHUNK_RECORDS)
+    for (let c = 0; c < full; c++) {
+      const b = this.chunkBounds[c]!
+      if (!out) out = { ...b }
+      else grow(out, b.minX, b.minY, b.maxX, b.maxY)
+    }
+    const scratch = new GeometryStore()
+    const rest = n - full * CHUNK_RECORDS
+    if (rest > 0) {
+      scratch.append({ data: this.chunks[full]!.subarray(0, rest * STRIDE), count: rest })
+      const b = scratch.bounds!
+      if (!out) out = { ...b }
+      else grow(out, b.minX, b.minY, b.maxX, b.maxY)
+    }
+    return out
+  }
+
   /** Records held by chunk `i`. */
   chunkLength(i: number): number {
     return Math.min(CHUNK_RECORDS, this.count - i * CHUNK_RECORDS)

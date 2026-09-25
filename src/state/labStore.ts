@@ -32,7 +32,7 @@ export type Phase = 'idle' | 'computing' | 'ready' | 'error'
 export type VerifyState =
   | { status: 'idle' }
   | { status: 'running'; expected: string }
-  | { status: 'verified' | 'mismatch'; expected: string; actual: string }
+  | { status: 'verified' | 'mismatch'; expected: string; actual: string; note?: string }
   | { status: 'error'; message: string }
 
 export interface LabState {
@@ -40,6 +40,8 @@ export interface LabState {
   error: string | null
   constantId: string
   precision: number
+  /** The precision the user picked (Infinite Mode may extend `precision` beyond it). */
+  chosenPrecision: number
   constant: ConstantInfo | null
   experimentId: string
   params: ParamValues
@@ -86,6 +88,7 @@ function initialState(): LabState {
     error: null,
     constantId: 'pi',
     precision: 1_000,
+    chosenPrecision: 1_000,
     constant: null,
     experimentId: digitCircleWalk.id,
     params: defaultParams(digitCircleWalk.parameters),

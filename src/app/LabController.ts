@@ -34,7 +34,9 @@ export class LabController {
    * Work to do once the simulation for a restored / imported config is ready: run to
    * `seek` and compare the geometry digest with `verify`. Cancelled by any manual change.
    */
-  private pending: { seek: number | null; verify: string | null } | null = null
+  private pending: { seek: number | null; verify: string | null; note?: string } | null = null
+  /** Explanation attached to the next verification result (older file formats). */
+  private verifyNote: string | undefined
   /** Digest to verify once `seekTarget` has been reached. */
   private pendingVerify: string | null = null
   /** Forward seek in progress: the step we are computing up to. */
@@ -100,13 +102,14 @@ export class LabController {
 
   setConstant(constantId: string): void {
     this.cancelPending()
-    this.store.setState({ constantId })
+    // a new constant starts from the precision the user picked, not an Infinite Mode extension
+    this.store.setState((s) => ({ constantId, precision: s.chosenPrecision }))
     this.computeConstant()
   }
 
   setPrecision(precision: number): void {
     this.cancelPending()
-    this.store.setState({ precision })
+    this.store.setState({ precision, chosenPrecision: precision })
     this.computeConstant()
   }
 
@@ -141,12 +144,13 @@ export class LabController {
   }
 
   /** Apply a full configuration, then optionally run to `steps` and verify a digest. */
-  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string): void {
+  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string, note?: string): void {
     this.pendingVerify = null
-    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null }
+    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null, note }
     this.store.setState({
       constantId: config.constant,
       precision: config.precision,
+      chosenPrecision: config.precision,
       experimentId: config.experiment,
       digitStart: config.digitStart,
       params: { ...config.parameters },
@@ -233,6 +237,7 @@ export class LabController {
    * (nothing is recomputed); going beyond the computed head computes the missing steps.
    */
   seek(step: number, options: { inspect?: boolean } = {}): void {
+    this.stopLockstep() // a Timeline move pauses Compare playback, like it pauses a single lane
     this.seekLane(step, options)
     this.peer?.seekLane(step, options)
   }
@@ -315,6 +320,7 @@ export class LabController {
     if (!peer) {
       peer = new LabController(createLabStore())
       peer.owner = this
+      peer.setLayerMode(this.store.getState().layerMode)
       this.peer = peer
       this.unsubscribeMirror = this.store.subscribe((s, prev) => {
         if (
@@ -357,6 +363,9 @@ export class LabController {
     const limit = Math.min(a.totalSteps, b.totalSteps)
     let target = Math.max(a.currentStep, b.currentStep)
     if (target >= limit) return
+    // bring a lagging lane (e.g. after a restore that only moved one lane) to the common start
+    if (a.currentStep < target || a.viewStep !== null) this.seekLane(target)
+    if (b.currentStep < target || b.viewStep !== null) peer.seekLane(target)
     let last = performance.now()
     let carry = 0
     this.store.setState({ lockstepPlaying: true })
@@ -434,7 +443,11 @@ export class LabController {
     const s = this.store.getState()
     const loaded = this.loaded
     if (!s.continuous || s.phase !== 'ready' || this.extendRequestId !== null || !loaded) return
-    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) return
+    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) {
+      // No extension can come: let a waiting worker finish instead of waiting forever.
+      if (s.waiting) this.postSim({ type: 'setContinuous', on: false })
+      return
+    }
     if (!s.waiting && s.currentStep < s.totalSteps / 2) return
     const to = nextPrecision(loaded.precision)
     const requestId = ++this.mathRequestId
@@ -447,7 +460,7 @@ export class LabController {
     this.extendRequestId = null
     this.store.setState({ extending: null })
     if (msg.type === 'error') {
-      this.store.setState({ error: `extension failed: ${msg.message}` })
+      this.endContinuous(`extension failed: ${msg.message}`)
       return
     }
     const s = this.store.getState()
@@ -456,7 +469,7 @@ export class LabController {
       return
     for (let i = 0; i < old.length; i++) {
       if (msg.digits[i] !== old[i]) {
-        this.store.setState({ error: `extension changed digit ${i}; refusing to continue` })
+        this.endContinuous(`extension changed digit ${i}; refusing to continue`)
         return
       }
     }
@@ -476,9 +489,16 @@ export class LabController {
     this.postSim({ type: 'extend', digits: copy }, [copy.buffer])
   }
 
+  /** Leave Infinite Mode after a failed extension (no retry loop, no endless waiting). */
+  private endContinuous(error: string): void {
+    this.store.setState({ continuous: false, error })
+    this.postSim({ type: 'setContinuous', on: false })
+  }
+
   setLayerMode(layerMode: 'instanced' | 'graphics'): void {
     this.store.setState({ layerMode })
     this.renderer.setLayerMode(layerMode)
+    this.peer?.setLayerMode(layerMode)
   }
 
   // ---- history / export / import --------------------------------------------------------
@@ -613,7 +633,7 @@ export class LabController {
   importJson(text: string): void {
     try {
       const parsed = parseImport(text)
-      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest)
+      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest, parsed.compatibilityNote)
     } catch (err) {
       this.store.setState({
         verify: { status: 'error', message: err instanceof Error ? err.message : String(err) },
@@ -626,9 +646,10 @@ export class LabController {
     if (!expected) return
     this.pendingVerify = null
     const actual = await geometryDigest(this.renderer.store, this.renderer.store.count)
-    this.store.setState({
-      verify: { status: actual === expected ? 'verified' : 'mismatch', expected, actual },
-    })
+    const status = actual === expected ? 'verified' : 'mismatch'
+    const note = status === 'mismatch' ? this.verifyNote : undefined
+    this.verifyNote = undefined
+    this.store.setState({ verify: { status, expected, actual, note } })
   }
 
   // ---- worker plumbing ---------------------------------------------------------
@@ -662,6 +683,7 @@ export class LabController {
       },
       [digits.buffer],
     )
+    this.postSim({ type: 'setContinuous', on: s.continuous })
   }
 
   private onMath(msg: MathResponse): void {
@@ -725,7 +747,10 @@ export class LabController {
         this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps })
         const pending = this.pending
         this.pending = null
-        if (pending?.verify) this.pendingVerify = pending.verify
+        if (pending?.verify) {
+          this.pendingVerify = pending.verify
+          this.verifyNote = pending.note
+        }
         if (pending?.seek) this.seek(pending.seek)
         else void this.verifyIfPending() // e.g. a 0-step file
         break

@@ -1,5 +1,5 @@
 import { KIND } from '../geometry/batch'
-import type { Bounds, GeometryStore } from '../geometry/GeometryStore'
+import type { GeometryStore } from '../geometry/GeometryStore'
 import { COLORS } from '../renderer/layers/GeometryLayer'
 
 /** Shortest decimal that round-trips to the same float64 (exact, never rounded for display). */
@@ -39,28 +39,6 @@ export function geometryCsv(store: GeometryStore, count: number): string[] {
   return parts
 }
 
-function boundsOf(store: GeometryStore, count: number): Bounds | null {
-  let b: Bounds | null = null
-  store.forEachRecord(count, (d, o) => {
-    const kind = d[o]
-    const r = kind === KIND.circle || kind === KIND.arc ? Math.abs(d[o + 4]!) : 0
-    const xs = kind === KIND.line ? [d[o + 2]!, d[o + 4]!] : [d[o + 2]! - r, d[o + 2]! + r]
-    const ys = kind === KIND.line ? [d[o + 3]!, d[o + 5]!] : [d[o + 3]! - r, d[o + 3]! + r]
-    const minX = Math.min(...xs)
-    const maxX = Math.max(...xs)
-    const minY = Math.min(...ys)
-    const maxY = Math.max(...ys)
-    if (!b) b = { minX, minY, maxX, maxY }
-    else {
-      b.minX = Math.min(b.minX, minX)
-      b.minY = Math.min(b.minY, minY)
-      b.maxX = Math.max(b.maxX, maxX)
-      b.maxY = Math.max(b.maxY, maxY)
-    }
-  })
-  return b
-}
-
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`
 const escapeXml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -75,7 +53,7 @@ export function geometrySvg(
   title: string,
   description: string,
 ): string[] {
-  const b = boundsOf(store, count) ?? { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+  const b = store.boundsUpTo(count) ?? { minX: -1, minY: -1, maxX: 1, maxY: 1 }
   const w = Math.max(b.maxX - b.minX, 1e-9)
   const h = Math.max(b.maxY - b.minY, 1e-9)
   const pad = Math.max(w, h) * 0.04

@@ -335,6 +335,10 @@ export class InstancedLayer implements GeometryLayer {
 
   destroy(): void {
     this.clear()
+    this.circleShader.destroy()
+    this.lineShader.destroy()
+    this.circleQuad.destroy()
+    this.lineQuad.destroy()
     this.container.destroy()
   }
 }

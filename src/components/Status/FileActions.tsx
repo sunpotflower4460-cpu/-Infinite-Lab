@@ -67,7 +67,7 @@ function VerifyBadge() {
           data-testid="verify"
           title={`expected ${verify.expected}\nactual ${verify.actual}`}
         >
-          ✗ geometry differs from the file
+          ✗ geometry differs from the file{verify.note ? ` — ${verify.note}` : ''}
         </span>
       )
     case 'error':

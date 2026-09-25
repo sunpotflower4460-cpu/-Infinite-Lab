@@ -73,3 +73,21 @@ describe('chunk bounding boxes (pick index)', () => {
     expect(store.chunkBounds).toHaveLength(store.chunks.length)
   })
 })
+
+describe('boundsUpTo', () => {
+  it('matches a direct scan for every prefix length across chunks', () => {
+    const store = storeFor(2600) // 5,200 records, 3 chunks
+    for (const n of [1, 7, 1999, 2000, 2001, 4000, 4001, 5200]) {
+      let minX = Infinity
+      let maxX = -Infinity
+      store.forEachRecord(n, (d, o) => {
+        const r = d[o] === 1 ? d[o + 4]! : 0 // circle radius
+        const xs = d[o] === 2 ? [d[o + 2]!, d[o + 4]!] : [d[o + 2]! - r, d[o + 2]! + r]
+        minX = Math.min(minX, ...xs)
+        maxX = Math.max(maxX, ...xs)
+      })
+      const b = store.boundsUpTo(n)!
+      expect([b.minX, b.maxX]).toEqual([minX, maxX])
+    }
+  })
+})
