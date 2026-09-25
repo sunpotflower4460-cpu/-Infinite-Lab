@@ -77,6 +77,9 @@ interface StepContext {
 - 1px の線は `pixelLine`、描画は加算合成（重なりが淡く発光）。現在 step / Inspect 中の step はアクセント色でハイライト。
 - **float32 対策**: GPU 頂点は float32 のため、チャンクは「ビュー付近の原点からの相対座標 × 2 のべき乗のズームバケット」で構築し、ズームがバケットの 0.5〜2 倍を外れるか、原点から画面 10⁶ px 以上離れたら再構築する。world 座標自体は float64 のまま。
 - **オンデマンド描画**: 図形・カメラ・ハイライトが変化したフレームだけ `app.render()` を呼ぶ。Scientific Mode の FPS は「直近 1 秒に実際に描画したフレーム数」。
+- **Timeline**: `setVisibleStep(n)` で step ≤ n のレコードだけを表示する（`GeometryStore.countUpToStep` の二分探索。境界のチャンクだけ再構築）。過去への移動は再計算しない。未計算の先への移動は worker に `step(count)` を送る。
+- **Picking**: クリック位置から許容 6px 以内の図形を線形走査で探す（円は円周または中心、線は線分への距離。円・点を線より優先）。見つかった step を `inspect` する。
+- ResizeObserver でホスト要素のサイズ変化時に `app.resize()` を呼ぶ（Pixi の `resizeTo` はウィンドウのリサイズにしか反応しないため。v0.1 ではレイアウト変化後に描画中心がずれていた）。
 - Camera（`Camera.ts`）: world（y 上向き）↔ screen。ホイールはカーソル位置固定ズーム、ドラッグでパン、ダブルクリックで中心移動、Fit All で bounds に合わせ自動追従。
 
 ### 性能メモ
@@ -92,22 +95,34 @@ interface StepContext {
 **「10,000 objects @ 60fps」の目標は実 GPU 環境で確認すること**（Scientific Mode の `Renderer FPS` と `Last render call`）。
 100k〜1M objects は v0.3 で SDF インスタンス描画へ置き換えて対応する（ROADMAP 参照）。
 
+## Lab 機能（`src/lab/`）
+
+| モジュール           | 役割                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.ts`          | `LabConfig`（constant / precision / experiment / digitStart / parameters）と、外部入力（JSON・localStorage）の検証。未知のキーや範囲外の値は拒否する |
+| `presets.ts`         | 組み込み Preset                                                                                                                                      |
+| `history.ts`         | localStorage 上の履歴（壊れたエントリは信頼せず捨てる）                                                                                              |
+| `experimentFile.ts`  | Export 形式 `pi-infinite-lab/experiment` v1 と Import の解析（完全な記録と、仕様 §24 形式の素の Preset の両方を受け付ける）                          |
+| `geometry/digest.ts` | ジオメトリの SHA-256                                                                                                                                 |
+
 ## ディレクトリ
 
 ```
 src/
-  app/            App.tsx, LabController.ts（Worker・Renderer・Store の配線）
-  math/           constants/ (pi, registry), algorithms/ (chudnovsky, machin), precision/ (bigint, fixed), detmath.ts
-  experiments/    core/ (types, Experiment, ExperimentRunner, formula/), digit-circle-walk/, registry.ts
-  geometry/       types.ts (instructions), batch.ts (encoding), GeometryStore.ts
+  app/            App.tsx, LabController.ts（Worker・Renderer・Store の配線、seek / import / verify）
+  lab/            config, presets, history, experimentFile
+  math/           constants/ (pi, e, sqrt2, phi, certain, registry), algorithms/ (chudnovsky, eSeries, machin),
+                  precision/ (bigint, fixed), detmath.ts, exactReduce.ts
+  experiments/    core/ (types, Experiment, ExperimentRunner, formula/), digit-circle-walk/, circle-chain/, pi-rotation/, registry.ts
+  geometry/       types.ts (instructions), batch.ts (encoding), GeometryStore.ts, digest.ts
   simulation/     Simulation.ts（再生クロック）
   workers/        math.worker.ts, simulation.worker.ts, protocol.ts
   renderer/       Renderer.ts, PixiRenderer.ts, Camera.ts
-  components/     Canvas, Controls, DigitStream, Inspector, FormulaViewer, Panel, Status
+  components/     Canvas, Controls, Timeline, DigitStream, Inspector, FormulaViewer, Panel, History, Status
   state/          labStore.ts (Zustand)
   utils/          format.ts
 tests/
   unit/           math, experiments, simulation, renderer
   e2e/            Playwright
-  fixtures/       pi-10000.txt（外部参照値）
+  fixtures/       pi / e / sqrt2 / phi 各 10,000 桁（外部参照値）
 ```

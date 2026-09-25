@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { getController } from '../../app/LabController'
-import { EXPERIMENTS, getExperiment } from '../../experiments/registry'
+import { describe, EXPERIMENTS, getExperiment } from '../../experiments/registry'
+import { PRESETS } from '../../lab/presets'
+import { CONSTANTS } from '../../math/constants'
+import { HistoryPanel } from '../History/HistoryPanel'
 import { PRECISIONS, useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
-
-const UPCOMING_EXPERIMENTS = ['Circle Chain', 'Pi Rotation']
-const UPCOMING_CONSTANTS = ['e', '√2', 'φ']
 
 export function ExperimentPanel() {
   const c = getController()
@@ -14,10 +14,28 @@ export function ExperimentPanel() {
   const precision = useLab((s) => s.precision)
   const digitStart = useLab((s) => s.digitStart)
   const phase = useLab((s) => s.phase)
+  const constantId = useLab((s) => s.constantId)
   const def = getExperiment(experimentId)
 
   return (
     <div className="side-panel">
+      <section>
+        <div className="panel-title">Preset</div>
+        <select
+          value=""
+          onChange={(e) => e.target.value && c.applyPreset(e.target.value)}
+          aria-label="Preset"
+          data-testid="preset"
+        >
+          <option value="">Load a preset…</option>
+          {PRESETS.map((p) => (
+            <option key={p.id} value={p.id} title={p.description}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </section>
+
       <section>
         <div className="panel-title">Experiment</div>
         <select
@@ -30,22 +48,22 @@ export function ExperimentPanel() {
               {x.name}
             </option>
           ))}
-          {UPCOMING_EXPERIMENTS.map((n) => (
-            <option key={n} disabled>
-              {n} (v0.2)
-            </option>
-          ))}
         </select>
-        <p className="muted small">{def.description}</p>
+        <p className="muted small">{describe(def, CONSTANTS[constantId]?.symbol ?? 'C')}</p>
       </section>
 
       <section>
         <div className="panel-title">Constant</div>
-        <select value="pi" aria-label="Constant" onChange={() => undefined}>
-          <option value="pi">π — Pi</option>
-          {UPCOMING_CONSTANTS.map((n) => (
-            <option key={n} disabled>
-              {n} (v0.2)
+        <select
+          value={constantId}
+          onChange={(e) => c.setConstant(e.target.value)}
+          disabled={phase === 'computing'}
+          aria-label="Constant"
+          data-testid="constant"
+        >
+          {Object.values(CONSTANTS).map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.symbol} — {k.name}
             </option>
           ))}
         </select>
@@ -73,7 +91,7 @@ export function ExperimentPanel() {
               checked={digitStart === 'integer'}
               onChange={() => c.setDigitStart('integer')}
             />
-            start at 3.
+            start at integer part
           </label>
           <label>
             <input
@@ -81,7 +99,7 @@ export function ExperimentPanel() {
               checked={digitStart === 'fractional'}
               onChange={() => c.setDigitStart('fractional')}
             />
-            start at .1
+            start after the point
           </label>
         </div>
       </section>
@@ -114,6 +132,7 @@ export function ExperimentPanel() {
           Press Enter to apply. Changing parameters restarts the experiment from step 0.
         </p>
       </section>
+      <HistoryPanel />
     </div>
   )
 }

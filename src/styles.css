@@ -108,7 +108,6 @@ input:not([type]) {
   font-size: 11px;
 }
 .toggle {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -440,6 +439,87 @@ input:not([type]) {
 .error {
   color: var(--danger);
   font-family: var(--mono);
+}
+
+/* ---- file actions / verification --------------------------------------- */
+
+.file-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.file-actions button {
+  font-size: 11px;
+}
+.badge.ok {
+  color: #7be0a4;
+  border-color: #2c5a40;
+}
+.badge.bad {
+  color: var(--danger);
+  border-color: #5a2c2c;
+}
+
+/* ---- timeline ---------------------------------------------------------------- */
+
+.timeline {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.timeline-track {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.timeline-computed {
+  position: absolute;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.35;
+  pointer-events: none;
+}
+.timeline input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  background: transparent;
+  border: 0;
+}
+.timeline-goto input {
+  width: 110px;
+}
+
+/* ---- history ------------------------------------------------------------------ */
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.history-list li {
+  display: flex;
+  gap: 4px;
+}
+.history-restore {
+  flex: 1;
+  display: grid;
+  text-align: left;
+  gap: 1px;
+  padding: 4px 8px;
+}
+.history-delete {
+  padding: 0 8px;
+  color: var(--muted);
 }
 
 /* ---- narrow screens: canvas first, panels below --------------------------- */

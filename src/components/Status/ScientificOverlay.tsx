@@ -28,6 +28,7 @@ export function ScientificOverlay() {
     ['Geometry arithmetic', 'IEEE-754 float64'],
     ['sin / cos', 'fdlibm port (deterministic)'],
     ['π inside formulas', 'float64 3.141592653589793'],
+    ['(… × C) mod m', 'BigInt, C to 120 decimals'],
     ['Randomness', 'none'],
   ]
   return (

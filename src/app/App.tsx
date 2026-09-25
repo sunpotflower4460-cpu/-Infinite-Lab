@@ -7,6 +7,7 @@ import { FormulaViewer } from '../components/FormulaViewer/FormulaViewer'
 import { Inspector } from '../components/Inspector/Inspector'
 import { ExperimentPanel } from '../components/Panel/ExperimentPanel'
 import { StatusStrip } from '../components/Status/StatusStrip'
+import { FileActions } from '../components/Status/FileActions'
 
 export function App() {
   const scientific = useLab((s) => s.scientific)
@@ -19,6 +20,7 @@ export function App() {
           <span className="accent">π</span> Infinite Lab
         </h1>
         <span className="tagline muted">computation → digits → rule → geometry</span>
+        <FileActions />
         <label className="toggle">
           <input type="checkbox" checked={scientific} onChange={(e) => c.setScientific(e.target.checked)} />
           Scientific Mode

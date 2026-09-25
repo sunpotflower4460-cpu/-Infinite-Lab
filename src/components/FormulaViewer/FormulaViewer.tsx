@@ -15,9 +15,14 @@ export function FormulaViewer({
   source?: 'focus' | 'current'
 }) {
   const experimentId = useLab((s) => s.experimentId)
-  // 'focus' follows a pinned (inspected) step; 'current' always tracks the running step.
-  const trace = useLab((s) => (source === 'current' ? s.currentTrace : (s.inspected ?? s.currentTrace)))
+  // 'focus' follows a pinned (inspected) step.
+  // 'current' follows the running step, or the Timeline position when looking at the past.
+  const trace = useLab((s) =>
+    source === 'current' && s.viewStep === null ? s.currentTrace : (s.inspected ?? s.currentTrace),
+  )
+  const symbol = useLab((s) => s.constant?.symbol ?? 'C')
   const def = getExperiment(experimentId)
+  const symbols = { ...def.symbols, C: symbol }
 
   if (!trace) {
     return (
@@ -25,7 +30,7 @@ export function FormulaViewer({
         {def.formulas.map((f) => (
           <div key={f.target} className="formula">
             <span className="mono">
-              {def.symbols[f.target] ?? f.target} = {renderExpr(f.expr, { symbols: def.symbols })}
+              {symbols[f.target as keyof typeof symbols] ?? f.target} = {renderExpr(f.expr, { symbols })}
             </span>
             {!compact && f.note && <span className="muted note">{f.note}</span>}
           </div>

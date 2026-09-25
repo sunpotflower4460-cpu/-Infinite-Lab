@@ -25,6 +25,16 @@ $$\frac{1}{\pi} = 12 \sum_{k=0}^{\infty} \frac{(-1)^k (6k)!\,(13591409 + 5451401
 `precision` = **小数点以下の桁数**。`pi(50) = "3.14159265358979323846264338327950288419716939937510"`（3 + 50 桁）。
 数字列 `digits` は小数点を除いた `"314159…"`（長さ `precision + 1`）、`integerPartLength = 1`。
 
+## 1b. e, √2, φ
+
+| 定数 | 実装                                                                                                                                      | raw 誤差                                 |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| e    | `src/math/algorithms/eSeries.ts`: Σ 1/k! を binary splitting（葉 `P=1, Q=b`、結合 `P = P₁Q₂ + P₂, Q = Q₁Q₂`）、項数 N は N! > 10^(桁数+5) | < 2 ulp（除算の floor + 級数の打ち切り） |
+| √2   | `isqrt(2·10^(2s))`                                                                                                                        | < 1 ulp（floor）                         |
+| φ    | `(10^s + isqrt(5·10^(2s))) >> 1`                                                                                                          | < 1 ulp（floor）                         |
+
+どれも `computeCertain`（`src/math/constants/certain.ts`）で、π と同じ「確実な切り捨て」を行う。
+
 ## 2. 検証 (Verification System)
 
 `tests/unit/math/pi.test.ts`
@@ -54,7 +64,7 @@ float64 の値は UI 上で **最短往復表現（shortest round-trip）** で�
 Digit Circle Walk の位置は `x[n] = x[n−1] + cos(angle) × distance` の逐次和であり、float64 の丸め誤差は step 数とともに蓄積しうる。
 これは **この実験の規則を float64 で実行した結果** であり、実数上の理想的な軌跡とは最終桁で異なりうる。決定性（同じ入力 → 同じビット列）は保証されるが、「実数としての真値」を主張するものではない。
 
-Pi Rotation（v0.2）では `θₙ = n·π·modifier mod 2π` を BigInt 固定小数点の π で厳密に剰余してから float64 化し、回転角の累積誤差を避ける設計とする。
+Pi Rotation では向き `φ[n] = (n × modifier × C) mod 360°` を BigInt で計算してから float64 化し、回転角の累積誤差を避ける（`src/math/exactReduce.ts`）。n と modifier は float64 の値を、その値が表す有理数として厳密に扱う（例: `10 × fl(0.1) = 1 + 2⁻⁵⁴` であり 1 ではない）。C は 120 桁（相対誤差 ≈ 10⁻¹²⁰）。独立に 1,000 桁の π から計算した参照値と一致することを、n = 10¹² までテストで確認。
 
 ## 4. 決定性 (Deterministic Design)
 
@@ -65,4 +75,5 @@ Pi Rotation（v0.2）では `θₙ = n·π·modifier mod 2π` を BigInt 固定�
   - それ以上: 1600 ビットの π/2（Chudnovsky で計算）を用いた **BigInt による厳密還元**
 - `Math.random`, `Date` は実験コードで使わない。将来乱数が必要な場合は seed を必須にする。
 - 再生速度・バッチサイズは結果に影響しない（`tests/unit/simulation/*.test.ts` でバイト単位比較）。
-- チェックポイントからの再実行（Inspector / Replay）は、連続実行と同じ値を返す（テスト済み）。
+- チェックポイントからの再実行（Inspector / Replay）は、連続実行と同じ値を返す（全実験 × 全 step でテスト済み）。
+- **Geometry digest**: 全レコードを little-endian float64 `[kind, step, a, b, c, d, e]` に直列化した SHA-256。JSON Export に含め、Import / History 復元時に再計算して一致を検証する。π Digit Circle Walk 1,000 step の digest を Node のテストで固定し、ブラウザでの Export が同じ値になることを E2E で確認している。

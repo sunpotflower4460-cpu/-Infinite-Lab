@@ -1,6 +1,6 @@
 import { Application, Container, Graphics } from 'pixi.js'
 import { KIND, STRIDE, type GeometryBatch } from '../geometry/batch'
-import { GeometryStore } from '../geometry/GeometryStore'
+import { CHUNK_RECORDS, GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
 import { Camera } from './Camera'
 import type { Renderer } from './Renderer'
@@ -27,12 +27,18 @@ export class PixiRenderer implements Renderer {
   readonly store = new GeometryStore()
   follow = true
   onUserCamera?: () => void
+  /** Called with the step of the geometry under a click (or null for empty space). */
+  onPick?: (step: number | null) => void
 
   private app: Application | undefined
   private world = new Container()
   private chunkLayer = new Container()
   private highlight = new Graphics()
   private chunkGraphics: Graphics[] = []
+  /** Records currently tessellated in each chunk Graphics. */
+  private builtLength: number[] = []
+  /** Only records with step ≤ visibleStep are shown (Timeline). */
+  private visibleStep = Infinity
   private highlightData: GeometryInstruction[] | null = null
   private bucket = 1
   private originX = 0
@@ -78,6 +84,9 @@ export class PixiRenderer implements Renderer {
 
     this.camera.setViewport(host.clientWidth, host.clientHeight)
     this.resizeObserver = new ResizeObserver(() => {
+      // Pixi's `resizeTo` only reacts to window resizes; layout changes resize the host
+      // too, so resize the renderer here to keep canvas and camera in the same space.
+      app.resize()
       this.camera.setViewport(host.clientWidth, host.clientHeight)
       if (this.follow) this.fitAll()
       this.applyCamera()
@@ -103,6 +112,8 @@ export class PixiRenderer implements Renderer {
     this.store.clear()
     for (const g of this.chunkGraphics) g.destroy()
     this.chunkGraphics = []
+    this.builtLength = []
+    this.visibleStep = Infinity
     this.highlightData = null
     this.highlight.clear()
     this.camera.centerOn(0, 0)
@@ -137,13 +148,16 @@ export class PixiRenderer implements Renderer {
   // ---------------------------------------------------------------------------
 
   private frame(): void {
-    const dirty = this.store.consumeDirty()
-    if (this.needsFullRebuild) {
-      this.needsFullRebuild = false
-      this.rebuildAll()
-    } else if (dirty !== Infinity) {
-      for (let i = dirty; i < this.store.chunks.length; i++) this.buildChunk(i)
-      this.needsRender = true
+    const full = this.needsFullRebuild
+    this.needsFullRebuild = false
+    if (full) this.rebuildView()
+    const visible = this.visibleCount()
+    for (let i = 0; i < this.store.chunks.length; i++) {
+      const want = Math.max(0, Math.min(this.store.chunkLength(i), visible - i * CHUNK_RECORDS))
+      if (full || want !== (this.builtLength[i] ?? -1)) {
+        this.buildChunk(i, want)
+        this.needsRender = true
+      }
     }
     const now = performance.now()
     if (this.needsRender && this.app) {
@@ -154,6 +168,46 @@ export class PixiRenderer implements Renderer {
     }
     while (this.renderTimes.length && now - this.renderTimes[0]! > 1000) this.renderTimes.shift()
     this.renderedFps = this.renderTimes.length
+  }
+
+  private visibleCount(): number {
+    return Number.isFinite(this.visibleStep) ? this.store.countUpToStep(this.visibleStep) : this.store.count
+  }
+
+  /** Show only geometry of steps ≤ step (Infinity = everything). */
+  setVisibleStep(step: number): void {
+    this.visibleStep = step
+    this.needsRender = true
+  }
+
+  /**
+   * Step of the visible geometry nearest to screen point (sx, sy), within `tolerancePx`.
+   * Circles are hit on their circumference or centre, lines anywhere along the segment.
+   */
+  pick(sx: number, sy: number, tolerancePx = 6): number | null {
+    const [wx, wy] = this.camera.screenToWorld(sx, sy)
+    const tol = tolerancePx / this.camera.zoom
+    // Score = distance, with path lines penalised so circles/points win when both are in range.
+    let bestScore = Infinity
+    let bestStep: number | null = null
+    this.store.forEachRecord(this.visibleCount(), (d, o) => {
+      const kind = d[o]
+      let dist: number
+      if (kind === KIND.line) {
+        dist = segmentDistance(wx, wy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!)
+      } else {
+        const c = Math.hypot(wx - d[o + 2]!, wy - d[o + 3]!)
+        dist = kind === KIND.point ? c : Math.min(c, Math.abs(c - d[o + 4]!))
+      }
+      if (dist > tol) return
+      const score = kind === KIND.line ? dist + tol : dist
+      if (score <= bestScore) {
+        // ≤ : on ties the later step (drawn on top) wins
+        bestScore = score
+        bestStep = d[o + 1]!
+      }
+    })
+    return bestStep
   }
 
   /** Map camera → container transform; schedule rebuilds when precision would suffer. */
@@ -179,16 +233,17 @@ export class PixiRenderer implements Renderer {
     }, 120)
   }
 
-  private rebuildAll(): void {
+  /** Re-anchor the float32 precision origin and zoom bucket at the current view. */
+  private rebuildView(): void {
     const c = this.camera
     this.bucket = 2 ** Math.round(Math.log2(c.zoom))
     this.originX = c.cx
     this.originY = c.cy
-    for (let i = 0; i < this.store.chunks.length; i++) this.buildChunk(i)
     this.applyCamera()
   }
 
-  private buildChunk(index: number): void {
+  private buildChunk(index: number, n: number): void {
+    this.builtLength[index] = n
     let g = this.chunkGraphics[index]
     if (!g) {
       g = new Graphics()
@@ -196,8 +251,9 @@ export class PixiRenderer implements Renderer {
       this.chunkLayer.addChild(g)
     }
     g.clear()
+    g.visible = n > 0
+    if (n === 0) return
     const data = this.store.chunks[index]!
-    const n = this.store.chunkLength(index)
     const s = this.bucket
     const ox = this.originX
     const oy = this.originY
@@ -280,6 +336,8 @@ export class PixiRenderer implements Renderer {
     let dragging = false
     let lastX = 0
     let lastY = 0
+    let downX = 0
+    let downY = 0
     const local = (e: MouseEvent) => {
       const r = canvas.getBoundingClientRect()
       return [e.clientX - r.left, e.clientY - r.top] as const
@@ -297,8 +355,8 @@ export class PixiRenderer implements Renderer {
     }
     const onDown = (e: PointerEvent) => {
       dragging = true
-      lastX = e.clientX
-      lastY = e.clientY
+      lastX = downX = e.clientX
+      lastY = downY = e.clientY
       canvas.setPointerCapture(e.pointerId)
     }
     const onMove = (e: PointerEvent) => {
@@ -313,6 +371,10 @@ export class PixiRenderer implements Renderer {
       this.applyCamera()
     }
     const onUp = (e: PointerEvent) => {
+      if (dragging && Math.hypot(e.clientX - downX, e.clientY - downY) < 4 && this.onPick) {
+        const [sx, sy] = local(e)
+        this.onPick(this.pick(sx, sy))
+      }
       dragging = false
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
     }
@@ -339,4 +401,12 @@ export class PixiRenderer implements Renderer {
       canvas.removeEventListener('dblclick', onDbl)
     })
   }
+}
+
+function segmentDistance(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const len2 = dx * dx + dy * dy
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2)) : 0
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 }

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { getController } from '../../app/LabController'
 import { SPEEDS, useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
+import { Timeline } from '../Timeline/Timeline'
 
 export function Controls() {
   const c = getController()
@@ -9,8 +10,6 @@ export function Controls() {
   const finished = useLab((s) => s.finished)
   const ready = useLab((s) => s.phase === 'ready')
   const speedIndex = useLab((s) => s.speedIndex)
-  const currentStep = useLab((s) => s.currentStep)
-  const totalSteps = useLab((s) => s.totalSteps)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -27,8 +26,6 @@ export function Controls() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [c])
-
-  const progress = totalSteps > 0 ? currentStep / totalSteps : 0
 
   return (
     <div className="controls">
@@ -67,15 +64,7 @@ export function Controls() {
           </button>
         ))}
       </div>
-      <div className="progress" title="Steps executed / steps available from computed digits">
-        <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${progress * 100}%` }} />
-        </div>
-        <span className="mono">
-          {formatInt(currentStep)} / {formatInt(totalSteps)}
-        </span>
-        {finished && <span className="badge">all computed digits consumed</span>}
-      </div>
+      <Timeline />
     </div>
   )
 }
