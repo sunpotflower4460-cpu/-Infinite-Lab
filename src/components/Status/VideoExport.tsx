@@ -18,6 +18,9 @@ export function VideoExport() {
   const microscope = useLab((s) => s.microscope)
   const upTo = useLab((s) => s.viewStep ?? s.currentStep)
   const [open, setOpen] = useState(false)
+  // the panel belongs to the lab's top bar: close it when the film or a bottom sheet takes over
+  const covered = useLab((s) => s.film || s.sheet !== null)
+  if (open && covered) setOpen(false)
   const [format, setFormat] = useState<VideoFormat>(DEFAULT_FORMAT)
   const [seconds, setSeconds] = useState(10)
   const [pace, setPace] = useState<VideoPace>('linear')
@@ -151,7 +154,7 @@ function usePanelPlacement(open: boolean, button: React.RefObject<HTMLButtonElem
     if (!open) return
     const update = () => {
       const r = button.current?.getBoundingClientRect()
-      if (!r) return
+      if (!r || r.width === 0) return // hidden (e.g. the top bar during the film): keep the last place
       const vw = document.documentElement.clientWidth
       const vh = document.documentElement.clientHeight
       const top = r.bottom + 6
@@ -163,9 +166,15 @@ function usePanelPlacement(open: boolean, button: React.RefObject<HTMLButtonElem
     update()
     window.addEventListener('resize', update)
     window.addEventListener('scroll', update, true) // the top bar scrolls sideways on phones
+    // the button also moves when its neighbours change width (e.g. the verification badge)
+    const bar = button.current?.parentElement?.parentElement
+    const observer = typeof ResizeObserver === 'undefined' || !bar ? null : new ResizeObserver(update)
+    if (bar) observer?.observe(bar)
+    for (const el of bar?.children ?? []) observer?.observe(el)
     return () => {
       window.removeEventListener('resize', update)
       window.removeEventListener('scroll', update, true)
+      observer?.disconnect()
     }
   }, [open, button])
   return place

@@ -71,3 +71,15 @@ test('typing #film / #lab in the address bar switches the screen', async ({ page
   await expect(page).toHaveURL(/#film$/)
   await expect(page.getByTestId('film')).toBeVisible()
 })
+
+test('the Video panel closes when the film takes over the screen', async ({ page }) => {
+  await page.goto('/#lab')
+  await ready(page)
+  const hasEncoder = await page.evaluate(() => typeof VideoEncoder !== 'undefined')
+  test.skip(!hasEncoder, 'no WebCodecs encoder: the Video button is disabled')
+  await page.getByRole('button', { name: 'Video', exact: true }).click()
+  await expect(page.getByTestId('video-panel')).toBeVisible()
+  await page.getByRole('button', { name: '▶ π の模様を見る' }).click()
+  await expect(page.getByTestId('film')).toBeVisible()
+  await expect(page.getByTestId('video-panel')).toHaveCount(0)
+})
