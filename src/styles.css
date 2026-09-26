@@ -1129,3 +1129,44 @@ input:not([type]) {
   background: rgba(0, 0, 0, 0.55);
   color: #d8dce8;
 }
+
+/* ---- 3D view (Two-Arm Torus / Height) ------------------------------------------ */
+
+.stage-3d,
+.stage-3d-canvas {
+  position: absolute;
+  inset: 0;
+}
+.stage-3d-canvas {
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.stage-3d-canvas:active {
+  cursor: grabbing;
+}
+.stage-3d-canvas canvas {
+  display: block;
+}
+.stage-3d-rotate {
+  position: absolute;
+  top: 46px;
+  right: 10px;
+  background: rgba(10, 12, 20, 0.8);
+  font-size: 11px;
+}
+.view-switch {
+  display: flex;
+}
+.view-switch button {
+  border-radius: 0;
+}
+.view-switch button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.view-switch button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.view-switch button + button {
+  margin-left: -1px;
+}

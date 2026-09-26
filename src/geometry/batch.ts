@@ -4,7 +4,7 @@ import { clampSweep, type GeometryInstruction } from './types'
  * Compact transferable encoding of geometry instructions:
  * one record = STRIDE float64 values  [kind, step, a, b, c, d, e]
  *
- *   point  : a=x  b=y
+ *   point  : a=x  b=y  c=z (0 for 2D points, so their bytes are unchanged)
  *   circle : a=x  b=y  c=radius
  *   line   : a=x1 b=y1 c=x2 d=y2
  *   arc    : a=x  b=y  c=radius d=startAngle e=sweep (counter-clockwise, 0…2π)
@@ -47,7 +47,8 @@ export class GeometryBatchWriter {
         d[o] = KIND.point
         d[o + 2] = g.x
         d[o + 3] = g.y
-        d[o + 4] = d[o + 5] = d[o + 6] = 0
+        d[o + 4] = g.z ?? 0
+        d[o + 5] = d[o + 6] = 0
         break
       case 'circle':
         d[o] = KIND.circle
@@ -93,7 +94,10 @@ export function decodeRecord(
   const [a, b, c, d, e] = [data[o + 2]!, data[o + 3]!, data[o + 4]!, data[o + 5]!, data[o + 6]!]
   switch (data[o]) {
     case KIND.point:
-      return { step, instruction: { type: 'point', x: a, y: b } }
+      return {
+        step,
+        instruction: c === 0 ? { type: 'point', x: a, y: b } : { type: 'point', x: a, y: b, z: c },
+      }
     case KIND.circle:
       return { step, instruction: { type: 'circle', x: a, y: b, radius: c } }
     case KIND.line:

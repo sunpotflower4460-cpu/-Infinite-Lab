@@ -13,13 +13,15 @@ const KIND_NAME: Record<number, string> = {
 const ROWS_PER_PART = 10_000
 
 export const CSV_HEADER = 'step,kind,x,y,radius,x2,y2,start_angle,sweep'
+/** 3D experiments add the points' z as a last column (2D exports are unchanged). */
+export const CSV_HEADER_3D = CSV_HEADER + ',z'
 
 /**
  * Geometry as CSV (spec §28): one row per record, exact float64 values.
  * Returned as string parts so large exports can go straight into a Blob.
  */
-export function geometryCsv(store: GeometryStore, count: number, from = 0): string[] {
-  const parts: string[] = [CSV_HEADER + '\n']
+export function geometryCsv(store: GeometryStore, count: number, from = 0, withZ = false): string[] {
+  const parts: string[] = [(withZ ? CSV_HEADER_3D : CSV_HEADER) + '\n']
   let rows: string[] = []
   store.forEachRecordFrom(from, count, (d, o) => {
     const kind = d[o]!
@@ -29,6 +31,7 @@ export function geometryCsv(store: GeometryStore, count: number, from = 0): stri
     else if (kind === KIND.circle) fields = [num(a), num(b), num(c), '', '', '', '']
     else if (kind === KIND.arc) fields = [num(a), num(b), num(c), '', '', num(e), num(f)]
     else fields = [num(a), num(b), '', '', '', '', '']
+    if (withZ) fields.push(kind === KIND.point ? num(c) : '')
     rows.push(`${num(d[o + 1]!)},${KIND_NAME[kind]},${fields.join(',')}`)
     if (rows.length === ROWS_PER_PART) {
       parts.push(rows.join('\n') + '\n')

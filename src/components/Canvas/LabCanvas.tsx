@@ -4,6 +4,9 @@ import { getController, type LabController } from '../../app/LabController'
 import { ScientificOverlay } from '../Status/ScientificOverlay'
 import { LaneReadout } from '../Compare/LaneReadout'
 import { FilmOverlay } from '../Film/FilmOverlay'
+import { Stage3D } from './Stage3D'
+import { EXPERIMENTS } from '../../experiments/registry'
+import { TWO_ARM_VIEWS } from '../../experiments/two-arm-3d'
 
 /**
  * One canvas lane. The main lab always renders lane 0 in the same place in the tree (so its
@@ -23,6 +26,9 @@ export function LabCanvas({
   const film = useStore(controller.store, (s) => s.film)
   const look = useStore(controller.store, (s) => s.look)
   const microscope = useStore(controller.store, (s) => s.microscope)
+  const experimentId = useStore(controller.store, (s) => s.experimentId)
+  const is3d = EXPERIMENTS[experimentId]?.view === '3d'
+  const views = TWO_ARM_VIEWS.some((v) => v.id === experimentId) && !film ? TWO_ARM_VIEWS : null
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
@@ -31,9 +37,25 @@ export function LabCanvas({
   return (
     <div className="stage" data-testid={`lane-${lane}`}>
       <div className="stage-canvas" ref={host} />
+      {is3d && <Stage3D controller={controller} />}
       {lane === 0 && <ScientificOverlay />}
       {comparing && <LaneReadout controller={controller} lane={lane} />}
       <div className="stage-tools">
+        {views && lane === 0 && (
+          <div className="view-switch" role="group" aria-label="Two-Arm view">
+            {views.map((v) => (
+              <button
+                key={v.id}
+                className={v.id === experimentId ? 'active' : ''}
+                aria-pressed={v.id === experimentId}
+                onClick={() => v.id !== experimentId && controller.switchView(v.id)}
+                title={EXPERIMENTS[v.id]?.name}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={() => controller.fitAll()}
           className={follow ? 'active' : ''}
@@ -41,9 +63,11 @@ export function LabCanvas({
         >
           Fit All
         </button>
-        <button onClick={() => controller.center()} title="Center on the structure">
-          Center
-        </button>
+        {!is3d && (
+          <button onClick={() => controller.center()} title="Center on the structure">
+            Center
+          </button>
+        )}
         <button
           onClick={() => controller.setLook(look === 'lab' ? 'luminous' : 'lab')}
           className={look === 'luminous' ? 'active' : ''}
@@ -52,7 +76,13 @@ export function LabCanvas({
           Glow
         </button>
       </div>
-      {lane === 0 && <div className="stage-hint">wheel: zoom · drag: pan · double-click: center</div>}
+      {lane === 0 && (
+        <div className="stage-hint">
+          {is3d
+            ? 'drag: rotate · right-drag / two fingers: pan · wheel / pinch: zoom · click: inspect · double-click: fit'
+            : 'wheel: zoom · drag: pan · double-click: center'}
+        </div>
+      )}
       {microscope && (
         <div className="stage-microscope" data-testid={`microscope-badge-${lane}`}>
           🔬 steps {microscope.from.toLocaleString('en-US')}–{microscope.to.toLocaleString('en-US')}

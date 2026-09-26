@@ -3,6 +3,7 @@ import { getController } from '../../app/LabController'
 import { webCodecsAvailable, type VideoFormat, type VideoPace } from '../../lab/video'
 import { useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
+import { useDefinition } from '../useDefinition'
 
 /** iPhone / iPad Safari plays MP4 (H.264) best; elsewhere MP4 is the safe default too. */
 const DEFAULT_FORMAT: VideoFormat = 'mp4'
@@ -22,6 +23,7 @@ export function VideoExport() {
   const [seconds, setSeconds] = useState(10)
   const [pace, setPace] = useState<VideoPace>('linear')
   const [glow, setGlow] = useState(false)
+  const is3d = useDefinition().view === '3d'
   const supported = webCodecsAvailable()
   const recording = video.status === 'recording'
 
@@ -29,14 +31,20 @@ export function VideoExport() {
     <div className="video-export">
       <button
         onClick={() => setOpen(!open)}
-        disabled={!supported}
-        className={open ? 'active' : ''}
-        title={supported ? 'Record the drawing as a video' : 'This browser has no WebCodecs video encoder'}
+        disabled={!supported || is3d}
+        className={open && !is3d ? 'active' : ''}
+        title={
+          is3d
+            ? 'Video export is not available in the 3D view yet (PNG, SVG, CSV and JSON are)'
+            : supported
+              ? 'Record the drawing as a video'
+              : 'This browser has no WebCodecs video encoder'
+        }
         aria-expanded={open}
       >
         Video
       </button>
-      {open && (
+      {open && !is3d && (
         <div className="video-panel" data-testid="video-panel" role="dialog" aria-label="Video export">
           <div className="muted small">
             Steps {formatInt(microscope?.from ?? 1)}–{formatInt(microscope?.to ?? upTo)}

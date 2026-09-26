@@ -89,6 +89,42 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
     },
   },
   {
+    id: 'pi-two-arm-sphere',
+    name: 'Pi Two-Arm 3D: Sphere',
+    description:
+      'The two-arm angles (θ₁ = t, θ₂ = πt, dt = 0.05) as longitude and latitude on a sphere (r = 2); 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-sphere',
+      parameters: { dt: 0.05, radius: 2, scale: 100 },
+    },
+  },
+  {
+    id: 'pi-two-arm-torus',
+    name: 'Pi Two-Arm 3D: Torus',
+    description:
+      'The two-arm angles (θ₁ = t, θ₂ = πt, dt = 0.05) as a point on a torus (R = 1.3, r = 1); 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-torus',
+      parameters: { dt: 0.05, major: 1.3, minor: 1, scale: 100 },
+    },
+  },
+  {
+    id: 'pi-two-arm-height',
+    name: 'Pi Two-Arm 3D: Height',
+    description:
+      'The two-arm pen path e^{it} + e^{iπt} (dt = 0.05) lifted by time, z = 100 × 0.01 × t; 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-height',
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, rise: 0.01 },
+    },
+  },
+  {
     id: 'playground-spec',
     name: 'Playground: spec example',
     description: 'Formula Playground with ANGLE = digit × π / 5, RADIUS = digit × 2, DISTANCE = 5',

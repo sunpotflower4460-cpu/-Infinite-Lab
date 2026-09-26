@@ -145,6 +145,20 @@ export class LabController {
     this.initSimulation()
   }
 
+  /**
+   * Switch between experiments that share parameters (the Two-Arm 2D / Torus / Height views):
+   * parameters with the same key keep their values, the others take their defaults.
+   */
+  switchView(experimentId: string): void {
+    this.cancelPending()
+    const def = getExperiment(experimentId)
+    const current = this.store.getState().params
+    const params = defaultParams(def.parameters)
+    for (const key of Object.keys(params)) if (Object.hasOwn(current, key)) params[key] = current[key]!
+    this.store.setState({ experimentId, params })
+    this.initSimulation()
+  }
+
   setParam(key: string, value: ParamValue): void {
     this.cancelPending()
     this.store.setState((s) => ({ params: { ...s.params, [key]: value } }))
@@ -397,6 +411,14 @@ export class LabController {
       else lane.inspect(step)
     }
   }
+
+  /** A click in the 3D view (same behaviour as a click on the 2D canvas). */
+  pickStep(step: number | null): void {
+    this.onPicked(step)
+  }
+
+  /** The 3D view, while one is mounted for this lane (PNG export of 3D experiments). */
+  view3d: { snapshotPng(): Promise<Blob> } | null = null
 
   /** For a Compare Mode lane: the main lab that owns it. */
   private owner: LabController | null = null
@@ -799,11 +821,13 @@ export class LabController {
       const count = this.renderer.visibleRecords
       // Microscope: only the range (the faint context is not part of the data)
       const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
+      const is3d = this.definition().view === '3d'
       if (format === 'png') {
-        this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
+        const png = is3d && this.view3d ? this.view3d.snapshotPng() : this.renderer.snapshotPng()
+        this.download(await png, `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count, from), { type: 'text/csv' }),
+          new Blob(geometryCsv(this.renderer.store, count, from, is3d), { type: 'text/csv' }),
           `${this.fileStem()}.csv`,
         )
       } else {

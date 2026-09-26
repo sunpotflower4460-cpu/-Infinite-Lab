@@ -87,6 +87,8 @@ export interface ExperimentDefinition {
   formulas: FormulaSet
   /** Display names for variables in formulas. */
   symbols: SymbolTable
+  /** '3d': emits points with z and is shown in the 3D view (default: 2D). */
+  view?: '3d'
   create(): GeometryExperiment
 }
 

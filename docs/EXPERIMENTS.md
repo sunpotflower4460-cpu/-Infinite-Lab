@@ -138,6 +138,26 @@ y[n] = y[n−1] + sin(angle) × distance      → 半径 radius の circle（と
 - 値が有限でない（0 で割った等）・半径が負のときは、その step と理由を示して止まる。式を直せば新しく実行し直す。
 - 式は設定・Export（ファイル形式 v3）・履歴・Compare に含まれる。
 
+## 06 Two-Arm 3D — Sphere / Torus / Height（v0.6）
+
+04 Two-Arm Rotation と **まったく同じ角度** θ₁ = (n × dt) mod 2π、θ₂ = (n × dt × C) mod 2π（BigInt で厳密）を、3D の点に置く。
+キャンバス右上の **2D / Sphere / Torus / Height** で切り替える（共通のパラメータ dt, scale などは引き継ぐ）。
+各 step は `point(x, y, z)` を 1 つ出力し、3D ビューは前の step の点と直線で結ぶ（04 が前のペン位置と結ぶのと同じ）。
+2D の表示・SVG は真上から見た (x, y)、CSV には最後の列に z が付く。z も SHA-256 の対象。
+
+| 表示   | 実験 id          | 規則                                                                                                           | 既定                     |
+| ------ | ---------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Sphere | `two-arm-sphere` | ρ = r × cos(θ₂)、x = scale × ρ × cos(θ₁)、y = scale × ρ × sin(θ₁)、z = scale × r × sin(θ₂)（θ₁ 経度・θ₂ 緯度） | r = 2, scale = 100       |
+| Torus  | `two-arm-torus`  | ρ = R + r × cos(θ₂)、x = scale × ρ × cos(θ₁)、y = scale × ρ × sin(θ₁)、z = scale × r × sin(θ₂)                 | R = 1.3, r = 1           |
+| Height | `two-arm-height` | x, y は 04 のペン位置そのもの、z = scale × rise × (n × dt)                                                     | r1 = r2 = 1, rise = 0.01 |
+
+- **Torus**: (θ₁, θ₂) の組をトーラス上の点として見る。04 の各 step はこの組だけで決まる（ペン = r₁e^{iθ₁} + r₂e^{iθ₂}）ので、トーラスは 2D の模様の「元になる空間」。C が無理数なら巻き線は閉じず、トーラスを埋め尽くしていく（Kronecker）。
+- **Sphere**: トーラスで R = 0 としたもの（テストで一致を確認）。θ₂ が 1 周するので、曲線は球の表と裏を極から極へ通り、少しずつ球全体を覆う。
+- **Height**: 04 の 2D の軌跡を、時間 t に比例して持ち上げたもの。どの周で模様が変わったかを高さで見られる。
+- 注意: dt = 0.05 = 1/20 のとき θ₂ = nπ/20 なので、θ₂ は厳密に 40 通りの値しかとらない（点は 40 本の緯線・経線上に並び、線はその間を結ぶ）。θ₁ = n/20 は 2π と通約不能なので繰り返さない。
+- 3D ビュー: ドラッグで回転、右ドラッグ／2 本指で移動、ホイール／ピンチで拡大、クリックでその step を Inspector に表示、ダブルクリックで全体表示、⟳ Rotate で自動回転。Timeline・Microscope・Glow・PNG（3D の見たまま）に対応。動画の書き出しは未対応。
+- 3D の描画は表示のみ（GPU には float32 で渡す）。データ・書き出し・SHA-256 は float64 のまま。
+
 ## Reference Reconstruction（v0.4）
 
 参照動画（`docs/reference/`）の生成規則を、仕様 §40 の手順で検証する（`tools/reference/analyze.py` → `docs/reference/ANALYSIS.md`）。
