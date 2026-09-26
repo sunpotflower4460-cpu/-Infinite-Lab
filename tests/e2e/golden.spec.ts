@@ -10,7 +10,7 @@ test.describe('φ and π room (#golden)', () => {
     await expect(page).toHaveURL(/#golden$/)
     const room = page.getByTestId('golden-room')
     await expect(room).toBeVisible()
-    for (const id of ['pentagon', 'sunflower', 'fractions', 'torus', 'kam', 'coincidence'])
+    for (const id of ['pentagon', 'sunflower', 'fractions', 'torus', 'kam', 'coincidence', 'summary'])
       await expect(page.getByTestId(`room-${id}`)).toBeVisible()
 
     // 1: diagonal / side measured on the drawn pentagon
@@ -25,14 +25,25 @@ test.describe('φ and π room (#golden)', () => {
     await page.getByRole('button', { name: 'K = 1.2' }).click()
     await expect(kam).toContainText('K = 1.200')
     await expect(kam.getByRole('row', { name: /黄金比/ })).toContainText('壊れた')
+    // 2: the golden angle's near fractions have Fibonacci denominators
+    await expect(page.getByTestId('sun-near')).toContainText('1/2、1/3、2/5、3/8、5/13、8/21')
     // 6: the coincidence and its size
     await expect(page.getByTestId('room-coincidence')).toContainText('0.096%')
 
-    // Back (or ✕) returns to the lab
+    // the lab's keyboard shortcuts are off while the room covers it (Space would play the lab)
+    await page.locator('.room-intro').click()
+    await page.keyboard.press('Space')
+    await page.waitForTimeout(300)
+    await expect(page.getByTestId('current-step')).toHaveText('0')
+
+    // ✕ returns to the lab, and Back afterwards does not reopen the room
     await page.getByRole('button', { name: 'Close the room' }).click()
     await expect(room).toHaveCount(0)
     await expect(page).toHaveURL(/#lab$/)
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible()
+    await page.goBack()
+    await page.waitForTimeout(300)
+    await expect(room).toHaveCount(0)
   })
 
   test('#golden opens the room directly (not the film), and the address bar switches screens', async ({
@@ -54,7 +65,7 @@ test.describe('φ and π room (#golden)', () => {
     test.setTimeout(60_000)
     await page.goto('/#golden')
     await page.getByRole('button', { name: 'K = 1.2' }).click()
-    await page.getByRole('button', { name: /壁」になっているか試す/ }).click()
+    await page.getByRole('button', { name: /で試す（最大 100 万回）/ }).click()
     await expect(page.getByTestId('kam-wall')).toContainText('抜けました', { timeout: 30_000 })
   })
 })

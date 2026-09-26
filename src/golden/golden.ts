@@ -52,6 +52,27 @@ export function seeds(count: number, angleDeg: number): [number, number][] {
   })
 }
 
+/**
+ * Fractions p/q close to x (0 < x < 1), from its continued fraction in float64: the arms of a
+ * sunflower drawn with a turn of x per seed follow these denominators. Stops at `count` or when
+ * the fraction is already within float64 of x.
+ */
+export function nearFractions(x: number, count: number): { p: number; q: number }[] {
+  const out: { p: number; q: number }[] = []
+  let [p0, q0, p1, q1] = [1, 0, 0, 1]
+  let r = x
+  for (let i = 0; i < count + 1; i++) {
+    const a = Math.floor(r)
+    ;[p0, p1] = [a * p0 + p1, p0]
+    ;[q0, q1] = [a * q0 + q1, q0]
+    if (q0 > 0 && p0 > 0) out.push({ p: p0, q: q0 })
+    const f = r - a
+    if (f < 1e-9 || out.length >= count) break
+    r = 1 / f
+  }
+  return out
+}
+
 // ---- 3. continued fractions ----------------------------------------------------------------
 
 export interface Convergent {
@@ -96,12 +117,12 @@ export function continuedFraction(
   return { terms, convergents }
 }
 
-/** a / b as a float, for huge BigInts (keeps ~17 significant digits). */
+/** a / b as a float for huge BigInts: each keeps its own top 60 bits, so a tiny a loses nothing. */
 function ratio(a: bigint, b: bigint): number {
   if (a === 0n) return 0
-  const shift = Math.max(0, a.toString(2).length - 60, b.toString(2).length - 60)
-  const s = BigInt(shift)
-  return Number(a >> s) / Number(b >> s)
+  const sa = Math.max(0, a.toString(2).length - 60)
+  const sb = Math.max(0, b.toString(2).length - 60)
+  return (Number(a >> BigInt(sa)) / Number(b >> BigInt(sb))) * 2 ** (sa - sb)
 }
 
 // ---- 4. filling a torus ----------------------------------------------------------------------
@@ -109,26 +130,53 @@ function ratio(a: bigint, b: bigint): number {
 /**
  * The flat torus (the square with opposite edges glued): the line x = t, y = a·t (mod 1).
  * On the two-arm torus, x is arm 1's turn and y arm 2's, so a is the speed ratio.
- * Returns, for each whole turn 0…turns, the fraction of the N×N cells the line has passed.
+ * Returns, for each whole turn 0…turns, the fraction of the N×N cells the line has passed
+ * through — exactly: each straight piece is walked cell by cell (grid traversal), so a cell the
+ * line only clips at a corner is counted too.
  */
 export function coverageByTurn(a: number, turns: number, N = 100): number[] {
   const seen = new Uint8Array(N * N)
   const frac = a - Math.floor(a)
-  const perTurn = Math.ceil(N * 8 * Math.hypot(1, frac)) // < 1/8 cell between samples
   const out = [0]
   let count = 0
-  for (let turn = 0; turn < turns; turn++) {
-    for (let i = 0; i < perTurn; i++) {
-      const x = i / perTurn
-      // y = frac · (turn + x) mod 1, with the whole-turn part reduced first (exact-ish for large turns)
-      const y0 = (frac * turn) % 1
-      let y = (y0 + frac * x) % 1
-      if (y < 0) y += 1
-      const cell = Math.min(N - 1, Math.floor(y * N)) * N + Math.min(N - 1, Math.floor(x * N))
-      if (!seen[cell]) {
-        seen[cell] = 1
-        count++
+  const mark = (ix: number, iy: number) => {
+    const c = Math.min(N - 1, iy) * N + Math.min(N - 1, ix)
+    if (!seen[c]) {
+      seen[c] = 1
+      count++
+    }
+  }
+  // the straight piece from (x0, y0) to (x1, y1), 0 ≤ x0 < x1 ≤ 1, 0 ≤ y0 ≤ y1 ≤ 1
+  const piece = (x0: number, y0: number, x1: number, y1: number) => {
+    const dx = x1 - x0
+    const dy = y1 - y0
+    let ix = Math.min(N - 1, Math.floor(x0 * N))
+    let iy = Math.min(N - 1, Math.floor(y0 * N))
+    const dtx = 1 / (N * dx)
+    const dty = dy > 0 ? 1 / (N * dy) : Infinity
+    let tx = ((ix + 1) / N - x0) / dx
+    let ty = dy > 0 ? ((iy + 1) / N - y0) / dy : Infinity
+    for (;;) {
+      mark(ix, iy)
+      const next = Math.min(tx, ty)
+      if (next >= 1 || ix >= N || iy >= N) break
+      if (tx <= ty) {
+        ix++
+        tx += dtx
       }
+      if (ty <= next) {
+        iy++
+        ty += dty
+      }
+    }
+  }
+  for (let turn = 0; turn < turns; turn++) {
+    const y0 = (frac * turn) % 1 // height where this turn starts (whole turns reduced first)
+    const xWrap = frac > 0 ? (1 - y0) / frac : Infinity // where the line leaves through the top
+    if (xWrap >= 1) piece(0, y0, 1, y0 + frac)
+    else {
+      piece(0, y0, xWrap, 1)
+      piece(xWrap, 0, 1, frac * (1 - xWrap))
     }
     out.push(count / (N * N))
   }
@@ -182,27 +230,34 @@ export function rotationNumber(K: number, p0: number, n = 3000, th0 = 0): number
 export interface CircleTest {
   /** p₀ (at θ₀ = 0) whose orbit turns with the requested rotation number */
   p0: number
-  /** true: the orbit lies on a smooth closed curve around the cylinder (the torus survives) */
+  /** true: an orbit with exactly this rotation number lies on a smooth closed curve (the torus survives) */
   survives: boolean
   /** largest jump in p between orbit points neighbouring in θ (0 for a smooth curve) */
   roughness: number
+  /** rotation number measured over 20,000 and 200,000 iterations from p₀ */
+  measured: [number, number]
 }
 
 /**
  * Is there still an invariant circle with rotation number w at kick strength K? Find the
- * starting p₀ with that rotation number (bisection: the map twists, so it grows with p₀), then
- * check that its orbit draws a smooth graph p = f(θ). A finite test (`n` iterations): near the
- * breaking point it can go either way; the literature value for the golden circle is K ≈ 0.9716.
+ * starting p₀ with that rotation number (bisection: the map twists, so it grows with p₀; coarse
+ * steps first, then 20,000 iterations per step), then require all of
+ *   - the orbit really turns at w, and at the same rate over 20,000 and over 200,000
+ *     iterations (a chaotic orbit's average drifts, a circle's converges like 1/n),
+ *   - its points draw a smooth graph p = f(θ).
+ * A finite test: near the breaking point it can go either way; the literature value for the
+ * golden circle is K ≈ 0.9716 (and ≈ 0.957 for √2 − 1).
  */
-export function circleTest(K: number, w: number, n = 20000): CircleTest {
+export function circleTest(K: number, w: number): CircleTest {
   let lo = 0
   let hi = TAU
-  for (let i = 0; i < 48; i++) {
+  for (let i = 0; i < 44; i++) {
     const mid = (lo + hi) / 2
-    if (rotationNumber(K, mid) < w) lo = mid
+    if (rotationNumber(K, mid, i < 24 ? 3000 : 20000) < w) lo = mid
     else hi = mid
   }
   const p0 = (lo + hi) / 2
+  const n = 20000
   const pts: [number, number][] = []
   let th = 0
   let p = p0
@@ -214,7 +269,11 @@ export function circleTest(K: number, w: number, n = 20000): CircleTest {
   pts.sort((a, b) => a[0] - b[0])
   let roughness = 0
   for (let i = 1; i < pts.length; i++) roughness = Math.max(roughness, Math.abs(pts[i]![1] - pts[i - 1]![1]))
-  return { p0, survives: roughness < 0.05, roughness }
+  const measured: [number, number] = [rotationNumber(K, p0, n), rotationNumber(K, p0, 10 * n)]
+  // the bisection decides with 20,000-iteration averages (±~5e-5), so it lands within that of w;
+  // a chaotic orbit found instead drifts by 1e-3 or more between the two lengths
+  const turnsRight = Math.abs(measured[1] - w) < 5e-5 && Math.abs(measured[0] - measured[1]) < 5e-5
+  return { p0, survives: roughness < 0.05 && turnsRight, roughness, measured }
 }
 
 /** Where the wall test started: next to the unstable point (θ, p) = (0, 0). */

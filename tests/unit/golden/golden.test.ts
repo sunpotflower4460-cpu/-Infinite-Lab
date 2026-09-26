@@ -60,6 +60,13 @@ describe('φ and π room: the numbers it shows', () => {
     expect(circleTest(0.9, w.golden!).survives).toBe(true)
     expect(circleTest(0.95, w.e!).survives).toBe(false)
     expect(circleTest(1.0, w.golden!).survives).toBe(false)
+    // near the literature values: √2 − 1 breaks at ≈ 0.957, the golden circle at ≈ 0.9716
+    expect(circleTest(0.97, w.sqrt2!).survives).toBe(false)
+    expect(circleTest(0.97, w.golden!).survives).toBe(true)
+    expect(circleTest(0.98, w.golden!).survives).toBe(false)
+    // the orbit tested really turns at the requested rate
+    const g = circleTest(0.9, w.golden!)
+    expect(Math.abs(g.measured[1] - w.golden!)).toBeLessThan(5e-5)
   })
 
   it('a surviving circle is a wall: below K ≈ 0.97 an orbit cannot climb a full turn in p', () => {
@@ -82,5 +89,22 @@ describe('wall test in chunks', () => {
       s = r
     }
     expect(crossed).toBe(whole)
+  })
+})
+
+describe('near fractions (sunflower arms)', () => {
+  it('golden turn → Fibonacci denominators; π − 3 turn → 7, then 106, 113', async () => {
+    const { nearFractions, GOLDEN_ANGLE_DEG } = await import('../../../src/golden/golden')
+    expect(nearFractions(GOLDEN_ANGLE_DEG / 360, 7).map((f) => `${f.p}/${f.q}`)).toEqual([
+      '1/2',
+      '1/3',
+      '2/5',
+      '3/8',
+      '5/13',
+      '8/21',
+      '13/34',
+    ])
+    expect(nearFractions(Math.PI - 3, 3).map((f) => `${f.p}/${f.q}`)).toEqual(['1/7', '15/106', '16/113'])
+    expect(nearFractions(1 / 7, 5)).toEqual([{ p: 1, q: 7 }]) // exactly 1/7: nothing further
   })
 })

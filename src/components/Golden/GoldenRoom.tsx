@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { closeRoom } from '../../golden/room'
-import { Coincidence, Fractions, Kam, Pentagon, Sunflower, TorusFill } from './Sections'
+import { Coincidence, Fractions, Kam, Pentagon, Summary, Sunflower, TorusFill } from './Sections'
 
 /**
  * The "φ and π" room: what the golden ratio and π have in common, and where they are opposites,
@@ -21,7 +21,7 @@ export function GoldenRoom() {
             <span className="accent">φ</span> と <span className="accent">π</span> の部屋
           </h2>
           <p className="muted">
-            π は「円そのもの」、黄金比 φ = 1.618… は「円の上で、いちばん繰り返さない回り方」。2
+            π（3.14…）は「円そのもの」。黄金比 φ（1.618…）は「円の上で、いちばん繰り返さない回り方」。2
             つは円の上で出会います。
           </p>
         </div>
@@ -48,14 +48,29 @@ export function GoldenRoom() {
         <a href="#golden" onClick={jump('coincidence')}>
           6 偶然の一致
         </a>
+        <a href="#golden" onClick={jump('summary')}>
+          まとめ
+        </a>
       </nav>
       <main className="room-body">
+        <div className="room-intro">
+          <p>
+            <b>この部屋で分かること：</b>黄金比と π
+            は、円の上で出会います。そして「分数にどれだけ似ているか」で正反対の性質を持ち、そのせいで、回したときのふるまいも正反対になります。
+          </p>
+          <p className="muted">
+            読み方：各項目の <b>ひとことで</b> だけ読んでも全体がつかめます。図は動かせます。
+            <span className="room-tag room-tag-測定">測定</span> はこのページでその場で計算した値、
+            <span className="room-tag room-tag-文献">文献</span> は数学の文献にある値です。
+          </p>
+        </div>
         <Pentagon />
         <Sunflower />
         <Fractions />
         <TorusFill />
         <Kam />
         <Coincidence />
+        <Summary />
         <p className="room-foot muted">
           この部屋の数値と図は、すべてその場で計算しています（sin / cos はどの端末でも同じ結果になる実装、π と
           φ は BigInt で全桁を保証）。「測定」は有限回の計算の結果、「文献」は数学の文献の値です。
