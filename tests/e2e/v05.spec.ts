@@ -164,3 +164,68 @@ test.describe('Film mode (the reference video look)', () => {
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible()
   })
 })
+
+test.describe('Mathematical Microscope (spec §38)', () => {
+  test('a step range is framed, picked and exported on its own; Exit shows everything again', async ({
+    page,
+  }) => {
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 400)
+    await page.getByLabel('Microscope from step').fill('100')
+    await page.getByLabel('Microscope to step').fill('150')
+    await page.getByRole('button', { name: 'Zoom' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toContainText('steps 100–150')
+    await expect(page.getByTestId('microscope-range')).toHaveText('100–150')
+
+    // clicks anywhere only ever select steps inside the range
+    const canvas = page.getByTestId('lab-canvas')
+    const box = (await canvas.boundingBox())!
+    for (const [fx, fy] of [
+      [0.5, 0.5],
+      [0.3, 0.4],
+      [0.7, 0.6],
+      [0.45, 0.55],
+    ]) {
+      await page.mouse.click(box.x + box.width * fx!, box.y + box.height * fy!)
+      await expect
+        .poll(async () => Number((await page.getByTestId('inspector-step').textContent())!.replace(/,/g, '')))
+        .toBeGreaterThanOrEqual(100)
+      expect(
+        Number((await page.getByTestId('inspector-step').textContent())!.replace(/,/g, '')),
+      ).toBeLessThanOrEqual(150)
+    }
+
+    // SVG export = exactly the range
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'SVG', exact: true }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe('pi-infinite-lab_digit-circle-walk_pi_100-150.svg')
+    const svg = readFileSync(await download.path(), 'utf8')
+    const steps = [...svg.matchAll(/data-step="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(steps).toHaveLength(102) // 51 steps × (path line + circle)
+    expect(Math.min(...steps)).toBe(100)
+    expect(Math.max(...steps)).toBe(150)
+
+    // hidden context, then exit
+    await page.getByRole('button', { name: 'hidden' }).click()
+    await expect(page.getByRole('button', { name: 'hidden' })).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Exit microscope view' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toHaveCount(0)
+    await expect(page.getByTestId('timeline')).toContainText('400 / 1,001')
+  })
+
+  test('±50 around the inspected step; playing leaves the Microscope', async ({ page }) => {
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 300)
+    await page.getByLabel('Inspect step').fill('200')
+    await page.getByLabel('Inspect step').press('Enter')
+    await expect(page.getByTestId('inspector-step')).toHaveText('200')
+    await page.getByRole('button', { name: '±50', exact: true }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toContainText('steps 150–250')
+    await page.getByRole('button', { name: 'Play' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toHaveCount(0)
+  })
+})

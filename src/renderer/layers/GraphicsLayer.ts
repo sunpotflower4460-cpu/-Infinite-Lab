@@ -14,6 +14,8 @@ export class GraphicsLayer implements GeometryLayer {
   private builtLength: number[] = []
   private style: LayerStyle = LOOKS.lab
   private styleChanged = false
+  private contextStart = 0
+  private contextAlpha = 1
 
   constructor() {
     this.container.blendMode = 'add'
@@ -41,6 +43,13 @@ export class GraphicsLayer implements GeometryLayer {
     this.styleChanged = true
   }
 
+  setContext(startIndex: number, alpha: number): void {
+    if (startIndex === this.contextStart && alpha === this.contextAlpha) return
+    this.contextStart = startIndex
+    this.contextAlpha = alpha
+    this.styleChanged = true // rebuild every chunk on the next sync
+  }
+
   setPixelScale(): void {
     // tessellation is refreshed on the next bucket change
   }
@@ -57,22 +66,38 @@ export class GraphicsLayer implements GeometryLayer {
     g.visible = n > 0
     if (n === 0) return
     const data = store.chunks[index]!
+    // Microscope: records before contextStart are drawn as faded context (or not at all).
+    const base = index * CHUNK_RECORDS
+    const split = Math.max(0, Math.min(n, this.contextStart - base))
+    if (split > 0 && this.contextAlpha > 0) this.drawRecords(g, data, 0, split, frame, this.contextAlpha)
+    if (split < n) this.drawRecords(g, data, split, n, frame, 1)
+  }
+
+  private drawRecords(
+    g: Graphics,
+    data: Float64Array,
+    from: number,
+    to: number,
+    frame: LayerFrame,
+    fade: number,
+  ) {
     const s = frame.bucket
     const tx = (x: number) => (x - frame.originX) * s
     const ty = (y: number) => (y - frame.originY) * s
+    const st = this.style
 
     let hasLines = false
-    for (let i = 0; i < n; i++) {
+    for (let i = from; i < to; i++) {
       const o = i * STRIDE
       if (data[o] === KIND.line) {
         g.moveTo(tx(data[o + 2]!), ty(data[o + 3]!)).lineTo(tx(data[o + 4]!), ty(data[o + 5]!))
         hasLines = true
       }
     }
-    if (hasLines) g.stroke({ width: 1, color: this.style.line, alpha: this.style.lineAlpha, pixelLine: true })
+    if (hasLines) g.stroke({ width: 1, color: st.line, alpha: st.lineAlpha * fade, pixelLine: true })
 
     let hasCircles = false
-    for (let i = 0; i < n; i++) {
+    for (let i = from; i < to; i++) {
       const o = i * STRIDE
       const kind = data[o]
       if (kind === KIND.circle && data[o + 4]! > 0) {
@@ -88,13 +113,12 @@ export class GraphicsLayer implements GeometryLayer {
         hasCircles = true
       }
     }
-    if (hasCircles)
-      g.stroke({ width: 1, color: this.style.circle, alpha: this.style.circleAlpha, pixelLine: true })
+    if (hasCircles) g.stroke({ width: 1, color: st.circle, alpha: st.circleAlpha * fade, pixelLine: true })
 
     // Points and zero-radius circles: a dot of constant screen size.
     const dot = 1.2 / frame.pxPerUnit
     let hasPoints = false
-    for (let i = 0; i < n; i++) {
+    for (let i = from; i < to; i++) {
       const o = i * STRIDE
       const kind = data[o]
       if (kind === KIND.point || (kind === KIND.circle && data[o + 4]! <= 0)) {
@@ -102,7 +126,7 @@ export class GraphicsLayer implements GeometryLayer {
         hasPoints = true
       }
     }
-    if (hasPoints) g.fill({ color: this.style.point, alpha: this.style.pointAlpha })
+    if (hasPoints) g.fill({ color: st.point, alpha: st.pointAlpha * fade })
   }
 
   clear(): void {

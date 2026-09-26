@@ -131,29 +131,58 @@ export class GeometryStore {
     return out
   }
 
-  /**
-   * Bounding box of the first `count` records: whole chunks from `chunkBounds`,
-   * only the partial last chunk is scanned.
-   */
+  /** Bounding box of the first `count` records. */
   boundsUpTo(count: number): Bounds | null {
     const n = Math.min(count, this.count)
     if (n === this.count) return this.bounds && { ...this.bounds }
+    return this.boundsBetween(0, n)
+  }
+
+  /**
+   * Bounding box of records [from, to): whole chunks from `chunkBounds`, only the partial
+   * first and last chunks are scanned. Null when the range is empty.
+   */
+  boundsBetween(from: number, to: number): Bounds | null {
+    const a = Math.max(0, from)
+    const b = Math.min(to, this.count)
+    if (a >= b) return null
     let out: Bounds | null = null
-    const full = Math.floor(n / CHUNK_RECORDS)
-    for (let c = 0; c < full; c++) {
-      const b = this.chunkBounds[c]!
-      if (!out) out = { ...b }
-      else grow(out, b.minX, b.minY, b.maxX, b.maxY)
+    const add = (x: Bounds | null) => {
+      if (!x) return
+      if (!out) out = { ...x }
+      else grow(out, x.minX, x.minY, x.maxX, x.maxY)
     }
-    const scratch = new GeometryStore()
-    const rest = n - full * CHUNK_RECORDS
-    if (rest > 0) {
-      scratch.append({ data: this.chunks[full]!.subarray(0, rest * STRIDE), count: rest })
-      const b = scratch.bounds!
-      if (!out) out = { ...b }
-      else grow(out, b.minX, b.minY, b.maxX, b.maxY)
+    const scan = (s: number, e: number) => {
+      if (e <= s) return
+      const c = Math.floor(s / CHUNK_RECORDS)
+      const scratch = new GeometryStore()
+      const offset = s - c * CHUNK_RECORDS
+      scratch.append({
+        data: this.chunks[c]!.subarray(offset * STRIDE, (offset + e - s) * STRIDE),
+        count: e - s,
+      })
+      add(scratch.bounds)
     }
+    const firstFull = Math.ceil(a / CHUNK_RECORDS)
+    const lastFull = Math.floor(b / CHUNK_RECORDS) // exclusive
+    if (firstFull >= lastFull) {
+      // within one chunk, or straddling one boundary without a whole chunk in between
+      const boundary = firstFull * CHUNK_RECORDS
+      if (boundary > a && boundary < b) {
+        scan(a, boundary)
+        scan(boundary, b)
+      } else scan(a, b)
+      return out
+    }
+    scan(a, firstFull * CHUNK_RECORDS)
+    for (let c = firstFull; c < lastFull; c++) add(this.chunkBounds[c]!)
+    scan(lastFull * CHUNK_RECORDS, b)
     return out
+  }
+
+  /** Index of the first record with step ≥ `step` (records before it belong to earlier steps). */
+  firstIndexOfStep(step: number): number {
+    return this.countUpToStep(step - 1)
   }
 
   /** Records held by chunk `i`. */

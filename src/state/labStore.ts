@@ -40,6 +40,13 @@ export type VerifyState =
   | { status: 'verified' | 'mismatch'; expected: string; actual: string; note?: string }
   | { status: 'error'; message: string }
 
+export interface Microscope {
+  from: number
+  to: number
+  /** What happens to the steps before `from`: drawn faintly, or not at all. */
+  context: 'dim' | 'hide'
+}
+
 export interface LabState {
   phase: Phase
   error: string | null
@@ -71,6 +78,8 @@ export interface LabState {
   look: Look
   /** Film mode: full-screen playback that speeds up like the reference video. */
   film: boolean
+  /** Mathematical Microscope: only steps [from, to] are shown (earlier ones as faint context). */
+  microscope: Microscope | null
   /** How much Film mode explains: plain words, the full mathematics, or nothing. */
   filmInfo: FilmInfoLevel
   scientific: boolean
@@ -128,6 +137,7 @@ function initialState(): LabState {
     look: 'lab',
     film: false,
     filmInfo: loadFilmInfo(),
+    microscope: null,
     patterns: null,
     ai: { status: 'idle' },
     sheet: null,

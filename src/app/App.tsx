@@ -7,6 +7,7 @@ import { DigitStream } from '../components/DigitStream/DigitStream'
 import { FormulaViewer } from '../components/FormulaViewer/FormulaViewer'
 import { Inspector } from '../components/Inspector/Inspector'
 import { ObserverPanel } from '../components/Observer/ObserverPanel'
+import { MicroscopePanel } from '../components/Microscope/MicroscopePanel'
 import { ExperimentPanel } from '../components/Panel/ExperimentPanel'
 import { StatusStrip } from '../components/Status/StatusStrip'
 import { FileActions } from '../components/Status/FileActions'
@@ -60,6 +61,7 @@ export function App() {
       <aside className="right" aria-label="Inspector">
         <SheetHeader title="Inspector" onClose={close} />
         <Inspector />
+        <MicroscopePanel />
         <ObserverPanel />
       </aside>
       {/* pointerdown, not click: the click that follows a tap must not close a sheet the tap opened */}

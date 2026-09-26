@@ -91,3 +91,50 @@ describe('boundsUpTo', () => {
     }
   })
 })
+
+describe('boundsBetween (Microscope ranges)', () => {
+  it('matches a direct scan for ranges inside, across and spanning chunks', () => {
+    const store = storeFor(4100) // 8,200 records, 5 chunks
+    const scan = (a: number, b: number) => {
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+      store.forEachRecordFrom(a, b, (d, o) => {
+        const r = d[o] === 1 ? d[o + 4]! : 0
+        const xs = d[o] === 2 ? [d[o + 2]!, d[o + 4]!] : [d[o + 2]! - r, d[o + 2]! + r]
+        const ys = d[o] === 2 ? [d[o + 3]!, d[o + 5]!] : [d[o + 3]! - r, d[o + 3]! + r]
+        minX = Math.min(minX, ...xs)
+        maxX = Math.max(maxX, ...xs)
+        minY = Math.min(minY, ...ys)
+        maxY = Math.max(maxY, ...ys)
+      })
+      return { minX, minY, maxX, maxY }
+    }
+    const ranges = [
+      [0, 1],
+      [5, 6],
+      [100, 150],
+      [1999, 2001],
+      [1900, 2100],
+      [0, 2000],
+      [2000, 4000],
+      [1500, 6500],
+      [3999, 8200],
+      [4000, 8200],
+      [8199, 8200],
+    ]
+    for (const [a, b] of ranges) expect(store.boundsBetween(a!, b!), `${a}–${b}`).toEqual(scan(a!, b!))
+    expect(store.boundsBetween(10, 10)).toBeNull()
+    expect(store.boundsBetween(9000, 9100)).toBeNull()
+    expect(store.boundsUpTo(3000)).toEqual(scan(0, 3000))
+  })
+
+  it('firstIndexOfStep is where a step range starts', () => {
+    const store = storeFor(100) // 2 records per step
+    expect(store.firstIndexOfStep(1)).toBe(0)
+    expect(store.firstIndexOfStep(2)).toBe(2)
+    expect(store.firstIndexOfStep(51)).toBe(100)
+    expect(store.stepAt(store.firstIndexOfStep(51))).toBe(51)
+  })
+})

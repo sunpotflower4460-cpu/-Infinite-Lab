@@ -1037,3 +1037,33 @@ input:not([type]) {
   font-size: 12px;
   color: #aab0c0;
 }
+
+/* ---- microscope --------------------------------------------------------------- */
+
+.microscope-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.stage-microscope {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  background: rgba(4, 5, 10, 0.8);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.stage-microscope button {
+  border: 0;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--accent);
+}

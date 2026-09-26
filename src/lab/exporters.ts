@@ -18,10 +18,10 @@ export const CSV_HEADER = 'step,kind,x,y,radius,x2,y2,start_angle,sweep'
  * Geometry as CSV (spec §28): one row per record, exact float64 values.
  * Returned as string parts so large exports can go straight into a Blob.
  */
-export function geometryCsv(store: GeometryStore, count: number): string[] {
+export function geometryCsv(store: GeometryStore, count: number, from = 0): string[] {
   const parts: string[] = [CSV_HEADER + '\n']
   let rows: string[] = []
-  store.forEachRecord(count, (d, o) => {
+  store.forEachRecordFrom(from, count, (d, o) => {
     const kind = d[o]!
     const [a, b, c, e, f] = [d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!]
     let fields: string[]
@@ -52,8 +52,10 @@ export function geometrySvg(
   count: number,
   title: string,
   description: string,
+  /** First record (Microscope range); records before it are left out. */
+  from = 0,
 ): string[] {
-  const b = store.boundsUpTo(count) ?? { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+  const b = store.boundsBetween(from, count) ?? { minX: -1, minY: -1, maxX: 1, maxY: 1 }
   const w = Math.max(b.maxX - b.minX, 1e-9)
   const h = Math.max(b.maxY - b.minY, 1e-9)
   const pad = Math.max(w, h) * 0.04
@@ -70,7 +72,7 @@ export function geometrySvg(
   const lineStyle = `stroke="${hex(COLORS.line)}" stroke-opacity="${COLORS.lineAlpha}" vector-effect="non-scaling-stroke"`
   const circleStyle = `stroke="${hex(COLORS.circle)}" stroke-opacity="${COLORS.circleAlpha}" vector-effect="non-scaling-stroke"`
   const dotStyle = `fill="${hex(COLORS.point)}" fill-opacity="${COLORS.pointAlpha}"`
-  store.forEachRecord(count, (d, o) => {
+  store.forEachRecordFrom(from, count, (d, o) => {
     const kind = d[o]
     const step = num(d[o + 1]!)
     const [a, bb, c, e, f] = [d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!]

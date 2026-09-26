@@ -26,7 +26,7 @@ import { PixiRenderer } from '../renderer/PixiRenderer'
 import type { Look } from '../renderer/layers/GeometryLayer'
 import { filmSpeed } from './filmSpeed'
 import { saveFilmInfo, type FilmInfoLevel } from '../film/explain'
-import { createLabStore, SPEEDS, useLab, type LabStore } from '../state/labStore'
+import { createLabStore, SPEEDS, useLab, type LabStore, type Microscope } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
 import { version as APP_VERSION } from '../../package.json'
@@ -298,6 +298,7 @@ export class LabController {
   private seekLane(step: number, options: { inspect?: boolean } = {}): void {
     const s = this.store.getState()
     if (s.phase !== 'ready') return
+    this.dropMicroscope() // moving along the Timeline leaves the Microscope
     const target = Math.max(0, Math.min(Math.round(step), s.totalSteps))
     if (target > s.currentStep) {
       this.leaveView()
@@ -332,9 +333,50 @@ export class LabController {
   }
 
   private leaveView(): void {
+    this.dropMicroscope()
     if (this.store.getState().viewStep === null) return
     this.store.setState({ viewStep: null, inspected: null })
     this.renderer.setVisibleStep(Infinity)
+  }
+
+  // ---- Mathematical Microscope (spec §38) --------------------------------------------
+
+  /**
+   * Show only steps [from, to] of the computed geometry, framed to fill the view; earlier steps
+   * stay as faint context (or are hidden), later ones are hidden, clicks pick inside the range.
+   * Compare Mode applies the same range to both lanes.
+   */
+  setMicroscope(from: number, to: number, context: Microscope['context'] = 'dim'): void {
+    const s = this.store.getState()
+    if (s.phase !== 'ready' || s.currentStep < 1) return
+    this.stopLockstep()
+    if (s.playing) this.pause()
+    const hi = Math.max(1, Math.min(Math.round(to), s.currentStep))
+    const lo = Math.max(1, Math.min(Math.round(from), hi))
+    const view = hi === s.currentStep ? null : hi
+    const microscope: Microscope = { from: lo, to: hi, context }
+    this.store.setState({ microscope, viewStep: view, follow: false })
+    this.renderer.setStepRange({ from: lo, to: hi, contextAlpha: context === 'dim' ? 0.12 : 0 })
+    const pinned = s.inspected?.step
+    if (pinned === undefined || pinned < lo || pinned > hi) this.queueInspect(hi)
+    if (this.peer && !this.owner) this.peer.setMicroscope(lo, hi, context)
+  }
+
+  /** Leave the Microscope and show everything that has been computed again. */
+  clearMicroscope(): void {
+    if (!this.store.getState().microscope) return
+    this.dropMicroscope()
+    this.store.setState({ viewStep: null, inspected: null })
+    this.renderer.setVisibleStep(Infinity)
+    this.fitAll()
+    if (this.peer && !this.owner) this.peer.clearMicroscope()
+  }
+
+  /** Forget the range without moving the camera (the caller decides what to show next). */
+  private dropMicroscope(): void {
+    if (!this.store.getState().microscope) return
+    this.store.setState({ microscope: null })
+    this.renderer.setStepRange(null)
   }
 
   // ---- inspection ------------------------------------------------------------------
@@ -736,7 +778,8 @@ export class LabController {
   private fileStem(): string {
     const s = this.store.getState()
     const step = s.viewStep ?? s.currentStep
-    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${step}`
+    const range = s.microscope ? `${s.microscope.from}-${s.microscope.to}` : String(step)
+    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${range}`
   }
 
   private download(blob: Blob, name: string): void {
@@ -753,11 +796,13 @@ export class LabController {
     try {
       const s = this.store.getState()
       const count = this.renderer.visibleRecords
+      // Microscope: only the range (the faint context is not part of the data)
+      const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
       if (format === 'png') {
         this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count), { type: 'text/csv' }),
+          new Blob(geometryCsv(this.renderer.store, count, from), { type: 'text/csv' }),
           `${this.fileStem()}.csv`,
         )
       } else {
@@ -769,7 +814,7 @@ export class LabController {
           ...formulaLines(def, symbol),
           `parameters ${JSON.stringify(s.params)}`,
         ].join('\n')
-        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc)
+        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc, from)
         this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
       }
     } catch (err) {
@@ -927,6 +972,7 @@ export class LabController {
       currentTrace: null,
       inspected: null,
       viewStep: null,
+      microscope: null,
       finished: false,
       playing: false,
       waiting: false,

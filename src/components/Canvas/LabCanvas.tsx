@@ -22,6 +22,7 @@ export function LabCanvas({
   const comparing = useStore(getController().store, (s) => s.compareConstant !== null)
   const film = useStore(controller.store, (s) => s.film)
   const look = useStore(controller.store, (s) => s.look)
+  const microscope = useStore(controller.store, (s) => s.microscope)
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
@@ -52,6 +53,14 @@ export function LabCanvas({
         </button>
       </div>
       {lane === 0 && <div className="stage-hint">wheel: zoom · drag: pan · double-click: center</div>}
+      {microscope && (
+        <div className="stage-microscope" data-testid={`microscope-badge-${lane}`}>
+          🔬 steps {microscope.from.toLocaleString('en-US')}–{microscope.to.toLocaleString('en-US')}
+          <button onClick={() => controller.clearMicroscope()} aria-label="Exit microscope view">
+            ✕
+          </button>
+        </div>
+      )}
       {phase === 'computing' && <div className="stage-busy">computing digits…</div>}
       {lane === 0 && film && <FilmOverlay />}
     </div>

@@ -114,6 +114,8 @@ export class PixiRenderer implements Renderer {
   clear(): void {
     this.store.clear()
     this.layer.clear()
+    this.range = null
+    this.layer.setContext(0, 1)
     this.visibleStep = Infinity
     this.highlightData = null
     this.highlight.clear()
@@ -213,6 +215,7 @@ export class PixiRenderer implements Renderer {
     this.layer.destroy()
     this.layer = next
     next.setStyle(LOOKS[this.look])
+    if (this.range) next.setContext(this.store.firstIndexOfStep(this.range.from), this.range.alpha)
     this.world.addChildAt(next.container, 0)
     this.needsFullRebuild = true
   }
@@ -252,6 +255,28 @@ export class PixiRenderer implements Renderer {
     this.needsRender = true
   }
 
+  /** Microscope range: steps before `from` are faded context (alpha 0 = hidden); null = none. */
+  private range: { from: number; alpha: number } | null = null
+
+  /**
+   * Mathematical Microscope: show steps [from, to] and frame them; earlier steps stay as faded
+   * (or hidden) context, later ones are hidden. Clicks only pick inside the range.
+   */
+  setStepRange(range: { from: number; to: number; contextAlpha: number } | null): void {
+    if (!range) {
+      this.range = null
+      this.layer.setContext(0, 1)
+      this.setVisibleStep(Infinity)
+      return
+    }
+    this.range = { from: range.from, alpha: range.contextAlpha }
+    const start = this.store.firstIndexOfStep(range.from)
+    this.layer.setContext(start, range.contextAlpha)
+    this.setVisibleStep(range.to)
+    const b = this.store.boundsBetween(start, this.store.countUpToStep(range.to))
+    if (b) this.fitTo(b)
+  }
+
   /**
    * Step of the visible geometry nearest to screen point (sx, sy), within `tolerancePx`.
    * Circles are hit on their circumference or centre, lines anywhere along the segment.
@@ -262,7 +287,9 @@ export class PixiRenderer implements Renderer {
     // Score = distance, with path lines penalised so circles/points win when both are in range.
     let bestScore = Infinity
     let bestStep: number | null = null
+    const minStep = this.range?.from ?? 0
     this.store.forEachRecordNear(wx, wy, tol, this.visibleCount(), (d, o) => {
+      if (d[o + 1]! < minStep) return // Microscope: context is not pickable
       const kind = d[o]
       let dist: number
       if (kind === KIND.line) {
