@@ -270,6 +270,20 @@ input:not([type]) {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 6px 24px;
 }
+/* One line per formula: values grow while playing, and a wrapping line would change the
+   footer height and move the transport buttons under the pointer. Full text in the title. */
+.bottom-formula .formula {
+  min-width: 0;
+}
+.bottom-formula .formula .symbolic,
+.bottom-formula .formula .substituted {
+  line-height: 18px;
+  height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
 
 /* ---- stage ------------------------------------------------------------------ */
 
@@ -585,6 +599,42 @@ input:not([type]) {
   text-overflow: ellipsis;
 }
 
+/* ---- observer ------------------------------------------------------------------ */
+
+.observer {
+  padding: 4px 14px 16px;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
+.facts {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  word-break: break-all;
+}
+.facts.stale {
+  opacity: 0.6;
+}
+.observer-row {
+  display: flex;
+  gap: 6px;
+}
+.observer-row select {
+  flex: 1;
+}
+.ai-answer {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed #5a4a2c;
+  border-radius: 8px;
+}
+.ai-text {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
 /* ---- narrow screens (spec §30): canvas first, panels as bottom sheets ---------- */
 
 .mobile-only {
@@ -637,8 +687,16 @@ input:not([type]) {
   .bottom-formula {
     display: none;
   }
+  /* fixed columns: growing numbers must not change the number of rows (see .bottom-formula) */
   .status-strip {
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 14px;
+  }
+  .reading-value {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .reading-value {
     font-size: 13px;

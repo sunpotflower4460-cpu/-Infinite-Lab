@@ -39,8 +39,13 @@ export function FormulaViewer({
     <div className="formulas" data-testid={`formulas-${source}`}>
       {trace.evaluations.map((ev) => (
         <div key={ev.target} className="formula">
-          <span className="mono symbolic">{ev.symbolic}</span>
-          <span className="mono substituted">
+          <span className="mono symbolic" title={compact ? ev.symbolic : undefined}>
+            {ev.symbolic}
+          </span>
+          <span
+            className="mono substituted"
+            title={compact ? `= ${ev.substituted} = ${formatExact(ev.value)}` : undefined}
+          >
             = {ev.substituted} = <strong>{formatExact(ev.value)}</strong>
           </span>
           {!compact && ev.note && <span className="muted note">{ev.note}</span>}

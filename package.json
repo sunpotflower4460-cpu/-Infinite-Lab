@@ -1,7 +1,7 @@
 {
   "name": "pi-infinite-lab",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Mathematical Visualization / Infinite Experiment Engine — observe how digits of mathematical constants become geometry.",
   "type": "module",
   "scripts": {

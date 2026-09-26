@@ -53,6 +53,7 @@ export class ExperimentRunner {
     this.constant = {
       ...config.constant,
       binary: binaryConstantFor(config.constant.id, COMPUTE_SYNC[config.constant.id]!),
+      pi: binaryConstantFor('pi', COMPUTE_SYNC.pi!),
     }
     this.experiment = definition.create()
     this.experiment.initialize({ params: config.params })
@@ -101,9 +102,9 @@ export class ExperimentRunner {
       const n = this.step + 1
       const ctx = this.context(n)
       const evaluations: FormulaEvaluation[] | undefined = traceLast && n === target ? [] : undefined
-      const { instructions, env } = this.experiment.step(ctx, evaluations)
+      const { instructions, env, overlay } = this.experiment.step(ctx, evaluations)
       if (out) for (const g of instructions) out.push(n, g)
-      if (evaluations) this.lastTrace = this.buildTrace(ctx, evaluations, env, instructions)
+      if (evaluations) this.lastTrace = this.buildTrace(ctx, evaluations, env, instructions, overlay)
       this.step = n
       if (n % CHECKPOINT_INTERVAL === 0) this.checkpoints.set(n, this.experiment.snapshot())
     }
@@ -125,8 +126,8 @@ export class ExperimentRunner {
     for (let n = base + 1; n < step; n++) shadow.step(this.context(n))
     const evaluations: FormulaEvaluation[] = []
     const ctx = this.context(step)
-    const { instructions, env } = shadow.step(ctx, evaluations)
-    return this.buildTrace(ctx, evaluations, env, instructions)
+    const { instructions, env, overlay } = shadow.step(ctx, evaluations)
+    return this.buildTrace(ctx, evaluations, env, instructions, overlay)
   }
 
   private buildTrace(
@@ -134,6 +135,7 @@ export class ExperimentRunner {
     evaluations: FormulaEvaluation[],
     env: StepTrace['env'],
     instructions: StepTrace['instructions'],
+    overlay?: StepTrace['overlay'],
   ): StepTrace {
     return {
       step: ctx.index,
@@ -146,6 +148,7 @@ export class ExperimentRunner {
       evaluations,
       env: { ...env },
       instructions,
+      ...(overlay ? { overlay } : {}),
     }
   }
 

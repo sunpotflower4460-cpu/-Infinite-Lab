@@ -1,10 +1,13 @@
 import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment } from '../experiments/registry'
-import { defaultParams, type DigitStart, type ParamValue } from '../experiments/core/types'
+import { defaultParams, type DigitStart, type ParamValue, type StepTrace } from '../experiments/core/types'
+import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
 import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
+import { detectPatterns } from '../analysis/patterns'
+import { askObserver, type DeepSeekModel } from '../ai/deepseek'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
@@ -48,6 +51,8 @@ export class LabController {
   private unsubscribeMirror: (() => void) | null = null
   /** Compare Mode playback clock (requestAnimationFrame id). */
   private clockFrame: number | null = null
+  /** Incremented per AI request and per run; stale answers are dropped. */
+  private aiRequestId = 0
   /** Latest requested inspection, posted at most once per frame (Timeline drags). */
   private queuedInspect: number | null = null
 
@@ -426,7 +431,7 @@ export class LabController {
       return
     }
     this.store.setState({ inspected: null })
-    this.renderer.setHighlight(s.currentTrace?.instructions ?? null)
+    this.renderer.setHighlight(highlightOf(s.currentTrace))
   }
 
   // ---- view ---------------------------------------------------------------------------
@@ -647,6 +652,53 @@ export class LabController {
     }
   }
 
+  // ---- Pattern Detection / AI Observer -----------------------------------------------------
+
+  /** Measure the geometry shown now (Timeline-aware). Deterministic facts only. */
+  measurePatterns(): void {
+    const s = this.store.getState()
+    const step = s.viewStep ?? s.currentStep
+    const count = this.renderer.visibleRecords
+    let consumed: Uint8Array | undefined
+    if (this.digits && s.constant) {
+      const start = s.digitStart === 'fractional' ? s.constant.integerPartLength : 0
+      consumed = this.digits.subarray(start, start + step)
+    }
+    this.store.setState({ patterns: { facts: detectPatterns(this.renderer.store, count, consumed), step } })
+  }
+
+  /**
+   * Ask DeepSeek for observations about the measured facts. The answer is stored as a
+   * conjecture; the key is used only for this request and never stored elsewhere.
+   */
+  async askAi(apiKey: string, model: DeepSeekModel, baseUrl?: string): Promise<void> {
+    this.measurePatterns() // always measure what is shown now (never reuse facts of another run)
+    const requestId = ++this.aiRequestId
+    const s = this.store.getState()
+    const def = getExperiment(s.experimentId)
+    this.store.setState({ ai: { status: 'asking' } })
+    try {
+      const answer = await askObserver(
+        {
+          experiment: `${def.name} (${def.id})`,
+          constant: `${s.constant?.symbol ?? s.constantId} (${s.constant?.name ?? ''})`,
+          precision: s.constant?.precision ?? s.precision,
+          steps: s.patterns!.step,
+          parameters: s.params,
+          formulas: formulaLines(def, s.constant?.symbol ?? 'C'),
+          facts: s.patterns!.facts,
+        },
+        { apiKey, model, baseUrl },
+      )
+      if (requestId === this.aiRequestId) this.store.setState({ ai: { status: 'done', answer } })
+    } catch (err) {
+      if (requestId !== this.aiRequestId) return
+      this.store.setState({
+        ai: { status: 'error', error: err instanceof Error ? err.message : String(err) },
+      })
+    }
+  }
+
   importJson(text: string): void {
     try {
       const parsed = parseImport(text)
@@ -739,6 +791,8 @@ export class LabController {
   }
 
   private resetView(): void {
+    this.aiRequestId++ // an answer still in flight belongs to the previous run
+    this.store.setState({ patterns: null, ai: { status: 'idle' } })
     this.renderer.clear()
     this.seekTarget = null
     this.store.setState({
@@ -779,7 +833,7 @@ export class LabController {
         this.renderer.append({ data: msg.data, count: msg.count })
         this.postSim({ type: 'ack', generation: msg.generation })
         const inspected = this.store.getState().inspected
-        if (msg.trace && !inspected) this.renderer.setHighlight(msg.trace.instructions)
+        if (msg.trace && !inspected) this.renderer.setHighlight(highlightOf(msg.trace))
         this.store.setState({
           currentStep: msg.currentStep,
           totalSteps: msg.totalSteps,
@@ -819,7 +873,7 @@ export class LabController {
         if (msg.requestId !== this.inspectRequestId) return
         if (msg.trace) {
           this.store.setState({ inspected: msg.trace })
-          this.renderer.setHighlight(msg.trace.instructions)
+          this.renderer.setHighlight(highlightOf(msg.trace))
         }
         break
       case 'extended':
@@ -836,4 +890,9 @@ let instance: LabController | undefined
 export function getController(): LabController {
   instance ??= new LabController()
   return instance
+}
+
+/** Geometry of a step plus its transient overlay (e.g. the arms of Two-Arm Rotation). */
+function highlightOf(trace: StepTrace | null | undefined): GeometryInstruction[] | null {
+  return trace ? [...trace.instructions, ...(trace.overlay ?? [])] : null
 }

@@ -64,6 +64,18 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
       parameters: { modifier: 10, distance: 5 },
     },
   },
+  {
+    id: 'pi-two-arm',
+    name: 'Pi Two-Arm (reference candidate)',
+    description:
+      'Two-Arm Rotation: pen traces e^{it} + e^{iπt}, dt = 0.05 — candidate rule for docs/reference',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm',
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100 },
+    },
+  },
 ]
 
 export const PRESETS: Preset[] = RAW.map((p) => ({ ...p, config: parseConfig(p.config) }))

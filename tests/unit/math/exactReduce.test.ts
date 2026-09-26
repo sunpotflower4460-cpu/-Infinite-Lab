@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { binaryConstant, constantProductMod, decomposeDouble } from '../../../src/math/exactReduce'
+import {
+  binaryConstant,
+  binaryConstantFor,
+  constantProductMod,
+  decomposeDouble,
+  productModTau,
+} from '../../../src/math/exactReduce'
+import { computePi } from '../../../src/math/constants/pi'
+import { computeE } from '../../../src/math/constants/e'
 import { piDigits } from '../helpers'
 
 const PI_REF = readFileSync(new URL('../../fixtures/pi-10000.txt', import.meta.url), 'utf8').trim()
@@ -61,5 +69,43 @@ describe('constantProductMod (n × C mod 360, BigInt)', () => {
     expect(constantProductMod([0], C, 360)).toBe(0)
     const r = constantProductMod([-1], C, 360)
     expect(r).toBeCloseTo(360 - Math.PI, 12)
+  })
+})
+
+describe('productModTau ((factors [× C]) mod 2π, BigInt)', () => {
+  const pi = binaryConstantFor('pi', computePi)
+  const e = binaryConstantFor('e', computeE)
+  const D = 1000
+  const PI_D = BigInt(PI_REF.replace('.', '').slice(0, D + 1)) // π·10^D
+  const E_REF = readFileSync(new URL('../../fixtures/e-10000.txt', import.meta.url), 'utf8').trim()
+  const E_D = BigInt(E_REF.replace('.', '').slice(0, D + 1))
+
+  /** Independent reference: exact rational n·dt (dt a double) times C, mod 2π, in decimal fixed point. */
+  function reference(n: bigint, dt: number, c: bigint | null): number {
+    const { mant, exp } = decomposeDouble(dt)
+    const one = 10n ** BigInt(D)
+    // n·dt·10^D (exact up to the final floor), then × C/10^D
+    let v = exp >= 0 ? n * mant * one * 2n ** BigInt(exp) : (n * mant * one) / 2n ** BigInt(-exp)
+    if (c !== null) v = (v * c) / one
+    const tau = 2n * PI_D
+    let r = v % tau
+    if (r < 0n) r += tau
+    return Number(`${r / one}.${(r % one).toString().padStart(D, '0').slice(0, 30)}`)
+  }
+
+  it.each([1n, 2n, 20n, 1234n, 1_000_000n, 99_999_999n, 10n ** 12n])('n = %s, dt = 0.05', (n) => {
+    const got = productModTau([Number(n), 0.05], null, pi)
+    expect(Math.abs(got - reference(n, 0.05, null))).toBeLessThanOrEqual(2 ** -49)
+    const gotPi = productModTau([Number(n), 0.05], pi, pi)
+    expect(Math.abs(gotPi - reference(n, 0.05, PI_D))).toBeLessThanOrEqual(2 ** -49)
+    const gotE = productModTau([Number(n), 0.05], e, pi)
+    expect(Math.abs(gotE - reference(n, 0.05, E_D))).toBeLessThanOrEqual(2 ** -49)
+  })
+
+  it('stays in [0, 2π) for negative factors', () => {
+    const r = productModTau([-3, 0.05], pi, pi)
+    expect(r).toBeGreaterThanOrEqual(0)
+    expect(r).toBeLessThan(2 * Math.PI)
+    expect(productModTau([0, 1], null, pi)).toBe(0)
   })
 })

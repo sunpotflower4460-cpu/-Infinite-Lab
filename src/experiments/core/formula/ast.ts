@@ -17,6 +17,10 @@ export type Expr =
    * Evaluated exactly in BigInt (see math/exactReduce.ts); only the result is float64.
    */
   | { kind: 'constMod'; factors: Expr[]; modulus: number }
+  /**
+   * (f₁ × … × fₖ [× C]) mod 2π, evaluated exactly in BigInt (π and C to ≈ 120 decimals).
+   */
+  | { kind: 'modTau'; factors: Expr[]; withConstant: boolean }
 
 export type BinOp = '+' | '-' | '*' | '/' | 'mod'
 export type FnName = 'sin' | 'cos'
@@ -48,6 +52,11 @@ export const neg = (arg: Expr): Expr => ({ kind: 'neg', arg })
 export const sin = (arg: Expr): Expr => ({ kind: 'call', fn: 'sin', arg })
 export const cos = (arg: Expr): Expr => ({ kind: 'call', fn: 'cos', arg })
 export const constMod = (factors: Expr[], modulus: number): Expr => ({ kind: 'constMod', factors, modulus })
+export const modTau = (factors: Expr[], withConstant = false): Expr => ({
+  kind: 'modTau',
+  factors,
+  withConstant,
+})
 export const assign = (target: string, expr: Expr, note?: string): Formula => ({ target, expr, note })
 
 /** All variable names referenced by an expression. */
@@ -65,6 +74,7 @@ export function freeVars(e: Expr, out = new Set<string>()): Set<string> {
       freeVars(e.arg, out)
       break
     case 'constMod':
+    case 'modTau':
       for (const f of e.factors) freeVars(f, out)
       break
   }

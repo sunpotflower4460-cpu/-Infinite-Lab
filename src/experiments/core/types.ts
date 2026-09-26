@@ -49,10 +49,14 @@ export interface ConstantHandle {
   symbol: string
   /** First ~120 decimals as binary fixed point (for exact reductions such as `constMod`). */
   binary: BinaryConstant
+  /** π in the same representation (for `modTau`, whatever the selected constant is). */
+  pi: BinaryConstant
 }
 
 export interface StepResult {
   instructions: GeometryInstruction[]
+  /** Transient helpers shown only with the current / inspected step (e.g. rotating arms); never stored. */
+  overlay?: GeometryInstruction[]
   /** Values after this step (inputs, parameters and every formula target). */
   env: Env
 }
@@ -95,6 +99,7 @@ export interface StepTrace {
   evaluations: FormulaEvaluation[]
   env: Env
   instructions: GeometryInstruction[]
+  overlay?: GeometryInstruction[]
 }
 
 export function defaultParams(defs: ParameterDef[]): ParamValues {

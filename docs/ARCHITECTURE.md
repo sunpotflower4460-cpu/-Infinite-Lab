@@ -117,6 +117,13 @@ Node で固定したジオメトリの SHA-256 とブラウザでの Export が�
 - 再生はメインスレッドの時計が両方に `seekTo(target)` を送り、両方が target に到達してから次へ進む（ロックステップ）。どちらのレーンも常に同じ step にいる。
 - 片方でクリックした step を両方で inspect する（同じ step・別の定数の比較）。
 
+## Patterns と AI Observer
+
+- `src/analysis/patterns.ts`: 表示中（Timeline 位置まで）の図形から、重心・慣性半径・最大半径・出発点への回帰・消費した桁の頻度と χ²（自由度 9）を計算する。
+  回転対称性は、図形を 512×512 に描き、重心から 25〜60 % の帯の明るさを角度の関数として Fourier 変換した振幅 |F_k|/F_0 で測る。k ≥ 3 かつ 0.05 以上かつ背景（全次数の中央値）の 3 倍以上を「有意」とする（k = 1, 2 は形の偏りを表すので対称性とはみなさない）。
+- `src/ai/deepseek.ts`: DeepSeek の OpenAI 互換 `chat/completions` に、式・パラメータ・計測値だけを送る。システムプロンプトで「観測」と「推測（未検証）」の分離と、証明を主張しないことを指示する。キーは Authorization ヘッダにだけ入り、本文・エクスポート・履歴には入らない（テストで確認）。
+- 開発環境からは DeepSeek に接続できないため、実際の応答と CORS の可否は未確認（テストは応答を差し替えて実施）。
+
 ## Lab 機能（`src/lab/`）
 
 | モジュール           | 役割                                                                                                                                                 |
@@ -133,10 +140,12 @@ Node で固定したジオメトリの SHA-256 とブラウザでの Export が�
 ```
 src/
   app/            App.tsx, LabController.ts（Worker・Renderer・Store の配線、seek / import / verify）
-  lab/            config, presets, history, experimentFile
+  lab/            config, presets, history, experimentFile, exporters
+  analysis/       patterns.ts（計測）
+  ai/             deepseek.ts（AI Observer）
   math/           constants/ (pi, e, sqrt2, phi, certain, registry), algorithms/ (chudnovsky, eSeries, machin),
                   precision/ (bigint, fixed), detmath.ts, exactReduce.ts
-  experiments/    core/ (types, Experiment, ExperimentRunner, formula/), digit-circle-walk/, circle-chain/, pi-rotation/, registry.ts
+  experiments/    core/ (types, Experiment, ExperimentRunner, formula/), digit-circle-walk/, circle-chain/, pi-rotation/, two-arm/, registry.ts
   geometry/       types.ts (instructions), batch.ts (encoding), GeometryStore.ts, digest.ts
   simulation/     Simulation.ts（再生クロック）
   workers/        math.worker.ts, simulation.worker.ts, protocol.ts

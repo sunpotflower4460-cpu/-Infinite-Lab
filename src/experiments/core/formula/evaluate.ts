@@ -1,5 +1,5 @@
 import { detCos, detSin } from '../../../math/detmath'
-import { constantProductMod, type BinaryConstant } from '../../../math/exactReduce'
+import { constantProductMod, productModTau, type BinaryConstant } from '../../../math/exactReduce'
 import type { Expr, FormulaSet } from './ast'
 
 /**
@@ -14,6 +14,8 @@ export const FLOAT64_PI = Math.PI
 /** Extra evaluation context: the selected constant in high precision (for `constMod`). */
 export interface EvalContext {
   constant?: BinaryConstant
+  /** π in high precision (for `modTau`). */
+  pi?: BinaryConstant
 }
 
 export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
@@ -35,6 +37,15 @@ export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
         e.factors.map((f) => evaluate(f, env, ctx)),
         ctx.constant,
         e.modulus,
+      )
+    }
+    case 'modTau': {
+      if (!ctx.pi || (e.withConstant && !ctx.constant))
+        throw new Error('modTau needs π (and C) in high precision')
+      return productModTau(
+        e.factors.map((f) => evaluate(f, env, ctx)),
+        e.withConstant ? ctx.constant! : null,
+        ctx.pi,
       )
     }
     case 'call': {

@@ -46,6 +46,8 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
         return `−${wrap(x.arg, 3, false)}`
       case 'call':
         return `${x.fn}(${go(x.arg)})`
+      case 'modTau':
+        return `(${[...x.factors.map((f) => wrap(f, 2, false)), ...(x.withConstant ? [opts.symbols?.C ?? 'C'] : [])].join(' × ')}) mod 2π`
       case 'constMod':
         return `(${[...x.factors.map((f) => wrap(f, 2, false)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
       case 'bin': {
