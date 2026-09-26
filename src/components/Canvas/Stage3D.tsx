@@ -12,8 +12,10 @@ export function Stage3D({ controller }: { controller: LabController }) {
   const scene = useRef<Scene3D | null>(null)
   const [rotating, setRotating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [webgl] = useState(webglAvailable)
 
   useEffect(() => {
+    if (!webgl) return // the 2D canvas underneath stays visible: the top view (x, y)
     let cancelled = false
     void import('../../renderer/Scene3D')
       .then(({ Scene3D }) => {
@@ -48,7 +50,15 @@ export function Stage3D({ controller }: { controller: LabController }) {
       scene.current?.destroy()
       scene.current = null
     }
-  }, [controller])
+  }, [controller, webgl])
+
+  if (!webgl)
+    return (
+      <div className="stage-3d-notice" data-testid="webgl-missing" role="note">
+        The 3D view needs WebGL, which this browser has turned off or does not support. Shown here: the same
+        points seen from above (x, y). The data, Inspector and exports include z.
+      </div>
+    )
 
   return (
     <div className="stage-3d" data-testid="stage-3d">
@@ -66,4 +76,14 @@ export function Stage3D({ controller }: { controller: LabController }) {
       </button>
     </div>
   )
+}
+
+/** Whether this browser can create a WebGL context (three.js needs one; 2D has fallbacks). */
+function webglAvailable(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    return !!(c.getContext('webgl2') ?? c.getContext('webgl'))
+  } catch {
+    return false
+  }
 }
