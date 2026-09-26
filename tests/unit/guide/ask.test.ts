@@ -49,7 +49,7 @@ describe('AI Guide requests', () => {
   })
 
   it('a text-only model gets no picture, and says so in the text', async () => {
-    const s = { ...defaultSettings().providers.deepseek, apiKey: 'k' }
+    const s = { ...defaultSettings().providers.deepseek, apiKey: 'k', model: 'deepseek-chat', vision: false }
     const { calls, fetchImpl } = recorder({ choices: [{ message: { content: 'ok' } }] })
     const a = await askGuide({
       provider: 'deepseek',
@@ -160,7 +160,15 @@ describe('AI Guide requests', () => {
   it('says what is missing before asking', () => {
     const d = defaultSettings()
     expect(notReady(d.providers.claude, PROVIDERS.claude)).toContain('API キー')
-    expect(notReady({ ...d.providers.openai, apiKey: 'k' }, PROVIDERS.openai)).toContain('モデル名')
+    expect(notReady({ ...d.providers.openai, apiKey: 'k', model: ' ' }, PROVIDERS.openai)).toContain(
+      'モデル名',
+    )
+    // current names as defaults (checked 2026-09): all three read images
+    expect([d.providers.openai.model, d.providers.deepseek.model, d.providers.minimax.model]).toEqual([
+      'gpt-6-luna',
+      'deepseek-flash',
+      'MiniMax-M3',
+    ])
     expect(notReady({ ...d.providers.deepseek, apiKey: 'k' }, PROVIDERS.deepseek)).toBeNull()
   })
 })

@@ -32,8 +32,9 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: 'openai',
     label: 'OpenAI（GPT）',
     kind: 'openai-compatible',
-    defaults: { apiKey: '', model: '', baseUrl: 'https://api.openai.com/v1', vision: true },
-    modelHint: '使うモデル名をそのまま入力（例：OpenAI のダッシュボードに表示される名前）',
+    defaults: { apiKey: '', model: 'gpt-6-luna', baseUrl: 'https://api.openai.com/v1', vision: true },
+    modelHint:
+      'GPT-6 は安い順に gpt-6-luna（入力 $0.10 / 出力 $0.50 / 100 万トークン）、gpt-6-sol（$2 / $10）、gpt-6-astra（$10 / $50）。どれも画像を読めます（2026-09 時点）',
   },
   qwen: {
     id: 'qwen',
@@ -51,15 +52,17 @@ export const PROVIDERS: Record<ProviderId, ProviderInfo> = {
     id: 'minimax',
     label: 'MiniMax',
     kind: 'openai-compatible',
-    defaults: { apiKey: '', model: '', baseUrl: 'https://api.minimax.io/v1', vision: false },
-    modelHint: '使うモデル名を入力。画像に対応したモデルなら「画像を送る」をオンに',
+    defaults: { apiKey: '', model: 'MiniMax-M3', baseUrl: 'https://api.minimax.io/v1', vision: true },
+    modelHint:
+      'MiniMax-M3 は画像も読めます。M2 系（MiniMax-M2.7 など）は文字だけなので「画像を送る」をオフに（2026-09 時点）',
   },
   deepseek: {
     id: 'deepseek',
     label: 'DeepSeek',
     kind: 'openai-compatible',
-    defaults: { apiKey: '', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com', vision: false },
-    modelHint: 'deepseek-chat など（画像は送れません）',
+    defaults: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com', vision: true },
+    modelHint:
+      'deepseek-flash が最新の V4.1 Flash で、画像も読めます。古い deepseek-chat などを使うときは「画像を送る」をオフに（2026-09 時点）',
   },
   claude: {
     id: 'claude',
