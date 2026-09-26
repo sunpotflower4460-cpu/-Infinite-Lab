@@ -3,6 +3,7 @@ import { useStore } from 'zustand'
 import { getController, type LabController } from '../../app/LabController'
 import { ScientificOverlay } from '../Status/ScientificOverlay'
 import { LaneReadout } from '../Compare/LaneReadout'
+import { FilmOverlay } from '../Film/FilmOverlay'
 
 /**
  * One canvas lane. The main lab always renders lane 0 in the same place in the tree (so its
@@ -19,6 +20,8 @@ export function LabCanvas({
   const follow = useStore(controller.store, (s) => s.follow)
   const phase = useStore(controller.store, (s) => s.phase)
   const comparing = useStore(getController().store, (s) => s.compareConstant !== null)
+  const film = useStore(controller.store, (s) => s.film)
+  const look = useStore(controller.store, (s) => s.look)
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
@@ -40,9 +43,17 @@ export function LabCanvas({
         <button onClick={() => controller.center()} title="Center on the structure">
           Center
         </button>
+        <button
+          onClick={() => controller.setLook(look === 'lab' ? 'luminous' : 'lab')}
+          className={look === 'luminous' ? 'active' : ''}
+          title="White glow (the reference video's look); presentation only"
+        >
+          Glow
+        </button>
       </div>
       {lane === 0 && <div className="stage-hint">wheel: zoom · drag: pan · double-click: center</div>}
       {phase === 'computing' && <div className="stage-busy">computing digits…</div>}
+      {lane === 0 && film && <FilmOverlay />}
     </div>
   )
 }

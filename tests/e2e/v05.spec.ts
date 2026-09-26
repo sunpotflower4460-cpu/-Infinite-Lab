@@ -97,3 +97,31 @@ test.describe('Formula Playground (spec §10)', () => {
     await expect(page.getByTestId('current-step')).toHaveText('2')
   })
 })
+
+test.describe('Film mode (the reference video look)', () => {
+  test('#film opens full-screen, draws the π two-arm rule and speeds up; ✕ returns to the lab', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.goto('/#film')
+    const film = page.getByTestId('film')
+    await expect(film).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Export JSON' })).toBeHidden() // lab chrome hidden
+    const time = async () => Number((await page.getByTestId('film-time').textContent())!.replace('T = ', ''))
+    await expect.poll(time, { timeout: 60_000 }).toBeGreaterThan(2)
+
+    // tap pauses, tap resumes
+    await page.getByRole('button', { name: 'Pause film' }).click()
+    const paused = await time()
+    await page.waitForTimeout(600)
+    expect(await time()).toBe(paused)
+    await page.getByRole('button', { name: 'Play film' }).click()
+    await expect.poll(time).toBeGreaterThan(paused)
+
+    // the same rule as the Two-Arm preset, without the arms
+    await page.getByRole('button', { name: 'Close film' }).click()
+    await expect(film).toBeHidden()
+    await expect(page.getByTestId('formulas-current')).toContainText('θ₂ = (n × dt × π) mod 2π')
+    await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible()
+  })
+})

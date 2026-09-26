@@ -58,6 +58,7 @@ describe('presets', () => {
       'Pi Orbit',
       'Pi Spiral',
       'Pi Two-Arm (reference candidate)',
+      'π Film (reference video look)',
       'Playground: spec example',
       'Playground: turning walk',
       'Playground: C-radian rotation',
@@ -209,5 +210,20 @@ describe('file format versions', () => {
     expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 5 } })).toThrow(
       /must be a string/,
     )
+  })
+})
+
+describe('film speed', () => {
+  it('grows like the reference video and is capped', async () => {
+    const { filmSpeed } = await import('../../../src/app/filmSpeed')
+    expect(filmSpeed(0)).toBe(5)
+    expect(filmSpeed(9)).toBeCloseTo(5 * Math.E, 12)
+    expect(filmSpeed(1000)).toBe(5000)
+    // drawing time T = dt · ∫ speed: ≈ 27 at 22 s and ≈ 130 at 36 s in the video
+    const T = (t: number) => 0.05 * 5 * 9 * (Math.exp(t / 9) - 1)
+    expect(T(22)).toBeGreaterThan(20)
+    expect(T(22)).toBeLessThan(35)
+    expect(T(36)).toBeGreaterThan(100)
+    expect(T(36)).toBeLessThan(160)
   })
 })

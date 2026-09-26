@@ -3,6 +3,7 @@ import { defaultParams, type DigitStart, type ParamValues, type StepTrace } from
 import { digitCircleWalk } from '../experiments/digit-circle-walk'
 import { DEFAULT_SOURCES, type PlaygroundSources } from '../experiments/playground'
 import type { HistoryEntry } from '../lab/history'
+import type { Look } from '../renderer/layers/GeometryLayer'
 import type { PatternFacts } from '../analysis/patterns'
 import type { ObserverAnswer } from '../ai/deepseek'
 
@@ -65,6 +66,10 @@ export interface LabState {
   viewStep: number | null
   history: HistoryEntry[]
   verify: VerifyState
+  /** Presentation palette ('luminous' = the reference video's white glow). */
+  look: Look
+  /** Film mode: full-screen playback that speeds up like the reference video. */
+  film: boolean
   scientific: boolean
   /** Pattern Detection results (measured) and the step they describe. */
   patterns: { facts: PatternFacts; step: number } | null
@@ -117,6 +122,8 @@ function initialState(): LabState {
     history: [],
     verify: { status: 'idle' },
     scientific: false,
+    look: 'lab',
+    film: false,
     patterns: null,
     ai: { status: 'idle' },
     sheet: null,

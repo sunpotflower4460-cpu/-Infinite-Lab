@@ -18,14 +18,22 @@ export function App() {
   const comparing = useLab((s) => s.compareConstant !== null)
   const peer = comparing ? c.peer : null
   const sheet = useLab((s) => s.sheet)
+  const film = useLab((s) => s.film)
   const close = () => useLab.setState({ sheet: null })
   return (
-    <div className="lab" data-sheet={sheet ?? 'none'}>
+    <div className="lab" data-sheet={sheet ?? 'none'} data-film={film ? 'on' : 'off'}>
       <header className="topbar">
         <h1>
           <span className="accent">π</span> Infinite Lab
         </h1>
         <span className="tagline muted">computation → digits → rule → geometry</span>
+        <button
+          className="film-open"
+          onClick={() => c.startFilm()}
+          title="Full-screen, like the reference video"
+        >
+          ▶ Film
+        </button>
         <CompareToggle />
         <FileActions />
         <label className="toggle">

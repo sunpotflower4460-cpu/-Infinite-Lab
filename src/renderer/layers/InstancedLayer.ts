@@ -1,7 +1,7 @@
 import { Buffer, BufferUsage, Container, Geometry, Mesh, Shader, UniformGroup } from 'pixi.js'
 import { KIND } from '../../geometry/batch'
 import type { GeometryStore } from '../../geometry/GeometryStore'
-import { COLORS, type GeometryLayer, type LayerFrame } from './GeometryLayer'
+import { COLORS, type GeometryLayer, type LayerFrame, type LayerStyle } from './GeometryLayer'
 
 /** Records per GPU chunk. Only the chunk being appended to is re-uploaded. */
 export const INSTANCED_CHUNK_RECORDS = 16384
@@ -319,6 +319,12 @@ export class InstancedLayer implements GeometryLayer {
       this.chunks[i] = c
     }
     return c
+  }
+
+  setStyle(style: LayerStyle): void {
+    this.circleUniforms.uniforms.uTint = rgba(style.circle, style.circleAlpha)
+    this.circleUniforms.uniforms.uDotAlpha = style.pointAlpha
+    this.lineUniforms.uniforms.uTint = rgba(style.line, style.lineAlpha)
   }
 
   setPixelScale(pxPerUnit: number): void {

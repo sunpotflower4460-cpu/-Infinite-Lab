@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js'
 import { KIND, STRIDE } from '../../geometry/batch'
 import { CHUNK_RECORDS, type GeometryStore } from '../../geometry/GeometryStore'
-import { COLORS, type GeometryLayer, type LayerFrame } from './GeometryLayer'
+import { LOOKS, type GeometryLayer, type LayerFrame, type LayerStyle } from './GeometryLayer'
 
 /**
  * Tessellated PixiJS Graphics, one per store chunk (2,000 records), built once and then only
@@ -12,6 +12,8 @@ export class GraphicsLayer implements GeometryLayer {
   readonly container = new Container()
   private chunks: Graphics[] = []
   private builtLength: number[] = []
+  private style: LayerStyle = LOOKS.lab
+  private styleChanged = false
 
   constructor() {
     this.container.blendMode = 'add'
@@ -19,6 +21,10 @@ export class GraphicsLayer implements GeometryLayer {
 
   sync(store: GeometryStore, visibleCount: number, frame: LayerFrame, full: boolean): boolean {
     let changed = false
+    if (this.styleChanged) {
+      full = true
+      this.styleChanged = false
+    }
     for (let i = 0; i < store.chunks.length; i++) {
       const want = Math.max(0, Math.min(store.chunkLength(i), visibleCount - i * CHUNK_RECORDS))
       if (full || want !== (this.builtLength[i] ?? -1)) {
@@ -27,6 +33,12 @@ export class GraphicsLayer implements GeometryLayer {
       }
     }
     return changed
+  }
+
+  setStyle(style: LayerStyle): void {
+    if (style === this.style) return
+    this.style = style
+    this.styleChanged = true
   }
 
   setPixelScale(): void {
@@ -57,7 +69,7 @@ export class GraphicsLayer implements GeometryLayer {
         hasLines = true
       }
     }
-    if (hasLines) g.stroke({ width: 1, color: COLORS.line, alpha: COLORS.lineAlpha, pixelLine: true })
+    if (hasLines) g.stroke({ width: 1, color: this.style.line, alpha: this.style.lineAlpha, pixelLine: true })
 
     let hasCircles = false
     for (let i = 0; i < n; i++) {
@@ -76,7 +88,8 @@ export class GraphicsLayer implements GeometryLayer {
         hasCircles = true
       }
     }
-    if (hasCircles) g.stroke({ width: 1, color: COLORS.circle, alpha: COLORS.circleAlpha, pixelLine: true })
+    if (hasCircles)
+      g.stroke({ width: 1, color: this.style.circle, alpha: this.style.circleAlpha, pixelLine: true })
 
     // Points and zero-radius circles: a dot of constant screen size.
     const dot = 1.2 / frame.pxPerUnit
@@ -89,7 +102,7 @@ export class GraphicsLayer implements GeometryLayer {
         hasPoints = true
       }
     }
-    if (hasPoints) g.fill({ color: COLORS.point, alpha: COLORS.pointAlpha })
+    if (hasPoints) g.fill({ color: this.style.point, alpha: this.style.pointAlpha })
   }
 
   clear(): void {
