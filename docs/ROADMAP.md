@@ -59,22 +59,30 @@
 - スマートフォンでの操作感（ピンチ、シート）、発熱・電池
 - iOS Safari 実機（WebKit エンジンでの一致は CI で確認）
 
-## v0.4 — 研究機能（進行中）
+## v0.4 — 研究機能 ✅
 
-| 項目                                                                     | 状態                      | 根拠                                                                                     |
-| ------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------- |
-| Experiment 04 Two-Arm Rotation（`modTau` による厳密な角度）              | ✅                        | `src/experiments/two-arm/`, `tests/unit/experiments/two-arm.test.ts`                     |
-| Reference Reconstruction（参照動画との比較・棄却）                       | ✅                        | `tools/reference/analyze.py`, `docs/reference/ANALYSIS.md`                               |
-| Pattern Detection（計算で求める事実、有意性つき）                        | ✅                        | `src/analysis/patterns.ts`, `patterns.test.ts`（Two-Arm の 15 回対称の出現と消失を検出） |
-| AI Observer（DeepSeek、推測として分離表示、キーはブラウザのみ）          | ✅（実 API は未接続確認） | `src/ai/deepseek.ts`, `deepseek.test.ts`, E2E（応答を差し替え）                          |
-| Experimental Playground（式パーサ）、Mathematical Microscope、MP4 / WebM | 次                        |                                                                                          |
+| 項目                                                            | 状態                      | 根拠                                                                                     |
+| --------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
+| Experiment 04 Two-Arm Rotation（`modTau` による厳密な角度）     | ✅                        | `src/experiments/two-arm/`, `tests/unit/experiments/two-arm.test.ts`                     |
+| Reference Reconstruction（参照動画との比較・棄却）              | ✅                        | `tools/reference/analyze.py`, `docs/reference/ANALYSIS.md`                               |
+| Pattern Detection（計算で求める事実、有意性つき）               | ✅                        | `src/analysis/patterns.ts`, `patterns.test.ts`（Two-Arm の 15 回対称の出現と消失を検出） |
+| AI Observer（DeepSeek、推測として分離表示、キーはブラウザのみ） | ✅（実 API は未接続確認） | `src/ai/deepseek.ts`, `deepseek.test.ts`, E2E（応答を差し替え）                          |
+
+## v0.5 — 見せる・掘り下げる ✅
+
+| 項目                                                                                                                         | 状態 | 根拠                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------- |
+| 起動時に π の模様（Film mode）: 参照動画の規則を白い光の線で全画面に、加速する再生                                           | ✅   | `src/components/Film/`, `filmSpeed.ts`, E2E                                                  |
+| Film の説明（かんたん / 専門 / 説明なし）: π = 3.14…、腕の周回と比、段階の説明 / 実行中の式と値、π の近似分数と p − q 回対称 | ✅   | `src/film/explain.ts`, `film.test.ts`, E2E                                                   |
+| Experiment 05 Formula Playground（式パーサ → 既存の式木、表示 = 実行）                                                       | ✅   | `formula/parse.ts`, `parse.test.ts`（3,000 個のランダムな式木の往復がビット単位で一致）, E2E |
+| Mathematical Microscope（step 範囲の拡大・範囲内だけの選択と書き出し）                                                       | ✅   | `GeometryStore.boundsBetween`, `PixiRenderer.setStepRange`, E2E（WebGL あり / なし）         |
+| 動画の書き出し（MP4 / WebM、WebCodecs）、Film 画面からの保存                                                                 | ✅   | `src/lab/video.ts`, `video.test.ts`, E2E（WebM / MP4 の署名と内容）                          |
+| Firefox の BigInt 上限（2^20 bit）に合わせた Infinite Mode の上限（142,000 桁）                                              | ✅   | `math/bigintLimit.ts`, `continuous.test.ts`                                                  |
 
 ## v0.4+ — 研究機能
 
-- Experimental Playground（式パーサ → Formula AST。表示 = 実行の原則はそのまま）
-- Mathematical Microscope（step 範囲の拡大表示）
 - Pattern Detection（周期性・対称性・密度・クラスタ）
 - Reference Reconstruction（候補式の実行と比較、検証されるまで「再現」と断定しない）
 - AI Mathematical Observer（AI の推測と数学的証明を明確に区別して表示）: DeepSeek API（OpenAI 互換）。キーは利用者が入力し、その端末のブラウザにだけ保存（サーバー不要・アプリに埋め込まない）
 - Reference Reconstruction の素材: 動画をリポジトリの `reference/` に置いてもらい、フレームを切り出して配置規則を推定する
-- MP4 / WebM Export、クラウド保存
+- クラウド保存、Playground の式の追加（x, y の骨格そのものを式で書く）、Microscope での範囲の Patterns 計測

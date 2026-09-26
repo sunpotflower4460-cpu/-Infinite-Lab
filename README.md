@@ -43,12 +43,13 @@
 
 ## 実験 (v0.2)
 
-| 実験                     | 規則（Inspector に表示される式そのもの）                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **01 Digit Circle Walk** | `angle = digit / 10 × 2π`, `x[n] = x[n−1] + cos(angle) × distance`, `radius = radiusBase + digit × radiusScale`                               |
-| **02 Circle Chain**      | `r[n] = digit × radiusScale`, `θ[n] = (cumulative × θ[n−1] + digit / 10 × 2π) mod 2π`, 中心 = 前の円周上 `x[n] = x[n−1] + cos(θ[n]) × r[n−1]` |
-| **03 Pi Rotation**       | `φ[n]° = (n × modifier × C) mod 360`（BigInt で厳密に計算、累積誤差なし）, `x[n] = x[n−1] + cos(φ[n]/180 × π) × distance`                     |
-| **04 Two-Arm Rotation**  | `θ₁ = (n × dt) mod 2π`, `θ₂ = (n × dt × C) mod 2π`（BigInt で厳密）, `x[n] = scale × (r1·cos θ₁ + r2·cos θ₂)` — 参照動画の候補規則            |
+| 実験                      | 規則（Inspector に表示される式そのもの）                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **01 Digit Circle Walk**  | `angle = digit / 10 × 2π`, `x[n] = x[n−1] + cos(angle) × distance`, `radius = radiusBase + digit × radiusScale`                                           |
+| **02 Circle Chain**       | `r[n] = digit × radiusScale`, `θ[n] = (cumulative × θ[n−1] + digit / 10 × 2π) mod 2π`, 中心 = 前の円周上 `x[n] = x[n−1] + cos(θ[n]) × r[n−1]`             |
+| **03 Pi Rotation**        | `φ[n]° = (n × modifier × C) mod 360`（BigInt で厳密に計算、累積誤差なし）, `x[n] = x[n−1] + cos(φ[n]/180 × π) × distance`                                 |
+| **04 Two-Arm Rotation**   | `θ₁ = (n × dt) mod 2π`, `θ₂ = (n × dt × C) mod 2π`（BigInt で厳密）, `x[n] = scale × (r1·cos θ₁ + r2·cos θ₂)` — 参照動画の候補規則                        |
+| **05 Formula Playground** | ANGLE / RADIUS / DISTANCE を自分の式で（例 `digit × π / 5`）。`x[n] = x[n−1] + cos(angle) × distance` の歩行で円を置く。`(n × C) mod 2π` は BigInt で厳密 |
 
 C は選択中の定数（既定 π）。詳細は [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)。
 
@@ -64,11 +65,13 @@ Inspector には、実行された式そのもの（表示用に別途書かれ�
 - **Presets**: Pi Walk / Pi Circle Chain / Pi Flower / Pi Orbit / Pi Spiral（名前はラベル、説明に規則を明記）
 - **History**: 状態をブラウザ（localStorage）に保存し、復元時に再計算してジオメトリの SHA-256 一致を検証
 - **JSON Export / Import**: 設定・step 数・式・ジオメトリの SHA-256 を含む再現可能な記録。Import すると再計算して **ビット単位で一致するか検証** し、結果（✓ / ✗）を表示
-- **PNG / SVG / CSV Export**: 表示中の画像、または Timeline 位置までの図形（SVG・CSV は float64 の値をそのまま出力）
+- **PNG / SVG / CSV Export**: 表示中の画像、または Timeline 位置まで（Microscope 中はその範囲）の図形（SVG・CSV は float64 の値をそのまま出力）
 - **Infinite Mode（Continuous computation）**: 桁を使い切る前に倍の桁数を裏で計算して継続（最大 1,000,000 桁）。延長した桁は既存の桁と一致することを検査し、途中で過去が変わることはない
 - **Compare Mode**: 同じ実験・パラメータ・精度を別の定数（例: π と e）で並べて、同じ step で揃えて実行。片方の図形をクリックすると両方で同じ step を表示
 - **モバイル**: キャンバス優先の 1 画面レイアウト、Setup / Inspector は下から出るシート、2 本指でピンチズーム
-- **Film mode / Glow**: 参照動画の見た目（白い光の線、腕なし、全画面、加速する再生）。キャンバス右上の Glow で通常の実験にも白い光の表示を使える（表示のみで、データは変わらない）
+- **Film mode / Glow**: 起動時に表示。参照動画の見た目（白い光の線、全画面、加速する再生）と 3 段階の説明。「⤓ 保存」でここまでの描画を MP4 に。キャンバス右上の Glow で通常の実験にも白い光の表示を使える（表示のみで、データは変わらない）
+- **Microscope**: step 範囲（例 120,380–120,500、または選択中の step の ±50 / ±500）だけを画面いっぱいに表示。前の step は薄く（または非表示）、クリックと SVG / CSV / PNG 書き出しは範囲内だけ
+- **動画の書き出し（Video）**: 表示中の step（Microscope 中はその範囲）が描かれていく様子を MP4 / WebM で保存。一定の速さか Film と同じ加速を選べる。どのフレームにどの step を描くかは決定的だが、圧縮後のファイルは端末のエンコーダによって異なる（再現には JSON を使う）
 - **Formula Playground（Experiment 05）**: ANGLE / RADIUS / DISTANCE を式で入力すると即座に再計算。入力した式は実行される式木そのものとして Inspector に表示
 - **Reference Reconstruction**: 参照動画（`docs/reference/`）を候補の式と比較し、一致しない候補を棄却（`tools/reference/analyze.py` → `docs/reference/ANALYSIS.md`）。動画は花の段階で 15 回対称が出てその後消える — これと矛盾しないのは速さの比 π（とこの動画では区別できない 355/113）だけ
 - **Patterns（計測）**: 表示中の図形の重心・広がり・回転対称性（有意性つき）・出発点への回帰・消費した桁の頻度と χ² を計算

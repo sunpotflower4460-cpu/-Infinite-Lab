@@ -124,6 +124,12 @@ Node で固定したジオメトリの SHA-256 とブラウザでの Export が�
 - `src/ai/deepseek.ts`: DeepSeek の OpenAI 互換 `chat/completions` に、式・パラメータ・計測値だけを送る。システムプロンプトで「観測」と「推測（未検証）」の分離と、証明を主張しないことを指示する。キーは Authorization ヘッダにだけ入り、本文・エクスポート・履歴には入らない（テストで確認）。
 - 開発環境からは DeepSeek に接続できないため、実際の応答と CORS の可否は未確認（テストは応答を差し替えて実施）。
 
+## Film mode・Microscope・動画（v0.5）
+
+- **Film mode**（`src/components/Film/`, `src/film/explain.ts`）: 起動時の画面。π Film preset（Two-Arm Rotation、dt = 0.05）を白い光の見た目（`LOOKS.luminous`、表示のみ）で全画面に描き、速さを `filmSpeed(t) = 5·e^{t/9}` steps/s で上げる。説明は「かんたん / 専門 / 説明なし」で、数値はすべて実行中の状態から計算する（周回 = t/2π, πt/2π、式の値は現在の trace）。URL は `#film` / `#lab`。
+- **Microscope**: `PixiRenderer.setStepRange` が範囲の開始レコード（`GeometryStore.firstIndexOfStep`）を層に渡し、それより前を薄く（または非表示）にする。Instanced 層はインスタンスごとのレコード番号と uniform の比較（再構築なし）、Graphics 層は範囲前と範囲を別の線として描く。ピックは範囲内だけ、書き出しは `forEachRecordFrom` で範囲だけ。
+- **動画**（`src/lab/video.ts`）: 再生とは別に、フレームごとに `renderer.renderStep(step)`（PNG と同じ extract）で描いて WebCodecs でエンコードする（mediabunny）。フレームと step の対応 `frameSteps` は決定的、圧縮結果は端末依存。細い線が消えないようにビットレートを明示（約 0.2 bit/画素/フレーム）。
+
 ## Lab 機能（`src/lab/`）
 
 | モジュール           | 役割                                                                                                                                                 |
@@ -132,7 +138,8 @@ Node で固定したジオメトリの SHA-256 とブラウザでの Export が�
 | `presets.ts`         | 組み込み Preset                                                                                                                                      |
 | `history.ts`         | localStorage 上の履歴（壊れたエントリは信頼せず捨てる）                                                                                              |
 | `experimentFile.ts`  | Export 形式 `pi-infinite-lab/experiment` v1 と Import の解析（完全な記録と、仕様 §24 形式の素の Preset の両方を受け付ける）                          |
-| `exporters.ts`       | CSV / SVG（float64 の値をそのまま出力）                                                                                                              |
+| `exporters.ts`       | CSV / SVG（float64 の値をそのまま出力、Microscope の範囲指定）                                                                                       |
+| `video.ts`           | MP4 / WebM の書き出し（WebCodecs）                                                                                                                   |
 | `geometry/digest.ts` | ジオメトリの SHA-256（WebCrypto がない環境では純 JS 実装）                                                                                           |
 
 ## ディレクトリ
