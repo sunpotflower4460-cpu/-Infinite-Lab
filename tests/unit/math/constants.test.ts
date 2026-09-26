@@ -4,7 +4,9 @@ import { computeE } from '../../../src/math/constants/e'
 import { computePhi, phiFixed } from '../../../src/math/constants/phi'
 import { computeSqrt2, sqrt2Fixed } from '../../../src/math/constants/sqrt2'
 import { eFixed } from '../../../src/math/algorithms/eSeries'
-import { CONSTANTS } from '../../../src/math/constants'
+import { CONSTANTS, isRational } from '../../../src/math/constants'
+import { computeRational } from '../../../src/math/constants/rational'
+import { makeRunner } from '../helpers'
 import type { ConstantResult } from '../../../src/math/constants/types'
 import type { FixedDecimal } from '../../../src/math/precision/fixed'
 
@@ -61,7 +63,41 @@ describe('algebraic self-checks (independent of any reference)', () => {
 })
 
 describe('registry', () => {
-  it('lists π, e, √2, φ with symbols', () => {
-    expect(Object.values(CONSTANTS).map((c) => c.symbol)).toEqual(['π', 'e', '√2', 'φ'])
+  it('lists π, e, √2, φ, then the rational comparison values', () => {
+    expect(Object.values(CONSTANTS).map((c) => c.symbol)).toEqual([
+      'π',
+      'e',
+      '√2',
+      'φ',
+      '22/7',
+      '355/113',
+      '3.14',
+    ])
+    expect(Object.keys(CONSTANTS).filter(isRational)).toEqual(['frac-22-7', 'frac-355-113', 'dec-3-14'])
+  })
+})
+
+describe('rational comparison values', () => {
+  it('22/7, 355/113 and 3.14 are exact long divisions', () => {
+    expect(computeRational(22n, 7n, 13).value).toBe('3.1428571428571')
+    expect(computeRational(355n, 113n, 10).value).toBe('3.1415929203')
+    expect(computeRational(157n, 50n, 6).value).toBe('3.140000')
+    // 22/7 repeats with period 6 forever
+    const d = computeRational(22n, 7n, 6000).digits.slice(1)
+    expect(d).toBe('142857'.repeat(1000))
+    expect(computeRational(1n, 8n, 3)).toMatchObject({ value: '0.125', digits: '0125', integerPartLength: 1 })
+  })
+
+  it('with 22/7 the Two-Arm speed ratio is exactly 22/7 (the curve closes after 7 turns)', () => {
+    const r = makeRunner('two-arm', 100, { dt: 0.05 }, 'integer', 'frac-22-7')
+    r.advance(10)
+    expect(r.inspect(1).evaluations[1]!.symbolic).toBe('θ₂ = (n × dt × 22/7) mod 2π')
+    // θ₂ − (22/7)·θ₁ ≡ 0 (mod 2π) at every step: the ratio is exactly 22/7
+    for (let n = 1; n <= 10; n++) {
+      const t = r.inspect(n)
+      const d = t.env.theta2! - (22 / 7) * (n * 0.05)
+      const k = Math.round(d / (2 * Math.PI))
+      expect(Math.abs(d - k * 2 * Math.PI)).toBeLessThan(1e-12)
+    }
   })
 })

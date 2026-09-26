@@ -1,4 +1,4 @@
-import { CONSTANTS } from '../../src/math/constants'
+import { COMPUTE_SYNC, CONSTANTS } from '../../src/math/constants'
 import { computeE } from '../../src/math/constants/e'
 import { computePhi } from '../../src/math/constants/phi'
 import { computePi } from '../../src/math/constants/pi'
@@ -20,7 +20,7 @@ export function constantDigits(
   constantId: string,
   precision: number,
 ): { digits: Uint8Array; integerPartLength: number } {
-  const r = COMPUTE[constantId]!(precision)
+  const r = (COMPUTE[constantId] ?? COMPUTE_SYNC[constantId]!)(precision)
   return {
     digits: Uint8Array.from(r.digits, (c) => c.charCodeAt(0) - 48),
     integerPartLength: r.integerPartLength,
