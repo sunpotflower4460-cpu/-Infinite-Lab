@@ -26,6 +26,7 @@ import { PixiRenderer } from '../renderer/PixiRenderer'
 import type { Look } from '../renderer/layers/GeometryLayer'
 import { filmSpeed } from './filmSpeed'
 import { saveFilmInfo, type FilmInfoLevel } from '../film/explain'
+import { encodeVideo, frameSteps, videoSize, type VideoFormat, type VideoPace } from '../lab/video'
 import { createLabStore, SPEEDS, useLab, type LabStore, type Microscope } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
@@ -820,6 +821,80 @@ export class LabController {
     } catch (err) {
       this.reportError(`${format.toUpperCase()} export failed`, err)
     }
+  }
+
+  // ---- video export (spec §28) ----------------------------------------------------------
+
+  private videoAbort: AbortController | null = null
+
+  /**
+   * Record the drawing of the shown steps (the Microscope range, or step 1 up to the Timeline
+   * position) as MP4 / WebM: rendered offline, frame by frame, framed on the final picture.
+   */
+  async exportVideo(o: {
+    format: VideoFormat
+    seconds: number
+    pace: VideoPace
+    glow: boolean
+  }): Promise<void> {
+    const s = this.store.getState()
+    if (s.phase !== 'ready' || s.currentStep < 1 || this.videoAbort) return
+    if (s.film) this.stopFilmClock()
+    this.stopLockstep()
+    if (s.playing) this.pause()
+    const from = s.microscope?.from ?? 1
+    const to = s.microscope?.to ?? s.viewStep ?? s.currentStep
+    const fps = 30
+    const frames = Math.max(2, Math.round(o.seconds * fps))
+    const steps = frameSteps(from, to, frames, o.pace)
+    const view = this.renderer.saveView()
+    const look = s.look
+    const abort = new AbortController()
+    this.videoAbort = abort
+    this.store.setState({ video: { status: 'recording', done: 0, total: frames } })
+    try {
+      if (o.glow) this.renderer.setLook('luminous')
+      this.renderer.frameSteps(from, to)
+      const first = this.renderer.renderStep(from)
+      const size = videoSize(first.width, first.height)
+      let shown = 0
+      const { blob, codec } = await encodeVideo({
+        format: o.format,
+        fps,
+        ...size,
+        frames,
+        draw: (i, ctx) => ctx.drawImage(this.renderer.renderStep(steps[i]!), 0, 0, size.width, size.height),
+        onProgress: (done, total) => {
+          if (done - shown >= 15 || done === total) {
+            shown = done
+            this.store.setState({ video: { status: 'recording', done, total } })
+          }
+        },
+        signal: abort.signal,
+      })
+      const name = `${this.fileStem()}.${o.format}`
+      this.download(blob, name)
+      this.store.setState({ video: { status: 'done', name, codec, bytes: blob.size } })
+    } catch (err) {
+      const cancelled = err instanceof DOMException && err.name === 'AbortError'
+      this.store.setState({
+        video: cancelled
+          ? { status: 'idle' }
+          : { status: 'error', message: err instanceof Error ? err.message : String(err) },
+      })
+    } finally {
+      this.videoAbort = null
+      if (o.glow) this.renderer.setLook(look)
+      this.renderer.restoreView(view)
+      const st = this.store.getState()
+      if (st.film)
+        this.renderer.setHighlight(st.filmInfo === 'off' ? null : (st.currentTrace?.overlay ?? null))
+      else this.renderer.setHighlight(highlightOf(st.inspected ?? st.currentTrace))
+    }
+  }
+
+  cancelVideo(): void {
+    this.videoAbort?.abort()
   }
 
   // ---- Pattern Detection / AI Observer -----------------------------------------------------

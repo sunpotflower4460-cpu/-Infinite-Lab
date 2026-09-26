@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
+import { VideoExport } from './VideoExport'
 
 /** JSON export / import (spec §28) with reproduction check of the geometry digest. */
 export function FileActions() {
@@ -27,6 +28,7 @@ export function FileActions() {
           {f.toUpperCase()}
         </button>
       ))}
+      <VideoExport />
       <button onClick={() => input.current?.click()} title="Load a preset or experiment file">
         Import JSON
       </button>

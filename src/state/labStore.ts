@@ -47,6 +47,12 @@ export interface Microscope {
   context: 'dim' | 'hide'
 }
 
+export type VideoState =
+  | { status: 'idle' }
+  | { status: 'recording'; done: number; total: number }
+  | { status: 'done'; name: string; codec: string; bytes: number }
+  | { status: 'error'; message: string }
+
 export interface LabState {
   phase: Phase
   error: string | null
@@ -80,6 +86,8 @@ export interface LabState {
   film: boolean
   /** Mathematical Microscope: only steps [from, to] are shown (earlier ones as faint context). */
   microscope: Microscope | null
+  /** Video export progress (spec §28). */
+  video: VideoState
   /** How much Film mode explains: plain words, the full mathematics, or nothing. */
   filmInfo: FilmInfoLevel
   scientific: boolean
@@ -138,6 +146,7 @@ function initialState(): LabState {
     film: false,
     filmInfo: loadFilmInfo(),
     microscope: null,
+    video: { status: 'idle' },
     patterns: null,
     ai: { status: 'idle' },
     sheet: null,

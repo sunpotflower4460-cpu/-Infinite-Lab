@@ -229,3 +229,37 @@ test.describe('Mathematical Microscope (spec §38)', () => {
     await expect(page.getByTestId('microscope-badge-0')).toHaveCount(0)
   })
 })
+
+test.describe('Video export (spec §28)', () => {
+  test('records the drawing as WebM and MP4 (or explains why it cannot)', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 200)
+    const hasEncoder = await page.evaluate(() => typeof VideoEncoder !== 'undefined')
+    const button = page.getByRole('button', { name: 'Video', exact: true })
+    if (!hasEncoder) {
+      await expect(button).toBeDisabled()
+      await expect(button).toHaveAttribute('title', /no WebCodecs/)
+      return
+    }
+    await button.click()
+    await page.getByLabel('Video length').selectOption('2')
+    for (const format of ['webm', 'mp4'] as const) {
+      await page.getByLabel('Video format').selectOption(format)
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 90_000 }),
+        page.getByRole('button', { name: 'Record' }).click(),
+      ])
+      expect(download.suggestedFilename()).toBe(`pi-infinite-lab_digit-circle-walk_pi_200.${format}`)
+      const bytes = readFileSync(await download.path())
+      expect(bytes.length).toBeGreaterThan(20_000) // a blank or blurred video compresses to a few KB
+      if (format === 'webm')
+        expect(bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3') // EBML
+      else expect(bytes.subarray(4, 8).toString('latin1')).toBe('ftyp')
+      await expect(page.getByTestId('video-status')).toContainText(`saved`)
+    }
+    // the view is back where it was
+    await expect(page.getByTestId('timeline')).toContainText('200 / 1,001')
+  })
+})
