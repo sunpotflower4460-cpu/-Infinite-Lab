@@ -27,6 +27,10 @@ export function Stage3D({ controller }: { controller: LabController }) {
             const s = store.getState()
             return (s.inspected ?? s.currentTrace)?.step ?? null
           },
+          guide: () => {
+            const s = store.getState()
+            return (s.inspected ?? s.currentTrace)?.overlay ?? null
+          },
           look: () => store.getState().look,
           follow: () => store.getState().follow,
           onUserCamera: () => store.setState({ follow: false }),

@@ -22,7 +22,7 @@ function storeOf(id: string, steps: number, params = {}): GeometryStore {
 
 describe('Two-Arm 3D: Torus', () => {
   it('places step n at the torus point of the exact two-arm angles (θ₁, θ₂)', () => {
-    const runner = makeRunner('two-arm-torus', 1000, { dt: 0.05, major: 2, minor: 1, scale: 100 })
+    const runner = makeRunner('two-arm-torus', 1000, { dt: 0.05, r1: 2, r2: 1, scale: 100 })
     runner.advance(5)
     for (let n = 1; n <= 5; n++) {
       const t = runner.inspect(n)
@@ -43,11 +43,35 @@ describe('Two-Arm 3D: Torus', () => {
     expect(runner.inspect(1).evaluations.map((e) => e.symbolic)).toEqual([
       'θ₁ = (n × dt) mod 2π',
       'θ₂ = (n × dt × π) mod 2π',
-      'ρ = R + r × cos(θ₂)',
+      'ρ = r1 + r2 × cos(θ₂)',
       'x[n] = scale × (ρ × cos(θ₁))',
       'y[n] = scale × (ρ × sin(θ₁))',
-      'z[n] = scale × (r × sin(θ₂))',
+      'z[n] = scale × (r2 × sin(θ₂))',
     ])
+  })
+
+  it('is the two-arm machine with arm 2 turning in the vertical plane (arms shown, not stored)', () => {
+    const runner = makeRunner('two-arm-torus', 1000, { dt: 0.05, r1: 1.3, r2: 1, scale: 100, drawArms: true })
+    runner.advance(50)
+    for (const n of [1, 17, 50]) {
+      const t = runner.inspect(n)
+      const [origin, elbow, pen] = t.overlay!
+      expect(origin).toEqual({ type: 'point', x: 0, y: 0, z: 0 })
+      if (elbow?.type !== 'point' || pen?.type !== 'point') throw new Error('expected points')
+      // arm 1: length 130, horizontal, at angle θ₁
+      expect(Math.hypot(elbow.x, elbow.y)).toBeCloseTo(130, 10)
+      expect(elbow.z).toBe(0)
+      // arm 2: length 100, in the vertical plane through arm 1, at angle θ₂ above the level
+      const dx = pen.x - elbow.x
+      const dy = pen.y - elbow.y
+      expect(Math.hypot(dx, dy, pen.z!)).toBeCloseTo(100, 10)
+      expect(dx * elbow.y - dy * elbow.x).toBeCloseTo(0, 8) // same vertical plane as arm 1
+      expect(Math.atan2(pen.z!, Math.hypot(dx, dy) * Math.sign(dx * elbow.x + dy * elbow.y))).toBeCloseTo(
+        Math.atan2(Math.sin(t.env.theta2!), Math.cos(t.env.theta2!)),
+        10,
+      )
+      expect(t.instructions).toEqual([pen])
+    }
   })
 
   it('uses the same angles as the 2D Two-Arm Rotation at every step', () => {
@@ -96,7 +120,7 @@ describe('Two-Arm 3D: Sphere', () => {
 
   it('is the torus with R = 0', () => {
     const sphere = storeOf('two-arm-sphere', 300, { radius: 1.5 })
-    const torus = storeOf('two-arm-torus', 300, { major: 0, minor: 1.5 })
+    const torus = storeOf('two-arm-torus', 300, { r1: 0, r2: 1.5 })
     for (let i = 0; i < 300; i++) {
       const a = decodeRecord(sphere.chunks[0]!, i).instruction
       const b = decodeRecord(torus.chunks[0]!, i).instruction
@@ -139,7 +163,7 @@ describe('3D geometry records', () => {
     const store = storeOf('two-arm-torus', 50)
     const g = decodeRecord(store.chunks[0]!, 9).instruction
     expect(g.type === 'point' && g.z !== undefined).toBe(true)
-    const other = storeOf('two-arm-torus', 50, { minor: 1.5 })
+    const other = storeOf('two-arm-torus', 50, { r2: 1.5 })
     expect(await geometryDigest(store, Infinity)).not.toBe(await geometryDigest(other, Infinity))
     const rows = geometryCsv(store, store.count, 0, true).join('').trim().split('\n')
     expect(rows[0]).toBe(CSV_HEADER_3D)

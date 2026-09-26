@@ -1,4 +1,5 @@
-import { point } from '../../geometry/types'
+import { point, type GeometryInstruction } from '../../geometry/types'
+import { detCos, detSin } from '../../math/detmath'
 import { paramsToEnv, runFormulas, traceSymbols } from '../core/Experiment'
 import { add, assign, cos, modTau, mul, sin, v, type FormulaSet } from '../core/formula'
 import type {
@@ -25,18 +26,24 @@ const theta2 = assign(
 )
 
 /**
- * Torus: the pair (θ₁, θ₂) as a point on a torus — θ₁ around the central axis, θ₂ around the
- * tube. Each step of Two-Arm is determined by this pair (pen = r₁e^{iθ₁} + r₂e^{iθ₂}), so the
- * torus is the space the 2D pattern comes from. With C irrational the winding never closes
- * and covers the torus densely (Kronecker); near-closures follow C's convergents (22/7, 355/113).
+ * Torus: the Two-Arm machine with arm 2 turning in the vertical plane instead of the table.
+ * Arm 1 (length r1) turns in the horizontal plane at speed 1; arm 2 (length r2), attached at its
+ * tip, turns C times as fast in the vertical plane that contains arm 1. The pen can only reach
+ * the torus with R = r1, r = r2 — as the 2D pen can only reach the disk of radius r1 + r2 — and
+ * whether it fills it is decided by C: a fraction p/q closes after q turns (a (q, p) torus knot),
+ * an irrational C never closes and covers the torus densely.
  */
 const torusFormulas: FormulaSet = [
   theta1,
   theta2,
-  assign('rho', add(v('major'), mul(v('minor'), cos(v('theta2')))), 'distance from the central axis'),
-  assign('x', mul(v('scale'), mul(v('rho'), cos(v('theta1')))), 'x'),
-  assign('y', mul(v('scale'), mul(v('rho'), sin(v('theta1')))), 'y'),
-  assign('z', mul(v('scale'), mul(v('minor'), sin(v('theta2')))), 'z'),
+  assign(
+    'rho',
+    add(v('r1'), mul(v('r2'), cos(v('theta2')))),
+    'horizontal reach: arm 1 + level part of arm 2',
+  ),
+  assign('x', mul(v('scale'), mul(v('rho'), cos(v('theta1')))), 'pen x'),
+  assign('y', mul(v('scale'), mul(v('rho'), sin(v('theta1')))), 'pen y'),
+  assign('z', mul(v('scale'), mul(v('r2'), sin(v('theta2')))), 'pen z: arm 2 turns in the vertical plane'),
 ]
 
 /**
@@ -74,22 +81,31 @@ const symbols = {
   theta1: 'θ₁',
   theta2: 'θ₂',
   rho: 'ρ',
-  major: 'R',
-  minor: 'r',
   radius: 'r',
   x: 'x[n]',
   y: 'y[n]',
   z: 'z[n]',
 }
 
+/**
+ * The joints of the machine at a traced step (origin → … → pen), shown as a guide with the
+ * current / inspected step only, never stored — like the arms of the 2D Two-Arm.
+ */
+type Arms = (env: Record<string, number>) => GeometryInstruction[]
+
 /** Stateless: each point depends only on n (and the parameters), never on earlier steps. */
 class PointPath implements GeometryExperiment<null> {
+  private params: ParamValues = {}
   private paramEnv: Record<string, number> = {}
 
-  constructor(private readonly formulas: FormulaSet) {}
+  constructor(
+    private readonly formulas: FormulaSet,
+    private readonly arms?: Arms,
+  ) {}
 
   initialize(config: { params: ParamValues }): void {
-    this.paramEnv = paramsToEnv({ ...config.params })
+    this.params = { ...config.params }
+    this.paramEnv = paramsToEnv(this.params)
   }
 
   step(ctx: StepContext, trace?: TraceSink) {
@@ -100,7 +116,9 @@ class PointPath implements GeometryExperiment<null> {
       trace,
       { constant: ctx.constant.binary, pi: ctx.constant.pi },
     )
-    return { instructions: [point(env.x!, env.y!, env.z!)], env }
+    const overlay =
+      this.arms && this.params.drawArms && trace ? this.arms(env as Record<string, number>) : undefined
+    return { instructions: [point(env.x!, env.y!, env.z!)], env, overlay }
   }
 
   snapshot(): null {
@@ -131,29 +149,55 @@ const SCALE: ParameterDef = {
   step: 1,
 }
 
+/** Elbow of the torus machine: the tip of arm 1, in the horizontal plane. */
+const torusArms: Arms = (env) => {
+  const ex = env.scale! * env.r1! * detCos(env.theta1!)
+  const ey = env.scale! * env.r1! * detSin(env.theta1!)
+  return [point(0, 0, 0), point(ex, ey, 0), point(env.x!, env.y!, env.z!)]
+}
+
+const ARM1: ParameterDef = {
+  key: 'r1',
+  label: 'ARM 1',
+  type: 'number',
+  default: 1,
+  min: 0,
+  max: 5,
+  step: 0.05,
+}
+const ARM2: ParameterDef = {
+  key: 'r2',
+  label: 'ARM 2',
+  type: 'number',
+  default: 1,
+  min: 0,
+  max: 5,
+  step: 0.05,
+}
+const DRAW_ARMS: ParameterDef = {
+  key: 'drawArms',
+  label: 'SHOW ARMS',
+  type: 'boolean',
+  default: true,
+  description: 'Arms at the current step',
+}
+
 export const twoArmTorus: ExperimentDefinition = {
   id: 'two-arm-torus',
-  name: 'Two-Arm 3D: Torus',
+  name: 'Two-Arm 3D: Torus (vertical arm 2)',
   description:
-    '{C} two-arm angles on a torus: θ₁ = t around the axis, θ₂ = {C}·t around the tube (never closes when {C} is irrational)',
+    '{C} two-arm machine with arm 2 turning in the vertical plane, {C}× as fast as arm 1: the pen stays on a torus (R = arm 1, r = arm 2) and fills it only if {C} is irrational',
   view: '3d',
   parameters: [
     DT,
-    {
-      key: 'major',
-      label: 'TORUS R (axis → tube centre)',
-      type: 'number',
-      default: 1.3,
-      min: 0,
-      max: 5,
-      step: 0.05,
-    },
-    { key: 'minor', label: 'TORUS r (tube)', type: 'number', default: 1, min: 0, max: 5, step: 0.05 },
+    { ...ARM1, label: 'ARM 1 (= torus R)', default: 1.3 },
+    { ...ARM2, label: 'ARM 2 (= tube r)' },
     SCALE,
+    DRAW_ARMS,
   ],
   formulas: torusFormulas,
   symbols,
-  create: () => new PointPath(torusFormulas),
+  create: () => new PointPath(torusFormulas, torusArms),
 }
 
 export const twoArmSphere: ExperimentDefinition = {
@@ -179,8 +223,8 @@ export const twoArmHeight: ExperimentDefinition = {
   view: '3d',
   parameters: [
     DT,
-    { key: 'r1', label: 'ARM 1', type: 'number', default: 1, min: 0, max: 5, step: 0.05 },
-    { key: 'r2', label: 'ARM 2', type: 'number', default: 1, min: 0, max: 5, step: 0.05 },
+    ARM1,
+    ARM2,
     SCALE,
     {
       key: 'rise',

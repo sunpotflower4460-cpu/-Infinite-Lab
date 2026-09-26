@@ -104,12 +104,12 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
     id: 'pi-two-arm-torus',
     name: 'Pi Two-Arm 3D: Torus',
     description:
-      'The two-arm angles (θ₁ = t, θ₂ = πt, dt = 0.05) as a point on a torus (R = 1.3, r = 1); 3D view',
+      'Two-arm machine with arm 2 turning π× as fast in the vertical plane (arms 1.3 and 1, dt = 0.05): the pen fills a torus; 3D view',
     config: {
       constant: 'pi',
       precision: 100_000,
       experiment: 'two-arm-torus',
-      parameters: { dt: 0.05, major: 1.3, minor: 1, scale: 100 },
+      parameters: { dt: 0.05, r1: 1.3, r2: 1, scale: 100, drawArms: true },
     },
   },
   {

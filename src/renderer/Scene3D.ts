@@ -17,6 +17,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { KIND } from '../geometry/batch'
 import type { GeometryStore } from '../geometry/GeometryStore'
+import type { GeometryInstruction } from '../geometry/types'
 import { COLORS, LOOKS, type Look } from './layers/GeometryLayer'
 
 /** What the 3D view reads each frame (the lab's state; the view never changes the data). */
@@ -28,6 +29,8 @@ export interface Scene3DSource {
   range(): { from: number; context: 'dim' | 'hide' } | null
   /** Step to mark (current or inspected), or null. */
   markedStep(): number | null
+  /** Guide at the marked step (e.g. the machine's arms): points joined in order; never data. */
+  guide(): GeometryInstruction[] | null
   look(): Look
   follow(): boolean
   onUserCamera(): void
@@ -55,6 +58,9 @@ export class Scene3D {
   private readonly contextMaterial = new LineBasicMaterial({ transparent: true, depthWrite: false })
   private readonly marker: Points
   private readonly markerPosition = new Float32Array(3)
+  private readonly guidePositions = new Float32Array(3 * 8)
+  private readonly guideLine: Line
+  private lastGuide: GeometryInstruction[] | null = null
   private uploaded = 0
   private readonly min = new Vector3(Infinity, Infinity, Infinity)
   private readonly max = new Vector3(-Infinity, -Infinity, -Infinity)
@@ -99,6 +105,15 @@ export class Scene3D {
     this.marker.renderOrder = 1
     this.marker.visible = false
     this.scene.add(this.marker)
+    const guideGeometry = new BufferGeometry()
+    guideGeometry.setAttribute('position', new BufferAttribute(this.guidePositions, 3))
+    this.guideLine = new Line(
+      guideGeometry,
+      new LineBasicMaterial({ color: COLORS.highlight, transparent: true, opacity: 0.9, depthTest: false }),
+    )
+    this.guideLine.renderOrder = 2
+    this.guideLine.visible = false
+    this.scene.add(this.guideLine)
 
     this.installPicking()
     this.canvas.addEventListener('dblclick', () => this.fit())
@@ -159,6 +174,11 @@ export class Scene3D {
     const range = this.source.range()
     const marked = this.source.markedStep()
     const look = this.source.look()
+    const guide = this.source.guide()
+    if (guide !== this.lastGuide) {
+      this.lastGuide = guide
+      this.applyGuide(guide)
+    }
     const state = `${from}/${to}/${range?.context}/${marked}/${look}`
     if (state !== this.lastState) {
       this.lastState = state
@@ -266,6 +286,18 @@ export class Scene3D {
       this.markerPosition.set(this.positions.subarray(3 * index, 3 * index + 3))
       this.marker.geometry.attributes.position!.needsUpdate = true
     }
+    this.dirty = true
+  }
+
+  private applyGuide(guide: GeometryInstruction[] | null): void {
+    const pts = (guide ?? []).filter((g) => g.type === 'point').slice(0, 8)
+    pts.forEach((g, i) => {
+      if (g.type !== 'point') return
+      this.guidePositions.set([g.x, g.y, g.z ?? 0], 3 * i)
+    })
+    this.guideLine.geometry.setDrawRange(0, pts.length)
+    this.guideLine.geometry.attributes.position!.needsUpdate = true
+    this.guideLine.visible = pts.length > 1
     this.dirty = true
   }
 
