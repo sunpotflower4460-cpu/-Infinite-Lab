@@ -10,5 +10,6 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// A link ending in #film opens straight into Film mode (e.g. from a phone).
-if (window.location.hash === '#film') getController().startFilm()
+// First impression: the app opens on the π film (with its plain-language explanation).
+// A link ending in #lab opens the laboratory directly; closing the film switches to #lab.
+if (window.location.hash !== '#lab') getController().startFilm()

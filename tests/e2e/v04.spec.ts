@@ -6,7 +6,7 @@ async function ready(page: Page) {
 }
 
 test('Two-Arm preset shows the exact angle formulas and the arms overlay', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByTestId('preset').selectOption('pi-two-arm')
   await expect(page.getByTestId('status')).toContainText('100,000 digits')
@@ -36,7 +36,7 @@ test('patterns are measured facts; the AI answer is shown as an unverified conje
       }),
     })
   })
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByTestId('preset').selectOption('pi-two-arm')
   await expect(page.getByTestId('status')).toContainText('100,000 digits')
@@ -71,7 +71,7 @@ test('AI errors are reported, not hidden', async ({ page }) => {
   await page.route('https://api.deepseek.com/chat/completions', (route) =>
     route.fulfill({ status: 401, headers: { 'access-control-allow-origin': '*' }, body: '{}' }),
   )
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByRole('button', { name: 'Step' }).click()
   await page.getByLabel('DeepSeek API key').fill('bad')

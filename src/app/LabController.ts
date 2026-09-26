@@ -409,6 +409,7 @@ export class LabController {
    * only — the geometry is the Two-Arm Rotation's, bit for bit.
    */
   startFilm(): void {
+    setHash('#film')
     this.disableCompare()
     this.setContinuous(false)
     this.stopFilmClock()
@@ -425,6 +426,7 @@ export class LabController {
   }
 
   stopFilm(): void {
+    setHash('#lab') // a reload stays in the lab
     this.filmPending = false
     this.stopFilmClock()
     this.pause()
@@ -1017,6 +1019,16 @@ export class LabController {
         this.store.setState({ phase: 'error', error: msg.message, playing: false })
         break
     }
+  }
+}
+
+/** Reflect the screen in the URL without adding history entries or firing hashchange. */
+function setHash(hash: '#film' | '#lab'): void {
+  if (typeof window === 'undefined' || window.location.hash === hash) return
+  try {
+    window.history.replaceState(window.history.state, '', hash)
+  } catch {
+    // sandboxed frames may refuse; the screen itself still switches
   }
 }
 

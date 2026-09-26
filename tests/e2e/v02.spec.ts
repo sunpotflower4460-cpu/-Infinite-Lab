@@ -14,7 +14,7 @@ async function gotoStep(page: Page, n: number) {
 }
 
 test('constants: e, √2, φ are computed and drive the experiment', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   for (const [id, prefix, first] of [
     ['e', '2.71828182845904', '2'],
@@ -29,7 +29,7 @@ test('constants: e, √2, φ are computed and drive the experiment', async ({ pa
 })
 
 test('experiments: Circle Chain and Pi Rotation show their executed formulas', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Experiment').selectOption('circle-chain')
   await expect(page.getByTestId('formulas-current')).toContainText(
@@ -44,7 +44,7 @@ test('experiments: Circle Chain and Pi Rotation show their executed formulas', a
 })
 
 test('timeline: look back, return, and compute forward', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await gotoStep(page, 500) // forward: computes 500 steps
   await expect(page.getByTestId('current-step')).toHaveText('500')
@@ -58,7 +58,7 @@ test('timeline: look back, return, and compute forward', async ({ page }) => {
 })
 
 test('click on the canvas inspects the geometry under the cursor', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Experiment').selectOption('circle-chain')
   await page.getByRole('button', { name: 'Step' }).click() // circle 1: centre (0,0), r = 6 — fit centres it
@@ -72,7 +72,7 @@ test('click on the canvas inspects the geometry under the cursor', async ({ page
 })
 
 test('presets configure constant, precision and experiment', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByTestId('preset').selectOption('pi-orbit')
   await expect(page.getByLabel('Experiment')).toHaveValue('pi-rotation')
@@ -84,7 +84,7 @@ test('presets configure constant, precision and experiment', async ({ page }) =>
 test('export → import reproduces the geometry bit-for-bit (and the browser matches Node)', async ({
   page,
 }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await gotoStep(page, 1000)
   await expect(page.getByTestId('current-step')).toHaveText('1,000')
@@ -129,7 +129,7 @@ test('export → import reproduces the geometry bit-for-bit (and the browser mat
 })
 
 test('history: save, restore with verification, delete', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Experiment').selectOption('pi-rotation')
   await gotoStep(page, 300)
@@ -150,7 +150,7 @@ test('history: save, restore with verification, delete', async ({ page }) => {
 })
 
 test('canvas keeps the host size after layout changes (camera and pixels agree)', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByRole('button', { name: 'Step' }).click()
   await page
@@ -170,7 +170,7 @@ test('canvas keeps the host size after layout changes (camera and pixels agree)'
 })
 
 test('seeking forward while playing stops exactly at the target (no overshoot)', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByTestId('precision').selectOption('10000')
   await expect(page.getByTestId('status')).toContainText('10,000 digits') // new digits loaded
@@ -184,7 +184,7 @@ test('seeking forward while playing stops exactly at the target (no overshoot)',
 })
 
 test('a manual change during a pending import cancels its verification', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   const file = {
     format: 'pi-infinite-lab/experiment',

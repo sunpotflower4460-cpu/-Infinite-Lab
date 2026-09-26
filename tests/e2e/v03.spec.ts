@@ -67,7 +67,7 @@ function coverage(
 }
 
 test('both geometry layers draw the same structure', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Go to step').fill('1000')
   await page.getByLabel('Go to step').press('Enter')
@@ -101,7 +101,7 @@ test('both geometry layers draw the same structure', async ({ page }) => {
 
 test('Infinite Mode keeps computing digits and the result stays reproducible', async ({ page }) => {
   test.setTimeout(120_000)
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByTestId('precision').selectOption('100')
   await expect(page.getByTestId('status')).toContainText('100 digits')
@@ -139,7 +139,7 @@ test('Infinite Mode keeps computing digits and the result stays reproducible', a
 
 /** Values grow while playing; the layout must not move the transport buttons under the pointer. */
 async function transportStaysPut(page: Page) {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByRole('radio', { name: '10x' }).click()
   const box = async () => (await page.getByRole('button', { name: /^(Play|Pause)$/ }).boundingBox())!
@@ -161,7 +161,7 @@ test('the transport buttons stay in place while values grow during playback', as
 })
 
 test('Compare Mode runs π and e in lockstep under identical conditions', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Experiment').selectOption('circle-chain')
   await page.getByRole('button', { name: 'Compare' }).click()
@@ -201,7 +201,7 @@ test('Compare Mode runs π and e in lockstep under identical conditions', async 
 
 test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
   const { readFileSync } = await import('node:fs')
-  await page.goto('/')
+  await page.goto('/#lab')
   await ready(page)
   await page.getByLabel('Go to step').fill('200')
   await page.getByLabel('Go to step').press('Enter')
@@ -247,7 +247,7 @@ test.describe('mobile layout (spec §30)', () => {
   })
 
   test('canvas first, Setup and Inspector as bottom sheets', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     const canvas = page.getByTestId('lab-canvas')
     const box = (await canvas.boundingBox())!

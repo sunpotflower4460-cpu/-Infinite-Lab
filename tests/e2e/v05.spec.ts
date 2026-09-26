@@ -13,7 +13,7 @@ async function goTo(page: Page, step: number) {
 
 test.describe('Formula Playground (spec §10)', () => {
   test('typed formulas are executed and shown as executed; invalid drafts do not run', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByLabel('Experiment').selectOption('playground')
     const formulas = page.getByTestId('formulas-current')
@@ -45,7 +45,7 @@ test.describe('Formula Playground (spec §10)', () => {
   })
 
   test('formulas travel with the JSON export and reproduce on import', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByTestId('preset').selectOption('playground-turning')
     await expect(page.getByTestId('status')).toContainText('10,000 digits')
@@ -77,7 +77,7 @@ test.describe('Formula Playground (spec §10)', () => {
   })
 
   test('a formula that produces an invalid value stops with the step and the reason', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByLabel('Experiment').selectOption('playground')
     await page.getByLabel('RADIUS formula').fill('digit − 3')
@@ -99,6 +99,21 @@ test.describe('Formula Playground (spec §10)', () => {
 })
 
 test.describe('Film mode (the reference video look)', () => {
+  test('the app opens on the π film; after closing it, a reload stays in the lab', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByTestId('film')).toBeVisible()
+    await expect(page.getByTestId('film-pi')).toContainText('π = 3.14159')
+    await page.getByRole('button', { name: 'Close film' }).click()
+    await expect(page.getByTestId('film')).toBeHidden()
+    await page.reload()
+    await expect(page.getByTestId('digit-stream')).toContainText('3.14159')
+    await expect(page.getByTestId('film')).toHaveCount(0)
+    // and the lab's button opens it again
+    await page.getByRole('button', { name: '▶ π の模様を見る' }).click()
+    await expect(page.getByTestId('film')).toBeVisible()
+    await expect(page).toHaveURL(/#film$/)
+  })
+
   test('#film opens full-screen, draws the π two-arm rule and speeds up; ✕ returns to the lab', async ({
     page,
   }) => {
@@ -143,6 +158,7 @@ test.describe('Film mode (the reference video look)', () => {
 
     // the same rule as the Two-Arm preset
     await page.getByRole('button', { name: 'Close film' }).click()
+    await expect(page).toHaveURL(/#lab$/)
     await expect(film).toBeHidden()
     await expect(page.getByTestId('formulas-current')).toContainText('θ₂ = (n × dt × π) mod 2π')
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible()
