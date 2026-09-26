@@ -23,7 +23,9 @@ export function Controls() {
     const onKey = (e: KeyboardEvent) => {
       if (useRoom.getState().open) return // the room covers the lab: its keys are the page's (scroll)
       const t = e.target
-      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return
+      if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement)
+        return
+      if (t instanceof Element && t.closest('[data-guide-ignore]')) return // typing to the AI Guide
       // A focused button already reacts to Space/Enter itself; don't toggle twice.
       if (t instanceof HTMLButtonElement && (e.code === 'Space' || e.code === 'Enter')) return
       if (e.code === 'Space') {
