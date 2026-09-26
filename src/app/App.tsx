@@ -19,9 +19,15 @@ export function App() {
   const peer = comparing ? c.peer : null
   const sheet = useLab((s) => s.sheet)
   const film = useLab((s) => s.film)
+  const filmInfo = useLab((s) => s.filmInfo)
   const close = () => useLab.setState({ sheet: null })
   return (
-    <div className="lab" data-sheet={sheet ?? 'none'} data-film={film ? 'on' : 'off'}>
+    <div
+      className="lab"
+      data-sheet={sheet ?? 'none'}
+      data-film={film ? 'on' : 'off'}
+      data-film-info={filmInfo}
+    >
       <header className="topbar">
         <h1>
           <span className="accent">π</span> Infinite Lab
@@ -32,7 +38,7 @@ export function App() {
           onClick={() => c.startFilm()}
           title="Full-screen, like the reference video"
         >
-          ▶ Film
+          ▶ π の模様を見る
         </button>
         <CompareToggle />
         <FileActions />

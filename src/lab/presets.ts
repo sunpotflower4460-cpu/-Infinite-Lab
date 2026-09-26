@@ -80,12 +80,12 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
     id: 'pi-film',
     name: 'π Film (reference video look)',
     description:
-      'Two-Arm Rotation e^{it} + e^{iπt} without arms, dt = 0.05 — the rule identified in the reference video',
+      'Two-Arm Rotation e^{it} + e^{iπt}, dt = 0.05 — the rule identified in the reference video (arms shown as a guide, never stored)',
     config: {
       constant: 'pi',
       precision: 100_000,
       experiment: 'two-arm',
-      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, drawArms: false },
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, drawArms: true },
     },
   },
   {
