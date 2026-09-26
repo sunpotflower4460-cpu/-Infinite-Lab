@@ -12,6 +12,44 @@ export const COLORS = {
   highlight: 0xffc766,
 }
 
+/** Colours and opacities of the drawn geometry (presentation only: never part of the data). */
+export interface LayerStyle {
+  background: number
+  line: number
+  lineAlpha: number
+  circle: number
+  circleAlpha: number
+  point: number
+  pointAlpha: number
+}
+
+export type Look = 'lab' | 'luminous'
+
+/**
+ * lab: the default observatory palette. luminous: white strokes on black that add up to a
+ * glow where the curve passes often — the look of the reference video (docs/reference).
+ */
+export const LOOKS: Record<Look, LayerStyle> = {
+  lab: {
+    background: COLORS.background,
+    line: COLORS.line,
+    lineAlpha: COLORS.lineAlpha,
+    circle: COLORS.circle,
+    circleAlpha: COLORS.circleAlpha,
+    point: COLORS.point,
+    pointAlpha: COLORS.pointAlpha,
+  },
+  luminous: {
+    background: 0x000000,
+    line: 0xffffff,
+    lineAlpha: 0.5,
+    circle: 0xffffff,
+    circleAlpha: 0.55,
+    point: 0xffffff,
+    pointAlpha: 0.8,
+  },
+}
+
 /**
  * Float32 precision frame shared by all layers: GPU coordinates are
  * (world − origin) × bucket, and the container maps them to the screen.
@@ -34,6 +72,8 @@ export interface GeometryLayer {
    * Returns true if anything changed.
    */
   sync(store: GeometryStore, visibleCount: number, frame: LayerFrame, full: boolean): boolean
+  /** Colours and opacities (takes effect on the next sync). */
+  setStyle(style: LayerStyle): void
   /** Camera zoom changed within the bucket (pixel-size dependent parameters). */
   setPixelScale(pxPerUnit: number): void
   clear(): void

@@ -1,9 +1,21 @@
 import { CONSTANTS } from '../math/constants'
-import { formulaLines, getExperiment } from '../experiments/registry'
-import { defaultParams, type DigitStart, type ParamValue, type StepTrace } from '../experiments/core/types'
+import { formulaLines, getExperiment, resolveExperiment } from '../experiments/registry'
+import {
+  checkSources,
+  DEFAULT_SOURCES,
+  PLAYGROUND_ID,
+  type PlaygroundSources,
+} from '../experiments/playground'
+import {
+  defaultParams,
+  type DigitStart,
+  type ExperimentDefinition,
+  type ParamValue,
+  type StepTrace,
+} from '../experiments/core/types'
 import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
-import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
+import { digitLimit, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { detectPatterns } from '../analysis/patterns'
@@ -11,6 +23,8 @@ import { askObserver, type DeepSeekModel } from '../ai/deepseek'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
+import type { Look } from '../renderer/layers/GeometryLayer'
+import { filmSpeed } from './filmSpeed'
 import { createLabStore, SPEEDS, useLab, type LabStore } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
@@ -135,6 +149,22 @@ export class LabController {
     this.initSimulation()
   }
 
+  /** Formula Playground: run new formulas (all three must parse; the panel keeps drafts). */
+  setFormulas(formulas: PlaygroundSources): void {
+    const errors = checkSources(formulas)
+    const first = Object.values(errors)[0]
+    if (first) throw first
+    this.cancelPending()
+    this.store.setState({ formulas: { ...formulas } })
+    this.initSimulation()
+  }
+
+  /** The definition being run (the Playground's is built from the current formulas). */
+  definition(): ExperimentDefinition {
+    const s = this.store.getState()
+    return resolveExperiment(s.experimentId, s.formulas)
+  }
+
   setDigitStart(digitStart: DigitStart): void {
     this.cancelPending()
     this.store.setState({ digitStart })
@@ -149,6 +179,7 @@ export class LabController {
       experiment: s.experimentId,
       digitStart: s.digitStart,
       parameters: { ...s.params },
+      ...(s.experimentId === PLAYGROUND_ID ? { formulas: { ...s.formulas } } : {}),
     }
   }
 
@@ -163,6 +194,7 @@ export class LabController {
       experimentId: config.experiment,
       digitStart: config.digitStart,
       params: { ...config.parameters },
+      formulas: config.formulas ?? DEFAULT_SOURCES,
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
     const loaded = this.loaded
@@ -345,6 +377,7 @@ export class LabController {
         if (
           s.experimentId !== prev.experimentId ||
           s.params !== prev.params ||
+          s.formulas !== prev.formulas ||
           s.digitStart !== prev.digitStart ||
           s.precision !== prev.precision
         ) {
@@ -361,6 +394,86 @@ export class LabController {
     // restart the main lane too, so both start from step 0 under identical conditions
     this.initSimulation()
     return peer
+  }
+
+  // ---- Film mode (the reference video's presentation) ------------------------------------
+
+  /** Film clock: accumulated playing time (ms) and the moment it last resumed. */
+  private film = { elapsed: 0, resumedAt: 0, timer: undefined as ReturnType<typeof setInterval> | undefined }
+  private filmPending = false
+
+  /**
+   * Full-screen playback of the rule found in the reference video (π Film preset): white glow,
+   * fixed framing on the whole disc, and a speed that grows like the video's. Presentation
+   * only — the geometry is the Two-Arm Rotation's, bit for bit.
+   */
+  startFilm(): void {
+    this.disableCompare()
+    this.setContinuous(false)
+    this.stopFilmClock()
+    this.film.elapsed = 0
+    this.store.setState({ film: true, look: 'luminous', follow: false, sheet: null })
+    this.renderer.setLook('luminous')
+    this.renderer.setHighlight(null)
+    const preset = PRESETS.find((p) => p.id === 'pi-film')!
+    const p = preset.config.parameters
+    const reach = ((p.r1 as number) + (p.r2 as number)) * (p.scale as number) // |z| ≤ (r1 + r2)·scale
+    this.renderer.fitTo({ minX: -reach, minY: -reach, maxX: reach, maxY: reach })
+    this.filmPending = true
+    this.applyConfig(preset.config)
+  }
+
+  stopFilm(): void {
+    this.filmPending = false
+    this.stopFilmClock()
+    this.pause()
+    this.store.setState({ film: false, look: 'lab' })
+    this.renderer.setLook('lab')
+    this.fitAll()
+  }
+
+  /** Pause / resume the film (tap on the picture). */
+  toggleFilm(): void {
+    if (!this.store.getState().film) return
+    if (this.film.timer !== undefined) {
+      this.stopFilmClock()
+      this.pause()
+    } else if (!this.store.getState().finished) {
+      this.startFilmClock()
+    }
+  }
+
+  setLook(look: Look): void {
+    this.store.setState({ look })
+    this.renderer.setLook(look)
+  }
+
+  private startFilmClock(): void {
+    const s = this.store.getState()
+    if (s.phase !== 'ready' || s.finished) return
+    this.leaveView()
+    this.film.resumedAt = performance.now()
+    this.postSim({ type: 'play', stepsPerSecond: filmSpeed(this.film.elapsed / 1000) })
+    this.film.timer = setInterval(() => {
+      if (this.store.getState().finished) {
+        this.stopFilmClock()
+        return
+      }
+      const t = (this.film.elapsed + performance.now() - this.film.resumedAt) / 1000
+      this.postSim({ type: 'setSpeed', stepsPerSecond: filmSpeed(t) })
+    }, 200)
+  }
+
+  private stopFilmClock(): void {
+    if (this.film.timer === undefined) return
+    clearInterval(this.film.timer)
+    this.film.timer = undefined
+    this.film.elapsed += performance.now() - this.film.resumedAt
+  }
+
+  /** Whether the film is running (for the overlay's play / pause hint). */
+  get filmRunning(): boolean {
+    return this.film.timer !== undefined
   }
 
   disableCompare(): void {
@@ -450,7 +563,7 @@ export class LabController {
     this.store.setState({ scientific })
   }
 
-  /** Infinite Mode (spec §37): continuous computation until paused (up to MAX_PRECISION digits). */
+  /** Infinite Mode (spec §37): continuous computation until paused (up to digitLimit() digits). */
   setContinuous(on: boolean): void {
     this.store.setState({ continuous: on })
     this.postSim({ type: 'setContinuous', on })
@@ -462,7 +575,7 @@ export class LabController {
     const s = this.store.getState()
     const loaded = this.loaded
     if (!s.continuous || s.phase !== 'ready' || this.extendRequestId !== null || !loaded) return
-    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) {
+    if (loaded.precision >= digitLimit() || loaded.constantId !== s.constantId) {
       // No extension can come: let a waiting worker finish instead of waiting forever.
       if (s.waiting) this.postSim({ type: 'setContinuous', on: false })
       return
@@ -563,7 +676,7 @@ export class LabController {
   /** Build the reproducible JSON record of the current experiment (spec §28). */
   async buildExport(): Promise<ExperimentFile> {
     const s = this.store.getState()
-    const def = getExperiment(s.experimentId)
+    const def = this.definition()
     return {
       format: FILE_FORMAT,
       version: FILE_VERSION,
@@ -636,7 +749,7 @@ export class LabController {
           `${this.fileStem()}.csv`,
         )
       } else {
-        const def = getExperiment(s.experimentId)
+        const def = this.definition()
         const symbol = s.constant?.symbol ?? 'C'
         const desc = [
           `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
@@ -675,7 +788,7 @@ export class LabController {
     this.measurePatterns() // always measure what is shown now (never reuse facts of another run)
     const requestId = ++this.aiRequestId
     const s = this.store.getState()
-    const def = getExperiment(s.experimentId)
+    const def = this.definition()
     this.store.setState({ ai: { status: 'asking' } })
     try {
       const answer = await askObserver(
@@ -745,6 +858,7 @@ export class LabController {
         initId: ++this.initId,
         experimentId: s.experimentId,
         params: s.params,
+        ...(s.experimentId === PLAYGROUND_ID ? { formulas: s.formulas } : {}),
         digitStart: s.digitStart,
         digits,
         integerPartLength: s.constant.integerPartLength,
@@ -815,7 +929,12 @@ export class LabController {
         // Only the ready of the latest init counts (config changes may be queued behind it).
         if (msg.initId !== this.initId || this.store.getState().phase === 'computing') return
         this.resetView()
-        this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps })
+        // a new run replaces a failed one (e.g. corrected Playground formulas)
+        this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps, error: null })
+        if (this.filmPending) {
+          this.filmPending = false
+          this.startFilmClock()
+        }
         const pending = this.pending
         this.pending = null
         if (pending?.verify) {
@@ -833,7 +952,9 @@ export class LabController {
         this.renderer.append({ data: msg.data, count: msg.count })
         this.postSim({ type: 'ack', generation: msg.generation })
         const inspected = this.store.getState().inspected
-        if (msg.trace && !inspected) this.renderer.setHighlight(highlightOf(msg.trace))
+        // Film mode shows only the drawing, as in the reference video (no pen / arm marker).
+        if (msg.trace && !inspected && !this.store.getState().film)
+          this.renderer.setHighlight(highlightOf(msg.trace))
         this.store.setState({
           currentStep: msg.currentStep,
           totalSteps: msg.totalSteps,

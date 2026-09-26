@@ -21,6 +21,7 @@ interface RenderOptions {
 function prec(e: Expr): number {
   if (e.kind === 'bin') return PRECEDENCE[e.op]
   if (e.kind === 'neg') return 3
+  if (e.kind === 'modTau' || e.kind === 'constMod') return PRECEDENCE.mod // "(…) mod 2π" is a mod
   return 4
 }
 
@@ -47,15 +48,15 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
       case 'call':
         return `${x.fn}(${go(x.arg)})`
       case 'modTau':
-        return `(${[...x.factors.map((f) => wrap(f, 2, false)), ...(x.withConstant ? [opts.symbols?.C ?? 'C'] : [])].join(' × ')}) mod 2π`
+        return `(${[...x.factors.map((f, i) => wrap(f, 2, i > 0)), ...(x.withConstant ? [opts.symbols?.C ?? 'C'] : [])].join(' × ')}) mod 2π`
       case 'constMod':
-        return `(${[...x.factors.map((f) => wrap(f, 2, false)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
+        return `(${[...x.factors.map((f, i) => wrap(f, 2, i > 0)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
       case 'bin': {
         if (isImplicitProduct(x)) return `${go(x.left)}π`
         const p = PRECEDENCE[x.op]
-        // Left-associative: the right operand needs parentheses at equal precedence for − and /.
-        const rightStrict = x.op === '-' || x.op === '/' || x.op === 'mod'
-        return wrap(x.left, p, false) + OP_TEXT[x.op] + wrap(x.right, p, rightStrict)
+        // Left-associative, and float64 + and × are not associative either: a + (b + c) can
+        // differ from (a + b) + c, so a right operand of equal precedence keeps its parentheses.
+        return wrap(x.left, p, false) + OP_TEXT[x.op] + wrap(x.right, p, true)
       }
     }
   }

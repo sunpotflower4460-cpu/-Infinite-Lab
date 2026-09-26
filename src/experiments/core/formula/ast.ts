@@ -23,7 +23,8 @@ export type Expr =
   | { kind: 'modTau'; factors: Expr[]; withConstant: boolean }
 
 export type BinOp = '+' | '-' | '*' | '/' | 'mod'
-export type FnName = 'sin' | 'cos'
+/** sin/cos via detmath; abs and sqrt are exact / correctly rounded in IEEE-754 (deterministic). */
+export type FnName = 'sin' | 'cos' | 'abs' | 'sqrt'
 
 /** One assignment `target = expr`, evaluated in order within a FormulaSet. */
 export interface Formula {

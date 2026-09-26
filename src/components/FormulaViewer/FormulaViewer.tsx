@@ -1,4 +1,5 @@
-import { formulaLines, getExperiment } from '../../experiments/registry'
+import { formulaLines } from '../../experiments/registry'
+import { useDefinition } from '../useDefinition'
 import { useLab } from '../../state/labStore'
 import { formatExact } from '../../utils/format'
 
@@ -13,14 +14,13 @@ export function FormulaViewer({
   compact?: boolean
   source?: 'focus' | 'current'
 }) {
-  const experimentId = useLab((s) => s.experimentId)
   // 'focus' follows a pinned (inspected) step.
   // 'current' follows the running step, or the Timeline position when looking at the past.
   const trace = useLab((s) =>
     source === 'current' && s.viewStep === null ? s.currentTrace : (s.inspected ?? s.currentTrace),
   )
   const symbol = useLab((s) => s.constant?.symbol ?? 'C')
-  const def = getExperiment(experimentId)
+  const def = useDefinition()
 
   if (!trace) {
     return (

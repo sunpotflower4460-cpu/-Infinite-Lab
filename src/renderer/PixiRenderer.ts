@@ -2,9 +2,9 @@ import { Application, Container, Graphics, Rectangle } from 'pixi.js'
 import { KIND, type GeometryBatch } from '../geometry/batch'
 import { GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
-import { Camera } from './Camera'
+import { Camera, type Bounds } from './Camera'
 import { arcDistance, segmentDistance } from './hitTest'
-import { COLORS, type GeometryLayer, type LayerFrame } from './layers/GeometryLayer'
+import { COLORS, LOOKS, type GeometryLayer, type LayerFrame, type Look } from './layers/GeometryLayer'
 import { GraphicsLayer } from './layers/GraphicsLayer'
 import { InstancedLayer } from './layers/InstancedLayer'
 import type { Renderer } from './Renderer'
@@ -37,6 +37,9 @@ export class PixiRenderer implements Renderer {
   /** Only records with step ≤ visibleStep are shown (Timeline). */
   private visibleStep = Infinity
   private highlightData: GeometryInstruction[] | null = null
+  private look: Look = 'lab'
+  /** Framing kept across resizes (fitTo) until the user moves the camera or fits all. */
+  private framed: Bounds | null = null
   private bucket = 1
   private originX = 0
   private originY = 0
@@ -64,7 +67,7 @@ export class PixiRenderer implements Renderer {
     const app = new Application()
     await app.init({
       resizeTo: host,
-      background: COLORS.background,
+      background: LOOKS[this.look].background,
       antialias: true,
       autoDensity: true,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
@@ -87,7 +90,8 @@ export class PixiRenderer implements Renderer {
       // too, so resize the renderer here to keep canvas and camera in the same space.
       app.resize()
       this.camera.setViewport(host.clientWidth, host.clientHeight)
-      if (this.follow) this.fitAll()
+      if (this.framed) this.camera.fit(this.framed, 24)
+      else if (this.follow) this.fitAll()
       this.applyCamera()
     })
     this.resizeObserver.observe(host)
@@ -113,12 +117,18 @@ export class PixiRenderer implements Renderer {
     this.visibleStep = Infinity
     this.highlightData = null
     this.highlight.clear()
-    this.camera.centerOn(0, 0)
-    this.follow = true
+    if (this.framed) {
+      this.camera.fit(this.framed, 24) // a fixed framing (Film mode) survives a restart
+    } else {
+      this.camera.centerOn(0, 0)
+      this.follow = true
+    }
+    this.applyCamera()
     this.needsRender = true
   }
 
   fitAll(): void {
+    this.framed = null
     const b = this.store.bounds
     if (!b) {
       this.camera.centerOn(0, 0)
@@ -126,6 +136,22 @@ export class PixiRenderer implements Renderer {
       this.camera.fit(b, 48)
     }
     this.applyCamera()
+  }
+
+  /** Show exactly these world bounds and stop following new geometry. */
+  fitTo(bounds: Bounds): void {
+    this.follow = false
+    this.framed = { ...bounds }
+    this.camera.fit(bounds, 24)
+    this.applyCamera()
+  }
+
+  /** Presentation palette (see LOOKS); the data is unchanged. */
+  setLook(look: Look): void {
+    this.look = look
+    this.layer.setStyle(LOOKS[look])
+    if (this.app) this.app.renderer.background.color = LOOKS[look].background
+    this.needsRender = true
   }
 
   center(): void {
@@ -153,7 +179,7 @@ export class PixiRenderer implements Renderer {
     const canvas = app.renderer.extract.canvas({
       target: app.stage,
       frame: new Rectangle(0, 0, this.camera.width, this.camera.height),
-      clearColor: COLORS.background,
+      clearColor: LOOKS[this.look].background,
     }) as HTMLCanvasElement
     return new Promise((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'),
@@ -186,6 +212,7 @@ export class PixiRenderer implements Renderer {
     this.world.removeChild(this.layer.container)
     this.layer.destroy()
     this.layer = next
+    next.setStyle(LOOKS[this.look])
     this.world.addChildAt(next.container, 0)
     this.needsFullRebuild = true
   }
@@ -337,6 +364,7 @@ export class PixiRenderer implements Renderer {
     }
     const user = () => {
       this.follow = false
+      this.framed = null
       this.onUserCamera?.()
     }
     const onWheel = (e: WheelEvent) => {

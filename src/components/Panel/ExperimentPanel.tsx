@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { getController } from '../../app/LabController'
-import { describe, EXPERIMENTS, getExperiment } from '../../experiments/registry'
+import { describe, EXPERIMENTS } from '../../experiments/registry'
+import { PLAYGROUND_ID } from '../../experiments/playground'
+import { PlaygroundEditor } from '../Playground/PlaygroundEditor'
+import { useDefinition } from '../useDefinition'
 import { PRESETS } from '../../lab/presets'
 import { CONSTANTS } from '../../math/constants'
 import { HistoryPanel } from '../History/HistoryPanel'
 import { PRECISIONS, useLab } from '../../state/labStore'
+import { digitLimit } from '../../lab/config'
 import { formatInt } from '../../utils/format'
 
 export function ExperimentPanel() {
@@ -15,7 +19,7 @@ export function ExperimentPanel() {
   const digitStart = useLab((s) => s.digitStart)
   const phase = useLab((s) => s.phase)
   const constantId = useLab((s) => s.constantId)
-  const def = getExperiment(experimentId)
+  const def = useDefinition()
 
   return (
     <div className="side-panel">
@@ -78,7 +82,7 @@ export function ExperimentPanel() {
           aria-label="Precision"
           data-testid="precision"
         >
-          {PRECISIONS.map((p) => (
+          {PRECISIONS.filter((p) => p <= digitLimit()).map((p) => (
             <option key={p} value={p}>
               {formatInt(p)} digits
             </option>
@@ -106,6 +110,8 @@ export function ExperimentPanel() {
           </label>
         </div>
       </section>
+
+      {experimentId === PLAYGROUND_ID && <PlaygroundEditor />}
 
       <section>
         <div className="panel-title">Parameters</div>

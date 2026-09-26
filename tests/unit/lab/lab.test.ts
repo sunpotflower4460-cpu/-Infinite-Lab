@@ -58,6 +58,10 @@ describe('presets', () => {
       'Pi Orbit',
       'Pi Spiral',
       'Pi Two-Arm (reference candidate)',
+      'π Film (reference video look)',
+      'Playground: spec example',
+      'Playground: turning walk',
+      'Playground: C-radian rotation',
     ])
     for (const p of PRESETS) expect(EXPERIMENTS[p.config.experiment]).toBeDefined()
   })
@@ -174,7 +178,52 @@ describe('file format versions', () => {
     )
     expect(v2.compatibilityNote).toBeUndefined()
     expect(() =>
-      parseImport(JSON.stringify({ ...base, version: 3, config: { experiment: 'pi-rotation' } })),
+      parseImport(JSON.stringify({ ...base, version: 4, config: { experiment: 'pi-rotation' } })),
     ).toThrow(/version/)
+  })
+
+  it('v3 carries the Formula Playground formulas, validated by parsing them', () => {
+    const formulas = { angle: '(angle_prev + digit × π / 5) mod 2π', radius: 'digit / 2', distance: '3' }
+    const v3 = parseImport(
+      JSON.stringify({ ...base, version: 3, config: { experiment: 'playground', formulas } }),
+    )
+    expect(v3.config.formulas).toEqual(formulas)
+    // missing formulas take the spec's example; other experiments have none
+    expect(parseConfig({ experiment: 'playground' }).formulas).toEqual({
+      angle: 'digit × π / 5',
+      radius: 'digit × 2',
+      distance: '5',
+    })
+    expect(parseConfig({ experiment: 'pi-rotation' }).formulas).toBeUndefined()
+    expect(() => parseConfig({ experiment: 'pi-rotation', formulas })).toThrow(
+      /only used by the Formula Playground/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 'digit ×' } })).toThrow(
+      /formula ANGLE: formula ends too early/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 'n × C' } })).toThrow(
+      /C can only/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { colour: 'red' } })).toThrow(
+      /unknown formula/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 5 } })).toThrow(
+      /must be a string/,
+    )
+  })
+})
+
+describe('film speed', () => {
+  it('grows like the reference video and is capped', async () => {
+    const { filmSpeed } = await import('../../../src/app/filmSpeed')
+    expect(filmSpeed(0)).toBe(5)
+    expect(filmSpeed(9)).toBeCloseTo(5 * Math.E, 12)
+    expect(filmSpeed(1000)).toBe(5000)
+    // drawing time T = dt · ∫ speed: ≈ 27 at 22 s and ≈ 130 at 36 s in the video
+    const T = (t: number) => 0.05 * 5 * 9 * (Math.exp(t / 9) - 1)
+    expect(T(22)).toBeGreaterThan(20)
+    expect(T(22)).toBeLessThan(35)
+    expect(T(36)).toBeGreaterThan(100)
+    expect(T(36)).toBeLessThan(160)
   })
 })
