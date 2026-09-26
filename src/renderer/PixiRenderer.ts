@@ -176,16 +176,23 @@ export class PixiRenderer implements Renderer {
 
   // ---------------------------------------------------------------------------
 
-  /** The current view (camera, Timeline cut-off, highlight) as a PNG at device resolution. */
-  async snapshotPng(): Promise<Blob> {
+  /** The current view (camera, Timeline cut-off, highlight) as a canvas at device resolution. */
+  snapshotCanvas(): HTMLCanvasElement | null {
     const app = this.app
-    if (!app) throw new Error('renderer not ready')
+    if (!app || this.isSuspended) return null
     this.frame() // bring GPU geometry up to date
-    const canvas = app.renderer.extract.canvas({
+    return app.renderer.extract.canvas({
       target: app.stage,
       frame: new Rectangle(0, 0, this.camera.width, this.camera.height),
       clearColor: LOOKS[this.look].background,
     }) as HTMLCanvasElement
+  }
+
+  /** The current view (camera, Timeline cut-off, highlight) as a PNG at device resolution. */
+  async snapshotPng(): Promise<Blob> {
+    if (!this.app) throw new Error('renderer not ready')
+    const canvas = this.snapshotCanvas()
+    if (!canvas) throw new Error('renderer not drawing')
     return new Promise((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'),
     )

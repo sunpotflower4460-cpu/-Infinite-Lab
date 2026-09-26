@@ -13,6 +13,9 @@ import { StatusStrip } from '../components/Status/StatusStrip'
 import { FileActions } from '../components/Status/FileActions'
 import { GoldenRoom } from '../components/Golden/GoldenRoom'
 import { openRoom, useRoom } from '../golden/room'
+import { GuideLayer } from '../components/Guide/GuideLayer'
+import { useGuideContext } from '../guide/context'
+import { labGuideContext } from './guideContext'
 
 export function App() {
   const scientific = useLab((s) => s.scientific)
@@ -24,6 +27,7 @@ export function App() {
   const film = useLab((s) => s.film)
   const filmInfo = useLab((s) => s.filmInfo)
   const room = useRoom((s) => s.open)
+  useGuideContext('lab', labGuideContext)
   const close = () => useLab.setState({ sheet: null })
   return (
     <div
@@ -96,6 +100,7 @@ export function App() {
         {error && <div className="error">Error: {error}</div>}
       </footer>
       {room && <GoldenRoom />}
+      <GuideLayer />
     </div>
   )
 }
