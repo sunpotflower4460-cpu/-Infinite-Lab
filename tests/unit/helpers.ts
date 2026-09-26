@@ -6,7 +6,8 @@ import { computeSqrt2 } from '../../src/math/constants/sqrt2'
 import type { ConstantResult } from '../../src/math/constants/types'
 import { ExperimentRunner, type DigitStart, type ParamValues } from '../../src/experiments/core'
 import { defaultParams } from '../../src/experiments/core/types'
-import { getExperiment } from '../../src/experiments/registry'
+import { resolveExperiment } from '../../src/experiments/registry'
+import type { PlaygroundSources } from '../../src/experiments/playground'
 
 const COMPUTE: Record<string, (p: number) => ConstantResult> = {
   pi: computePi,
@@ -34,8 +35,9 @@ export function makeRunner(
   overrides: ParamValues = {},
   digitStart: DigitStart = 'integer',
   constantId = 'pi',
+  formulas?: PlaygroundSources,
 ): ExperimentRunner {
-  const def = getExperiment(experimentId)
+  const def = resolveExperiment(experimentId, formulas)
   const { digits, integerPartLength } = constantDigits(constantId, precision)
   return new ExperimentRunner(def, {
     digits,

@@ -1,4 +1,5 @@
 import type { DigitStart, ParamValues, StepTrace } from '../experiments/core/types'
+import type { PlaygroundSources } from '../experiments/playground'
 
 // ---- math.worker -----------------------------------------------------------
 
@@ -23,6 +24,8 @@ export type MathResponse =
 export interface SimulationInit {
   experimentId: string
   params: ParamValues
+  /** Formula Playground: the formulas to parse and run (the worker builds the definition). */
+  formulas?: PlaygroundSources
   digitStart: DigitStart
   digits: Uint8Array
   integerPartLength: number

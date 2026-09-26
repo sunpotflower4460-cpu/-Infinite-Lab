@@ -1,4 +1,5 @@
 import type { DigitStart, ParamValues } from '../experiments/core/types'
+import { PLAYGROUND_ID, parseSources, type PlaygroundSources } from '../experiments/playground'
 import { EXPERIMENTS } from '../experiments/registry'
 import { CONSTANTS } from '../math/constants'
 
@@ -18,6 +19,8 @@ export interface LabConfig {
   experiment: string
   digitStart: DigitStart
   parameters: ParamValues
+  /** Formula Playground only: the user's ANGLE / RADIUS / DISTANCE (validated by parsing). */
+  formulas?: PlaygroundSources
 }
 
 /**
@@ -72,5 +75,10 @@ export function parseConfig(input: unknown): LabConfig {
       parameters[p.key] = value
     }
   }
-  return { constant, precision, experiment, digitStart, parameters }
+  if (experiment !== PLAYGROUND_ID) {
+    if (o.formulas !== undefined) throw new Error(`formulas are only used by the Formula Playground`)
+    return { constant, precision, experiment, digitStart, parameters }
+  }
+  const formulas = parseSources(o.formulas ?? {})
+  return { constant, precision, experiment, digitStart, parameters, formulas }
 }

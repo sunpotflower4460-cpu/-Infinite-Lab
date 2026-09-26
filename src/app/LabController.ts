@@ -1,6 +1,18 @@
 import { CONSTANTS } from '../math/constants'
-import { formulaLines, getExperiment } from '../experiments/registry'
-import { defaultParams, type DigitStart, type ParamValue, type StepTrace } from '../experiments/core/types'
+import { formulaLines, getExperiment, resolveExperiment } from '../experiments/registry'
+import {
+  checkSources,
+  DEFAULT_SOURCES,
+  PLAYGROUND_ID,
+  type PlaygroundSources,
+} from '../experiments/playground'
+import {
+  defaultParams,
+  type DigitStart,
+  type ExperimentDefinition,
+  type ParamValue,
+  type StepTrace,
+} from '../experiments/core/types'
 import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
 import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
@@ -135,6 +147,22 @@ export class LabController {
     this.initSimulation()
   }
 
+  /** Formula Playground: run new formulas (all three must parse; the panel keeps drafts). */
+  setFormulas(formulas: PlaygroundSources): void {
+    const errors = checkSources(formulas)
+    const first = Object.values(errors)[0]
+    if (first) throw first
+    this.cancelPending()
+    this.store.setState({ formulas: { ...formulas } })
+    this.initSimulation()
+  }
+
+  /** The definition being run (the Playground's is built from the current formulas). */
+  definition(): ExperimentDefinition {
+    const s = this.store.getState()
+    return resolveExperiment(s.experimentId, s.formulas)
+  }
+
   setDigitStart(digitStart: DigitStart): void {
     this.cancelPending()
     this.store.setState({ digitStart })
@@ -149,6 +177,7 @@ export class LabController {
       experiment: s.experimentId,
       digitStart: s.digitStart,
       parameters: { ...s.params },
+      ...(s.experimentId === PLAYGROUND_ID ? { formulas: { ...s.formulas } } : {}),
     }
   }
 
@@ -163,6 +192,7 @@ export class LabController {
       experimentId: config.experiment,
       digitStart: config.digitStart,
       params: { ...config.parameters },
+      formulas: config.formulas ?? DEFAULT_SOURCES,
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
     const loaded = this.loaded
@@ -345,6 +375,7 @@ export class LabController {
         if (
           s.experimentId !== prev.experimentId ||
           s.params !== prev.params ||
+          s.formulas !== prev.formulas ||
           s.digitStart !== prev.digitStart ||
           s.precision !== prev.precision
         ) {
@@ -563,7 +594,7 @@ export class LabController {
   /** Build the reproducible JSON record of the current experiment (spec §28). */
   async buildExport(): Promise<ExperimentFile> {
     const s = this.store.getState()
-    const def = getExperiment(s.experimentId)
+    const def = this.definition()
     return {
       format: FILE_FORMAT,
       version: FILE_VERSION,
@@ -636,7 +667,7 @@ export class LabController {
           `${this.fileStem()}.csv`,
         )
       } else {
-        const def = getExperiment(s.experimentId)
+        const def = this.definition()
         const symbol = s.constant?.symbol ?? 'C'
         const desc = [
           `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
@@ -675,7 +706,7 @@ export class LabController {
     this.measurePatterns() // always measure what is shown now (never reuse facts of another run)
     const requestId = ++this.aiRequestId
     const s = this.store.getState()
-    const def = getExperiment(s.experimentId)
+    const def = this.definition()
     this.store.setState({ ai: { status: 'asking' } })
     try {
       const answer = await askObserver(
@@ -745,6 +776,7 @@ export class LabController {
         initId: ++this.initId,
         experimentId: s.experimentId,
         params: s.params,
+        ...(s.experimentId === PLAYGROUND_ID ? { formulas: s.formulas } : {}),
         digitStart: s.digitStart,
         digits,
         integerPartLength: s.constant.integerPartLength,
@@ -815,7 +847,8 @@ export class LabController {
         // Only the ready of the latest init counts (config changes may be queued behind it).
         if (msg.initId !== this.initId || this.store.getState().phase === 'computing') return
         this.resetView()
-        this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps })
+        // a new run replaces a failed one (e.g. corrected Playground formulas)
+        this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps, error: null })
         const pending = this.pending
         this.pending = null
         if (pending?.verify) {

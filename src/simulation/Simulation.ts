@@ -1,6 +1,6 @@
 import { defaultParams, type StepTrace } from '../experiments/core/types'
 import { ExperimentRunner } from '../experiments/core/ExperimentRunner'
-import { getExperiment } from '../experiments/registry'
+import { resolveExperiment } from '../experiments/registry'
 import { GeometryBatchWriter, type GeometryBatch } from '../geometry/batch'
 import type { SimulationInit } from '../workers/protocol'
 
@@ -28,7 +28,7 @@ export class Simulation {
   stepsPerSecond = 10
 
   constructor(init: SimulationInit) {
-    const def = getExperiment(init.experimentId)
+    const def = resolveExperiment(init.experimentId, init.formulas)
     this.runner = new ExperimentRunner(def, {
       digits: init.digits,
       integerPartLength: init.integerPartLength,

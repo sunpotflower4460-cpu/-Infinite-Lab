@@ -76,6 +76,40 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
       parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100 },
     },
   },
+  {
+    id: 'playground-spec',
+    name: 'Playground: spec example',
+    description: 'Formula Playground with ANGLE = digit × π / 5, RADIUS = digit × 2, DISTANCE = 5',
+    config: {
+      constant: 'pi',
+      precision: 10_000,
+      experiment: 'playground',
+      formulas: { angle: 'digit × π / 5', radius: 'digit × 2', distance: '5' },
+    },
+  },
+  {
+    id: 'playground-turning',
+    name: 'Playground: turning walk',
+    description: 'Formula Playground: each digit turns the walker by digit × 36° (angle accumulates)',
+    config: {
+      constant: 'pi',
+      precision: 10_000,
+      experiment: 'playground',
+      formulas: { angle: '(angle_prev + digit × π / 5) mod 2π', radius: 'digit / 2', distance: '3' },
+    },
+  },
+  {
+    id: 'playground-exact-rotation',
+    name: 'Playground: C-radian rotation',
+    description:
+      'Formula Playground: heading (n × C) mod 2π, reduced exactly in BigInt; radius from the digit',
+    config: {
+      constant: 'pi',
+      precision: 10_000,
+      experiment: 'playground',
+      formulas: { angle: '(n × C) mod 2π', radius: 'digit / 3', distance: '4' },
+    },
+  },
 ]
 
 export const PRESETS: Preset[] = RAW.map((p) => ({ ...p, config: parseConfig(p.config) }))

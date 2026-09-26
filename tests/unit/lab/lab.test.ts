@@ -58,6 +58,9 @@ describe('presets', () => {
       'Pi Orbit',
       'Pi Spiral',
       'Pi Two-Arm (reference candidate)',
+      'Playground: spec example',
+      'Playground: turning walk',
+      'Playground: C-radian rotation',
     ])
     for (const p of PRESETS) expect(EXPERIMENTS[p.config.experiment]).toBeDefined()
   })
@@ -174,7 +177,37 @@ describe('file format versions', () => {
     )
     expect(v2.compatibilityNote).toBeUndefined()
     expect(() =>
-      parseImport(JSON.stringify({ ...base, version: 3, config: { experiment: 'pi-rotation' } })),
+      parseImport(JSON.stringify({ ...base, version: 4, config: { experiment: 'pi-rotation' } })),
     ).toThrow(/version/)
+  })
+
+  it('v3 carries the Formula Playground formulas, validated by parsing them', () => {
+    const formulas = { angle: '(angle_prev + digit × π / 5) mod 2π', radius: 'digit / 2', distance: '3' }
+    const v3 = parseImport(
+      JSON.stringify({ ...base, version: 3, config: { experiment: 'playground', formulas } }),
+    )
+    expect(v3.config.formulas).toEqual(formulas)
+    // missing formulas take the spec's example; other experiments have none
+    expect(parseConfig({ experiment: 'playground' }).formulas).toEqual({
+      angle: 'digit × π / 5',
+      radius: 'digit × 2',
+      distance: '5',
+    })
+    expect(parseConfig({ experiment: 'pi-rotation' }).formulas).toBeUndefined()
+    expect(() => parseConfig({ experiment: 'pi-rotation', formulas })).toThrow(
+      /only used by the Formula Playground/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 'digit ×' } })).toThrow(
+      /formula ANGLE: formula ends too early/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 'n × C' } })).toThrow(
+      /C can only/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { colour: 'red' } })).toThrow(
+      /unknown formula/,
+    )
+    expect(() => parseConfig({ experiment: 'playground', formulas: { angle: 5 } })).toThrow(
+      /must be a string/,
+    )
   })
 })

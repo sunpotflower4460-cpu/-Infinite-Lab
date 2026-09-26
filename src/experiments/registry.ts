@@ -3,6 +3,7 @@ import { renderFormula, withConstantSymbol, type SymbolTable } from './core/form
 import type { ExperimentDefinition } from './core/types'
 import { digitCircleWalk } from './digit-circle-walk'
 import { piRotation } from './pi-rotation'
+import { makePlaygroundDefinition, playground, PLAYGROUND_ID, type PlaygroundSources } from './playground'
 import { twoArm } from './two-arm'
 
 /** Available experiments, in display order. */
@@ -11,11 +12,25 @@ export const EXPERIMENTS: Record<string, ExperimentDefinition> = {
   [circleChain.id]: circleChain,
   [piRotation.id]: piRotation,
   [twoArm.id]: twoArm,
+  [playground.id]: playground,
 }
 
 export function getExperiment(id: string): ExperimentDefinition {
   if (!Object.hasOwn(EXPERIMENTS, id)) throw new Error(`Unknown experiment "${id}"`)
   return EXPERIMENTS[id]!
+}
+
+let cachedPlayground: { key: string; def: ExperimentDefinition } | null = null
+
+/**
+ * The definition that is actually run: the registry entry, or for the Formula Playground the
+ * one built from the user's formulas (throws if they do not parse).
+ */
+export function resolveExperiment(id: string, formulas?: PlaygroundSources): ExperimentDefinition {
+  if (id !== PLAYGROUND_ID || !formulas) return getExperiment(id)
+  const key = JSON.stringify([formulas.angle, formulas.radius, formulas.distance])
+  if (cachedPlayground?.key !== key) cachedPlayground = { key, def: makePlaygroundDefinition(formulas) }
+  return cachedPlayground.def
 }
 
 /** Description with the constant's symbol substituted for "{C}". */

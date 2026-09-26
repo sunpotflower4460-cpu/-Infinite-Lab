@@ -50,7 +50,17 @@ export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
     }
     case 'call': {
       const a = evaluate(e.arg, env, ctx)
-      return e.fn === 'sin' ? detSin(a) : detCos(a)
+      switch (e.fn) {
+        case 'sin':
+          return detSin(a)
+        case 'cos':
+          return detCos(a)
+        case 'abs':
+          return Math.abs(a)
+        case 'sqrt':
+          return Math.sqrt(a) // correctly rounded (IEEE-754), identical on every engine
+      }
+      throw new Error(`unknown function ${String(e.fn)}`)
     }
     case 'bin': {
       const l = evaluate(e.left, env, ctx)
