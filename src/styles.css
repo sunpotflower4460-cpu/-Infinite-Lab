@@ -1192,3 +1192,240 @@ input:not([type]) {
   font-size: 11px;
   pointer-events: none;
 }
+
+/* ---- the φ and π room (#golden) --------------------------------------------------- */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+}
+.room-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 20px 8px;
+  background: linear-gradient(var(--bg) 85%, transparent);
+}
+.room-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.room-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.room-close {
+  flex-shrink: 0;
+}
+.room-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 0 20px 8px;
+  font-size: 12px;
+}
+.room-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.room-nav a:hover {
+  color: var(--accent);
+}
+.room-body {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 8px 20px 48px;
+}
+.room-sec {
+  padding: 22px 0 26px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 90px;
+}
+.room-sec h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.room-n {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 12px;
+}
+.room-lead {
+  margin: 0 0 14px;
+  color: var(--text);
+  opacity: 0.85;
+  font-size: 14px;
+}
+.room-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.room-text p {
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+.room-svg {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.room-chart {
+  max-width: 460px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-top: 10px;
+}
+.room-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.room-kam {
+  aspect-ratio: 1;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.room-tori {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.room-tori figure {
+  margin: 0;
+}
+.room-flat {
+  aspect-ratio: 1;
+}
+.room-tori figcaption {
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.room-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+.room-table th,
+.room-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-weight: normal;
+}
+.room-table thead th {
+  color: var(--muted);
+}
+.room-table caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 2px;
+}
+.room-long {
+  overflow-wrap: anywhere;
+}
+.room-big {
+  font-size: 14px;
+}
+.room-tables {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+.room-cf td,
+.room-cf th {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+.room-hit td {
+  color: #ff8a65;
+}
+.room-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1.6;
+  vertical-align: 1px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.room-tag-測定 {
+  border-color: #6fd3b8;
+  color: #6fd3b8;
+}
+.room-tag-文献 {
+  border-color: #b78cff;
+  color: #b78cff;
+}
+.room-slider {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.room-slider input {
+  width: 100%;
+}
+.room-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.room-buttons button {
+  font-size: 11px;
+}
+.room-link {
+  font-size: 12px;
+}
+.room-foot {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .room-grid,
+  .room-tables {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .room-head {
+    position: static; /* on phones the heading scrolls away; only ✕ stays */
+    padding: 10px 56px 6px 14px;
+  }
+  .room-close {
+    position: fixed;
+    top: 10px;
+    right: 12px;
+    z-index: 3;
+  }
+  .room-nav,
+  .room-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
