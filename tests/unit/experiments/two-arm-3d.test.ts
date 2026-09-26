@@ -7,6 +7,7 @@ import { CSV_HEADER_3D, geometryCsv } from '../../../src/lab/exporters'
 import { detCos, detSin } from '../../../src/math/detmath'
 import { binaryConstantFor, productModTau } from '../../../src/math/exactReduce'
 import { computePi } from '../../../src/math/constants/pi'
+import { getExperiment } from '../../../src/experiments/registry'
 import { makeRunner } from '../helpers'
 
 const pi = binaryConstantFor('pi', computePi)
@@ -191,5 +192,29 @@ describe('3D geometry records', () => {
     const a = await geometryDigest(storeOf('two-arm-height', 800), Infinity)
     const b = await geometryDigest(storeOf('two-arm-height', 800), Infinity)
     expect(a).toBe(b)
+  })
+})
+
+describe('extent (framed from step 1)', () => {
+  it('every point of the Two-Arm family lies inside the declared extent', () => {
+    const params = { dt: 0.05, r1: 1.3, r2: 1, scale: 100, rise: 0.01 }
+    for (const id of ['two-arm', 'two-arm-torus', 'two-arm-ball']) {
+      const def = getExperiment(id)
+      const e = def.extent!(params)
+      const store = storeOf(id, 1500, params)
+      store.forEachRecord(store.count, (d, o) => {
+        const [x, y] = d[o] === 2 ? [d[o + 4]!, d[o + 5]!] : [d[o + 2]!, d[o + 3]!] // line end / point
+        const z = d[o] === 0 ? d[o + 4]! : 0
+        expect(x).toBeGreaterThanOrEqual(e.minX - 1e-9)
+        expect(x).toBeLessThanOrEqual(e.maxX + 1e-9)
+        expect(y).toBeGreaterThanOrEqual(e.minY - 1e-9)
+        expect(y).toBeLessThanOrEqual(e.maxY + 1e-9)
+        expect(z).toBeGreaterThanOrEqual(e.minZ - 1e-9)
+        expect(z).toBeLessThanOrEqual(e.maxZ + 1e-9)
+      })
+    }
+    const flat = getExperiment('two-arm').extent!(params)
+    expect(flat.maxX).toBeCloseTo(230, 10) // disk of radius scale × (r1 + r2)
+    expect([flat.minZ, flat.maxZ]).toEqual([0, 0])
   })
 })

@@ -32,7 +32,9 @@ export function LabCanvas({
   const microscope = useStore(controller.store, (s) => s.microscope)
   const experimentId = useStore(controller.store, (s) => s.experimentId)
   const is3d = EXPERIMENTS[experimentId]?.view === '3d'
-  const views = TWO_ARM_VIEWS.some((v) => v.id === experimentId) && !film ? TWO_ARM_VIEWS : null
+  // always offered (not only after the Film has switched to Two-Arm): a click starts that view
+  const inFamily = TWO_ARM_VIEWS.some((v) => v.id === experimentId)
+  const views = film ? null : TWO_ARM_VIEWS
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
@@ -60,18 +62,20 @@ export function LabCanvas({
                 </button>
               ))}
             </div>
-            <button
-              className={`view-compare ${compareConstant === COMPARE_RATIONAL ? 'active' : ''}`}
-              aria-pressed={compareConstant === COMPARE_RATIONAL}
-              onClick={() =>
-                compareConstant === COMPARE_RATIONAL
-                  ? controller.disableCompare()
-                  : controller.enableCompare(COMPARE_RATIONAL)
-              }
-              title="Run the same machine with the speed ratio 22/7 next to it: the fraction closes, the constant never does"
-            >
-              vs 22/7
-            </button>
+            {inFamily && (
+              <button
+                className={`view-compare ${compareConstant === COMPARE_RATIONAL ? 'active' : ''}`}
+                aria-pressed={compareConstant === COMPARE_RATIONAL}
+                onClick={() =>
+                  compareConstant === COMPARE_RATIONAL
+                    ? controller.disableCompare()
+                    : controller.enableCompare(COMPARE_RATIONAL)
+                }
+                title="Run the same machine with the speed ratio 22/7 next to it: the fraction closes, the constant never does"
+              >
+                vs 22/7
+              </button>
+            )}
           </>
         )}
         <button

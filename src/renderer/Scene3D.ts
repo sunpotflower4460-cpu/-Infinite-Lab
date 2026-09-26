@@ -18,6 +18,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { KIND } from '../geometry/batch'
 import type { GeometryStore } from '../geometry/GeometryStore'
 import type { GeometryInstruction } from '../geometry/types'
+import type { Extent } from '../experiments/core/types'
 import { COLORS, LOOKS, type Look } from './layers/GeometryLayer'
 
 /** What the 3D view reads each frame (the lab's state; the view never changes the data). */
@@ -32,12 +33,16 @@ export interface Scene3DSource {
   /** Guide at the marked step (e.g. the machine's arms): points joined in order; never data. */
   guide(): GeometryInstruction[] | null
   look(): Look
+  /** Region the rule can reach (framed from the first step), or null. */
+  extent(): Extent | null
   follow(): boolean
   onUserCamera(): void
   onPick(step: number | null): void
 }
 
 const FIT_INTERVAL_MS = 200
+/** Fraction of the remaining way the camera moves per frame while following (smooth, no jumps). */
+const FOLLOW_EASE = 0.15
 const PICK_TOLERANCE_PX = 10
 
 /**
@@ -50,7 +55,7 @@ export class Scene3D {
   private readonly scene = new Scene()
   private readonly camera = new PerspectiveCamera(40, 1, 0.1, 1e7)
   private readonly controls: OrbitControls
-  private positions = new Float32Array(3 * 4096)
+  private positions = new Float32Array(3 * 131_072)
   private attribute = new BufferAttribute(this.positions, 3)
   private readonly shown = new BufferGeometry()
   private readonly context = new BufferGeometry()
@@ -70,6 +75,10 @@ export class Scene3D {
   private lastState = ''
   private lastRange = ''
   private autoRotate = false
+  /** Camera goal while following: eased towards each frame instead of jumping. */
+  private goal: { target: Vector3; position: Vector3 } | null = null
+  /** Video recording: records [from, to) drawn regardless of the lab's Timeline. */
+  private recording: { from: number; to: number; look: Look } | null = null
   private readonly resizeObserver: ResizeObserver
   private readonly canvas: HTMLCanvasElement
 
@@ -87,6 +96,7 @@ export class Scene3D {
     this.camera.position.set(3, -4, 2.5)
     this.controls = new OrbitControls(this.camera, this.canvas)
     this.controls.addEventListener('start', () => {
+      this.goal = null
       this.source.onUserCamera()
       this.dirty = true
     })
@@ -123,21 +133,107 @@ export class Scene3D {
     this.loop()
   }
 
-  /** Frame everything shown and follow it as it grows (until the user moves the camera). */
-  fit(): void {
+  /**
+   * Frame everything shown (and the region the rule can reach). `smooth`: ease the camera there
+   * over the next frames (following growing geometry) instead of jumping.
+   */
+  fit(smooth = false): void {
     const [from, to] = this.shownRange()
-    const box = from === 0 ? { min: this.min, max: this.max } : this.boundsOf(from, to)
+    const box = from === 0 ? { min: this.min.clone(), max: this.max.clone() } : this.boundsOf(from, to)
+    const extent = from === 0 && !this.recording ? this.source.extent() : null
+    if (extent) {
+      box.min.min(new Vector3(extent.minX, extent.minY, extent.minZ))
+      box.max.max(new Vector3(extent.maxX, extent.maxY, extent.maxZ))
+    }
     if (!Number.isFinite(box.min.x)) return
     const centre = box.min.clone().add(box.max).multiplyScalar(0.5)
-    const radius = Math.max(box.max.clone().sub(box.min).length() / 2, 1e-6)
+    // bounding sphere about the box centre: the farthest shown point (sampled when there are
+    // very many), at least the reachable region's half-size — not the box's half-diagonal,
+    // which would leave a ball or a torus small in the frame
+    let r2 = 0
+    const p = this.positions
+    const stride = Math.max(1, Math.ceil((to - from) / 200_000))
+    for (let i = from; i < to; i += stride) {
+      const dx = p[3 * i]! - centre.x
+      const dy = p[3 * i + 1]! - centre.y
+      const dz = p[3 * i + 2]! - centre.z
+      r2 = Math.max(r2, dx * dx + dy * dy + dz * dz)
+    }
+    const half = box.max.clone().sub(box.min).multiplyScalar(0.5)
+    const reach = extent ? Math.max(half.x, half.y, half.z) : 0
+    const radius = Math.max(Math.sqrt(r2) * (stride > 1 ? 1.02 : 1), reach, 1e-6)
     const dir = this.camera.position.clone().sub(this.controls.target)
     if (dir.lengthSq() === 0) dir.set(3, -4, 2.5)
-    const distance = (radius / Math.sin((this.camera.fov * Math.PI) / 360)) * 1.05
-    this.controls.target.copy(centre)
-    this.camera.position.copy(centre).add(dir.normalize().multiplyScalar(distance))
+    // the narrower of the vertical and horizontal field of view (portrait phones: horizontal)
+    const halfV = (this.camera.fov * Math.PI) / 360
+    const halfFov = Math.min(halfV, Math.atan(Math.tan(halfV) * this.camera.aspect))
+    const distance = (radius / Math.sin(halfFov)) * 1.15
+    const position = centre.clone().add(dir.normalize().multiplyScalar(distance))
     this.camera.near = distance / 1000
     this.camera.far = distance * 10 + radius
     this.camera.updateProjectionMatrix()
+    if (smooth) {
+      this.goal = { target: centre, position }
+    } else {
+      this.goal = null
+      this.controls.target.copy(centre)
+      this.camera.position.copy(position)
+      this.controls.update()
+    }
+    this.dirty = true
+  }
+
+  private easeCamera(): void {
+    if (!this.goal) return
+    const { target, position } = this.goal
+    this.controls.target.lerp(target, FOLLOW_EASE)
+    this.camera.position.lerp(position, FOLLOW_EASE)
+    if (this.camera.position.distanceTo(position) < 1e-3 * position.distanceTo(target)) {
+      this.controls.target.copy(target)
+      this.camera.position.copy(position)
+      this.goal = null
+    }
+    this.controls.update()
+    this.dirty = true
+  }
+
+  // ---- video ---------------------------------------------------------------------
+
+  /**
+   * Start recording steps [fromStep, toStep]: frame that range once (the camera then stays
+   * still, or turns if ⟳ Rotate is on) and return the canvas each frame is drawn on.
+   */
+  beginRecording(fromStep: number, toStep: number, look: Look): HTMLCanvasElement {
+    this.sync()
+    const store = this.source.store
+    this.recording = { from: store.firstIndexOfStep(fromStep), to: store.countUpToStep(toStep), look }
+    this.goal = null
+    this.fit()
+    return this.canvas
+  }
+
+  /** Draw the frame showing steps up to `step` (deterministic: same step → same geometry). */
+  renderRecordingStep(step: number, frame: number): HTMLCanvasElement {
+    const r = this.recording!
+    const to = Math.min(this.source.store.countUpToStep(step), this.uploaded)
+    this.applyState(r.from, to, 'hide', step, r.look)
+    this.applyGuide(null)
+    this.marker.visible = false
+    if (this.autoRotate) {
+      // a fixed turn per frame (≈ 2 rpm at 30 fps), independent of how fast frames are encoded
+      const offset = this.camera.position.clone().sub(this.controls.target)
+      offset.applyAxisAngle(new Vector3(0, 0, 1), frame === 0 ? 0 : (2 * Math.PI) / 900)
+      this.camera.position.copy(this.controls.target).add(offset)
+      this.camera.lookAt(this.controls.target)
+    }
+    this.render()
+    return this.canvas
+  }
+
+  endRecording(): void {
+    this.recording = null
+    this.lastState = ''
+    this.lastGuide = null
     this.controls.update()
     this.dirty = true
   }
@@ -169,6 +265,7 @@ export class Scene3D {
 
   private loop = (): void => {
     this.frameId = requestAnimationFrame(this.loop)
+    if (this.recording) return // frames are drawn by renderRecordingStep
     const grew = this.sync()
     const [from, to] = this.shownRange()
     const range = this.source.range()
@@ -191,9 +288,11 @@ export class Scene3D {
     }
     const now = performance.now()
     if (this.source.follow() && (grew || this.lastFit === 0) && now - this.lastFit > FIT_INTERVAL_MS) {
+      const first = this.lastFit === 0
       this.lastFit = now
-      this.fit()
+      this.fit(!first)
     }
+    this.easeCamera()
     if (this.autoRotate) this.controls.update()
     if (this.dirty) this.render()
   }

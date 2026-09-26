@@ -1170,3 +1170,9 @@ input:not([type]) {
 .view-switch button + button {
   margin-left: -1px;
 }
+/* the active (or hovered) segment is drawn above its neighbours so its whole border shows */
+.view-switch button:hover,
+.view-switch button.active {
+  position: relative;
+  z-index: 1;
+}

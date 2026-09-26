@@ -1,5 +1,6 @@
 import { point, type GeometryInstruction } from '../../geometry/types'
 import { detCos, detSin } from '../../math/detmath'
+import { disk } from '../two-arm'
 import { paramsToEnv, runFormulas, traceSymbols } from '../core/Experiment'
 import { add, assign, cos, modTau, mul, sin, v, type FormulaSet } from '../core/formula'
 import type {
@@ -217,6 +218,11 @@ export const twoArmTorus: ExperimentDefinition = {
   ],
   formulas: torusFormulas,
   symbols,
+  extent: (p) => ({
+    ...disk(p.scale! * (Math.abs(p.r1!) + Math.abs(p.r2!))),
+    minZ: -p.scale! * Math.abs(p.r2!),
+    maxZ: p.scale! * Math.abs(p.r2!),
+  }),
   create: () => new PointPath(torusFormulas, torusArms),
 }
 
@@ -238,6 +244,10 @@ export const twoArmBall: ExperimentDefinition = {
   parameters: [DT, ARM1, ARM2, SCALE, DRAW_ARMS],
   formulas: ballFormulas,
   symbols,
+  extent: (p) => {
+    const r = p.scale! * (Math.abs(p.r1!) + Math.abs(p.r2!))
+    return { ...disk(r), minZ: -r, maxZ: r }
+  },
   create: () => new PointPath(ballFormulas, ballArms),
 }
 
@@ -263,6 +273,8 @@ export const twoArmHeight: ExperimentDefinition = {
   ],
   formulas: heightFormulas,
   symbols,
+  // the height grows without bound: frame the disk, the view follows upwards
+  extent: (p) => disk(p.scale! * (Math.abs(p.r1!) + Math.abs(p.r2!))),
   create: () => new PointPath(heightFormulas),
 }
 

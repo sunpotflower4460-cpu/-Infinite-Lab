@@ -129,9 +129,12 @@ export class PixiRenderer implements Renderer {
     this.needsRender = true
   }
 
+  /** Region the running rule can reach, framed from the first step (null = unknown). */
+  extent: Bounds | null = null
+
   fitAll(): void {
     this.framed = null
-    const b = this.store.bounds
+    const b = union(this.store.bounds, this.extent)
     if (!b) {
       this.camera.centerOn(0, 0)
     } else {
@@ -286,7 +289,21 @@ export class PixiRenderer implements Renderer {
     }
   }
 
+  /**
+   * While another view (the 3D view) covers this canvas, skip building and drawing entirely;
+   * the store keeps receiving geometry and everything is rebuilt when drawing resumes.
+   */
+  get suspended(): boolean {
+    return this.isSuspended
+  }
+  set suspended(on: boolean) {
+    if (!on && this.isSuspended) this.needsFullRebuild = true
+    this.isSuspended = on
+  }
+  private isSuspended = false
+
   private frame(): void {
+    if (this.isSuspended) return
     const full = this.needsFullRebuild
     this.needsFullRebuild = false
     if (full) this.rebuildView()
@@ -523,5 +540,16 @@ export class PixiRenderer implements Renderer {
       canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('dblclick', onDbl)
     })
+  }
+}
+
+function union(a: Bounds | null, b: Bounds | null): Bounds | null {
+  if (!a) return b && { ...b }
+  if (!b) return { ...a }
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
   }
 }

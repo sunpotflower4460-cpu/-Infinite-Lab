@@ -32,16 +32,19 @@ export function Stage3D({ controller }: { controller: LabController }) {
             return (s.inspected ?? s.currentTrace)?.overlay ?? null
           },
           look: () => store.getState().look,
+          extent: () => controller.extent(),
           follow: () => store.getState().follow,
           onUserCamera: () => store.setState({ follow: false }),
           onPick: (step) => controller.pickStep(step),
         })
         controller.view3d = scene.current
+        controller.renderer.suspended = true // the 2D canvas underneath is covered: do not draw it
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
     return () => {
       cancelled = true
       if (controller.view3d === scene.current) controller.view3d = null
+      controller.renderer.suspended = false
       scene.current?.destroy()
       scene.current = null
     }

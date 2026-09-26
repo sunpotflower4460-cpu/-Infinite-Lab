@@ -31,20 +31,20 @@ export function VideoExport() {
     <div className="video-export">
       <button
         onClick={() => setOpen(!open)}
-        disabled={!supported || is3d}
-        className={open && !is3d ? 'active' : ''}
+        disabled={!supported}
+        className={open ? 'active' : ''}
         title={
-          is3d
-            ? 'Video export is not available in the 3D view yet (PNG, SVG, CSV and JSON are)'
-            : supported
-              ? 'Record the drawing as a video'
-              : 'This browser has no WebCodecs video encoder'
+          !supported
+            ? 'This browser has no WebCodecs video encoder'
+            : is3d
+              ? 'Record the drawing in the 3D view as a video (turning if ⟳ Rotate is on)'
+              : 'Record the drawing as a video'
         }
         aria-expanded={open}
       >
         Video
       </button>
-      {open && !is3d && (
+      {open && (
         <div className="video-panel" data-testid="video-panel" role="dialog" aria-label="Video export">
           <div className="muted small">
             Steps {formatInt(microscope?.from ?? 1)}–{formatInt(microscope?.to ?? upTo)}
