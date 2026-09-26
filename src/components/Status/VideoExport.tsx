@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { getController } from '../../app/LabController'
 import { webCodecsAvailable, type VideoFormat, type VideoPace } from '../../lab/video'
 import { useLab } from '../../state/labStore'
@@ -18,16 +18,22 @@ export function VideoExport() {
   const microscope = useLab((s) => s.microscope)
   const upTo = useLab((s) => s.viewStep ?? s.currentStep)
   const [open, setOpen] = useState(false)
+  // the panel belongs to the lab's top bar: close it when the film or a bottom sheet takes over
+  const covered = useLab((s) => s.film || s.sheet !== null)
+  if (open && covered) setOpen(false)
   const [format, setFormat] = useState<VideoFormat>(DEFAULT_FORMAT)
   const [seconds, setSeconds] = useState(10)
   const [pace, setPace] = useState<VideoPace>('linear')
   const [glow, setGlow] = useState(false)
   const supported = webCodecsAvailable()
   const recording = video.status === 'recording'
+  const button = useRef<HTMLButtonElement>(null)
+  const place = usePanelPlacement(open, button)
 
   return (
     <div className="video-export">
       <button
+        ref={button}
         onClick={() => setOpen(!open)}
         disabled={!supported}
         className={open ? 'active' : ''}
@@ -37,7 +43,13 @@ export function VideoExport() {
         Video
       </button>
       {open && (
-        <div className="video-panel" data-testid="video-panel" role="dialog" aria-label="Video export">
+        <div
+          className="video-panel"
+          style={place}
+          data-testid="video-panel"
+          role="dialog"
+          aria-label="Video export"
+        >
           <div className="muted small">
             Steps {formatInt(microscope?.from ?? 1)}–{formatInt(microscope?.to ?? upTo)}
             {microscope ? ' (Microscope range)' : ''}
@@ -127,4 +139,43 @@ export function VideoStatus() {
       </span>
     )
   return null
+}
+
+const PANEL_WIDTH = 260
+
+/**
+ * Where the panel goes: fixed to the viewport just below the Video button, right-aligned with
+ * it and kept on screen. (Absolutely positioned inside the top bar it was clipped whenever the
+ * bar scrolls horizontally — narrow windows and phones.)
+ */
+function usePanelPlacement(open: boolean, button: React.RefObject<HTMLButtonElement | null>): CSSProperties {
+  const [place, setPlace] = useState<CSSProperties>({})
+  useLayoutEffect(() => {
+    if (!open) return
+    const update = () => {
+      const r = button.current?.getBoundingClientRect()
+      if (!r || r.width === 0) return // hidden (e.g. the top bar during the film): keep the last place
+      const vw = document.documentElement.clientWidth
+      const vh = document.documentElement.clientHeight
+      const top = r.bottom + 6
+      const width = Math.min(PANEL_WIDTH, vw - 16)
+      // right-aligned with the button, but never past either edge of the screen
+      const left = Math.min(Math.max(8, r.right - width), vw - width - 8)
+      setPlace({ top, left, width, maxHeight: Math.max(120, vh - top - 8) })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true) // the top bar scrolls sideways on phones
+    // the button also moves when its neighbours change width (e.g. the verification badge)
+    const bar = button.current?.parentElement?.parentElement
+    const observer = typeof ResizeObserver === 'undefined' || !bar ? null : new ResizeObserver(update)
+    if (bar) observer?.observe(bar)
+    for (const el of bar?.children ?? []) observer?.observe(el)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+      observer?.disconnect()
+    }
+  }, [open, button])
+  return place
 }
