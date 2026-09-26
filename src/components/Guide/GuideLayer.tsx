@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { collectState, placeOf, textInRect, type Rect } from '../../guide/context'
-import { PROVIDERS } from '../../guide/providers'
+import {
+  CLASS_LABEL,
+  MODELS,
+  modelInfo,
+  notReady,
+  endpointFor,
+  typicalYen,
+  yen,
+  type ModelClass,
+} from '../../guide/providers'
 import { guide, useGuide } from '../../guide/store'
 import { GuideSettingsView } from './GuideSettings'
 
@@ -139,9 +148,15 @@ function GuidePanel() {
   const { attachment, messages, busy, error, settings, settingsOpen, capturing } = useGuide()
   const [draft, setDraft] = useState('')
   const end = useRef<HTMLDivElement>(null)
-  const normal = settings.tiers.normal
-  const deep = settings.tiers.deep
-  const lastIsAnswer = messages.at(-1)?.role === 'assistant'
+  const light = settings.choice.light
+  const lastAnswer = messages.at(-1)?.role === 'assistant' ? messages.at(-1) : undefined
+  // classes above every class that has already answered the latest question
+  const answered = new Set<ModelClass>()
+  for (let i = messages.length - 1; i >= 0 && messages[i]!.role === 'assistant'; i--)
+    answered.add(messages[i]!.by!.cls)
+  const order: ModelClass[] = ['light', 'standard', 'deep']
+  const top = Math.max(...[...answered].map((c) => order.indexOf(c)))
+  const higher = lastAnswer ? order.filter((_, i) => i > top) : []
 
   useEffect(() => {
     // braces: newer browsers return a promise from scrollIntoView, which React must not see
@@ -195,8 +210,8 @@ function GuidePanel() {
                 <details>
                   <summary>AI に渡す内容を見る</summary>
                   <p className="guide-small">
-                    画像（{PROVIDERS[normal].label}）：
-                    {settings.providers[normal].vision ? '送る' : '送らない（文字だけ）'}
+                    画像（{modelInfo(light).label}）：
+                    {settings.models[light]?.vision ? '送る' : '送らない（文字だけ）'}
                   </p>
                   {attachment.text.length > 0 && (
                     <pre className="guide-pre">{attachment.text.join('\n')}</pre>
@@ -228,21 +243,28 @@ function GuidePanel() {
                 {m.role === 'assistant' ? <Rich text={m.text} /> : m.text}
                 {m.by && (
                   <div className="guide-by">
-                    {m.by.tier === 'deep' ? 'じっくり' : 'ふつう'}・{PROVIDERS[m.by.provider].label}（
-                    {m.by.model}）{attachment?.image && !m.by.sentImage ? '・画像なし' : ''}
+                    {CLASS_LABEL[m.by.cls]}・{modelInfo(m.by.modelId).label}
+                    {m.by.usd !== null ? `・${yen(m.by.usd)}` : ''}
+                    {attachment?.image && !m.by.sentImage ? '・画像なし' : ''}
                   </div>
                 )}
               </div>
             ))}
             {busy && (
               <div className="guide-msg guide-assistant guide-thinking" data-testid="guide-busy">
-                {busy === 'deep' ? `${PROVIDERS[deep].label} がじっくり考えています…` : '考えています…'}
+                {CLASS_LABEL[busy]}（{modelInfo(settings.choice[busy]).label}）が考えています…
               </div>
             )}
-            {lastIsAnswer && !busy && messages.at(-1)?.by?.tier !== 'deep' && (
-              <button className="guide-deeper" onClick={() => void guide.deeper()}>
-                もっと詳しく：{PROVIDERS[deep].label} でじっくり聞き直す
-              </button>
+            {!busy && higher.length > 0 && (
+              <div className="guide-again">
+                <span className="guide-small">足りないときは：</span>
+                {higher.map((c) => (
+                  <button key={c} className={`guide-again-${c}`} onClick={() => void guide.askAgain(c)}>
+                    {CLASS_LABEL[c]}で聞き直す（{modelInfo(settings.choice[c]).label}・
+                    {typicalYen(settings.choice[c])}）
+                  </button>
+                ))}
+              </div>
             )}
             <div ref={end} />
           </div>
@@ -253,6 +275,22 @@ function GuidePanel() {
             </p>
           )}
 
+          <div className="guide-light">
+            <label className="guide-small">
+              まず答える AI（下）
+              <select
+                value={light}
+                onChange={(e) => guide.choose('light', e.target.value)}
+                aria-label="まず答える AI"
+              >
+                {MODELS.filter((m) => m.class === 'light').map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}（{typicalYen(m.id)}）{notReady(endpointFor(settings, m.id)) ? '・キーなし' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="guide-quick">
             {QUICK.map((q) => (
               <button key={q} onClick={() => send(q)} disabled={!!busy}>
@@ -285,7 +323,7 @@ function GuidePanel() {
             </button>
           </form>
           <p className="guide-small guide-foot">
-            ふつう：{PROVIDERS[normal].label}、じっくり：{PROVIDERS[deep].label}。AI
+            料金は各社の定価と、AI が報告したトークン数からの目安です（1 ドル 150 円で換算）。AI
             の答えは推測を含みます。アプリの計算値と見比べてください。
           </p>
         </div>

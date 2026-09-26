@@ -2,18 +2,19 @@ import { create } from 'zustand'
 import { askGuide, GuideError, type Attachment, type Turn } from './ask'
 import { collectState } from './context'
 import {
+  costOf,
+  endpointFor,
   loadSettings,
+  modelInfo,
   notReady,
-  PROVIDERS,
   saveSettings,
   type GuideSettings,
-  type ProviderId,
-  type Tier,
+  type ModelClass,
 } from './providers'
 
 export interface Message extends Turn {
-  /** assistant: who answered */
-  by?: { provider: ProviderId; model: string; tier: Tier; sentImage: boolean }
+  /** assistant: who answered, and what it cost (US$, list price; null if not reported) */
+  by?: { modelId: string; model: string; cls: ModelClass; sentImage: boolean; usd: number | null }
 }
 
 interface GuideState {
@@ -25,7 +26,8 @@ interface GuideState {
   capturing: boolean
   attachment: Attachment | null
   messages: Message[]
-  busy: Tier | null
+  /** the class answering right now */
+  busy: ModelClass | null
   error: string | null
   settings: GuideSettings
 }
@@ -74,21 +76,27 @@ export const guide = {
     saveSettings(next)
     useGuide.setState({ settings: next })
   },
+  /** Pick the model a class uses (the panel's quick switch for 下). */
+  choose(cls: ModelClass, modelId: string) {
+    const s = useGuide.getState().settings
+    if (modelInfo(modelId).class !== cls) return
+    guide.updateSettings({ ...s, choice: { ...s.choice, [cls]: modelId } })
+  },
 
-  /** Ask a question in the "ふつう" tier. */
+  /** A new question: answered in 下 (light) first. */
   ask(question: string) {
-    return run(question.trim(), 'normal', null)
+    return run(question.trim(), 'light', null)
   },
 
   /**
-   * Ask the latest question again in the "じっくり" tier (e.g. Claude). The earlier answer stays
-   * on screen; the deeper one is added below it, so the two can be compared.
+   * Ask the latest question again one class up (中 or 上). The earlier answers stay on screen;
+   * the new one is added below them, so they can be compared.
    */
-  deeper() {
+  askAgain(cls: ModelClass) {
     const s = useGuide.getState()
     const idx = s.messages.map((m) => m.role).lastIndexOf('user')
     if (idx < 0) return Promise.resolve()
-    return run(s.messages[idx]!.text, 'deep', idx)
+    return run(s.messages[idx]!.text, cls, idx)
   },
 }
 
@@ -96,12 +104,11 @@ export const guide = {
  * `reask`: index of an already shown question to answer again (its earlier turns are the
  * history); null: a new question, added to the conversation.
  */
-async function run(q: string, tier: Tier, reask: number | null) {
+async function run(q: string, cls: ModelClass, reask: number | null) {
   const s = useGuide.getState()
   if (!q || s.busy) return
-  const provider = s.settings.tiers[tier]
-  const settings = s.settings.providers[provider]
-  const missing = notReady(settings, PROVIDERS[provider])
+  const endpoint = endpointFor(s.settings, s.settings.choice[cls])
+  const missing = notReady(endpoint)
   if (missing) {
     useGuide.setState({ error: `${missing}。⚙ 設定から入力してください。`, settingsOpen: true })
     return
@@ -112,11 +119,10 @@ async function run(q: string, tier: Tier, reask: number | null) {
   const controller = new AbortController()
   abort = controller
   if (reask === null) useGuide.setState({ messages: [...s.messages, { role: 'user', text: q }] })
-  useGuide.setState({ busy: tier, error: null })
+  useGuide.setState({ busy: cls, error: null })
   try {
     const a = await askGuide({
-      provider,
-      settings,
+      endpoint,
       // nothing circled: still tell the AI where the viewer is and what the page shows
       attachment: s.attachment ?? { image: null, place: '', text: [], state: collectState() },
       history,
@@ -124,11 +130,15 @@ async function run(q: string, tier: Tier, reask: number | null) {
       signal: controller.signal,
     })
     if (abort !== controller) return
+    const by = {
+      modelId: a.modelId,
+      model: a.model,
+      cls,
+      sentImage: a.sentImage,
+      usd: costOf(a.modelId, a.usage),
+    }
     useGuide.setState((st) => ({
-      messages: [
-        ...st.messages,
-        { role: 'assistant', text: a.text, by: { provider, model: a.model, tier, sentImage: a.sentImage } },
-      ],
+      messages: [...st.messages, { role: 'assistant', text: a.text, by }],
       busy: null,
     }))
   } catch (err) {

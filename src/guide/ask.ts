@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { PROVIDERS, type ProviderId, type ProviderSettings } from './providers'
+import { PROVIDERS, type Endpoint } from './providers'
 
 /** What the viewer circled, gathered by the guide layer. */
 export interface Attachment {
@@ -20,10 +20,18 @@ export interface Turn {
 
 export interface Answer {
   text: string
-  provider: ProviderId
+  /** catalog id (providers.ts MODELS) and the API model name that answered */
+  modelId: string
   model: string
   /** the picture was sent (false: text only, e.g. the model cannot read images) */
   sentImage: boolean
+  /** tokens the provider reported, for the cost shown with the answer */
+  usage: { input: number; output: number } | null
+}
+
+interface Reply {
+  text: string
+  usage: Answer['usage']
 }
 
 export const GUIDE_SYSTEM_PROMPT = [
@@ -66,16 +74,16 @@ export class GuideError extends Error {
  * attachment (and its picture, if the model reads images) goes with the first question.
  */
 export async function askGuide(o: {
-  provider: ProviderId
-  settings: ProviderSettings
+  endpoint: Endpoint
   attachment: Attachment | null
   history: Turn[]
   question: string
   signal?: AbortSignal
   fetchImpl?: typeof fetch
 }): Promise<Answer> {
-  const info = PROVIDERS[o.provider]
-  const withImage = !!(o.attachment?.image && o.settings.vision)
+  const e = o.endpoint
+  const info = PROVIDERS[e.provider]
+  const withImage = !!(o.attachment?.image && e.vision)
   const first = o.history.length === 0
   const userText = o.attachment && first ? attachmentText(o.attachment, o.question, withImage) : o.question
   // the attachment text is the first user turn; later turns refer back to it
@@ -85,22 +93,22 @@ export async function askGuide(o: {
       : t,
   )
   const image = withImage && first ? o.attachment!.image! : null
-  const text =
+  const reply =
     info.kind === 'anthropic'
-      ? await askAnthropic(o.settings, earlier, userText, image, o.signal, o.fetchImpl)
-      : await askOpenAiCompatible(o.settings, earlier, userText, image, o.signal, o.fetchImpl)
-  return { text, provider: o.provider, model: o.settings.model, sentImage: withImage }
+      ? await askAnthropic(e, earlier, userText, image, o.signal, o.fetchImpl)
+      : await askOpenAiCompatible(e, earlier, userText, image, o.signal, o.fetchImpl)
+  return { ...reply, modelId: e.modelId, model: e.model, sentImage: withImage }
 }
 
 /** Anthropic Messages API from the browser (the viewer's own key; see providers.ts). */
 async function askAnthropic(
-  s: ProviderSettings,
+  s: Endpoint,
   history: Turn[],
   question: string,
   image: string | null,
   signal?: AbortSignal,
   fetchImpl?: typeof fetch,
-): Promise<string> {
+): Promise<Reply> {
   // the SDK loads when Claude is first asked (it is not needed for the other providers)
   const { default: Anthropic } = await import('@anthropic-ai/sdk')
   const client = new Anthropic({
@@ -149,7 +157,7 @@ async function askAnthropic(
       .join('\n')
       .trim()
     if (!text) throw new GuideError('答えが空でした。', 'format')
-    return text
+    return { text, usage: { input: response.usage.input_tokens, output: response.usage.output_tokens } }
   } catch (err) {
     if (err instanceof GuideError) throw err
     if (err instanceof Anthropic.AuthenticationError)
@@ -166,13 +174,13 @@ async function askAnthropic(
 
 /** OpenAI-compatible chat completions (OpenAI, Qwen, MiniMax, DeepSeek, …). */
 async function askOpenAiCompatible(
-  s: ProviderSettings,
+  s: Endpoint,
   history: Turn[],
   question: string,
   image: string | null,
   signal?: AbortSignal,
   fetchImpl: typeof fetch = fetch,
-): Promise<string> {
+): Promise<Reply> {
   const body = openAiBody(s.model.trim(), history, question, image)
   let res: Response
   try {
@@ -198,13 +206,19 @@ async function askOpenAiCompatible(
   }
   const data = (await res.json().catch(() => null)) as {
     choices?: { message?: { content?: string | { type: string; text?: string }[] } }[]
+    usage?: { prompt_tokens?: number; completion_tokens?: number }
   } | null
   const c = data?.choices?.[0]?.message?.content
   const text = (
     typeof c === 'string' ? c : Array.isArray(c) ? c.map((p) => p.text ?? '').join('') : ''
   ).trim()
   if (!text) throw new GuideError('答えの形式が読み取れませんでした。', 'format')
-  return text
+  const u = data?.usage
+  const usage =
+    typeof u?.prompt_tokens === 'number' && typeof u?.completion_tokens === 'number'
+      ? { input: u.prompt_tokens, output: u.completion_tokens }
+      : null
+  return { text, usage }
 }
 
 export function openAiBody(model: string, history: Turn[], question: string, image: string | null) {
