@@ -96,35 +96,51 @@ describe('Two-Arm 3D: Torus', () => {
   })
 })
 
-describe('Two-Arm 3D: Sphere', () => {
-  it('uses θ₁ as longitude and θ₂ as latitude; every point lies on the sphere', () => {
-    const runner = makeRunner('two-arm-sphere', 1000, { dt: 0.05, radius: 2, scale: 100 })
-    runner.advance(400)
+describe('Two-Arm 3D: Ball', () => {
+  it('is the 2D machine on a table turned by θ₃ = (n × dt × π²) mod 2π about the x axis', () => {
+    const flat = makeRunner('two-arm', 1000, { dt: 0.05, r1: 1, r2: 1, scale: 100 })
+    const ball = makeRunner('two-arm-ball', 1000, { dt: 0.05, r1: 1, r2: 1, scale: 100, drawArms: true })
+    flat.advance(400)
+    ball.advance(400)
     for (const n of [1, 3, 40, 399]) {
-      const t = runner.inspect(n)
-      const th1 = productModTau([n, 0.05], null, pi)
-      const th2 = productModTau([n, 0.05], pi, pi)
-      const rho = 2 * detCos(th2)
-      expect(t.instructions).toEqual([
-        {
-          type: 'point',
-          x: 100 * (rho * detCos(th1)),
-          y: 100 * (rho * detSin(th1)),
-          z: 100 * (2 * detSin(th2)),
-        },
-      ])
-      const g = t.instructions[0]!
-      if (g.type === 'point') expect(Math.hypot(g.x, g.y, g.z!)).toBeCloseTo(200, 9)
+      const a = flat.inspect(n)
+      const b = ball.inspect(n)
+      expect(b.env.theta1).toBe(a.env.theta1)
+      expect(b.env.theta2).toBe(a.env.theta2)
+      const th3 = productModTau([n, 0.05], pi, pi, 2)
+      expect(b.env.theta3).toBe(th3)
+      // independent check of the exact reduction (float64 accuracy is enough at small n)
+      const approx = (n * 0.05 * Math.PI * Math.PI) % (2 * Math.PI)
+      expect(Math.abs(th3 - approx)).toBeLessThan(1e-12)
+      expect(b.env.x).toBe(a.env.x) // the table's x axis does not move
+      expect(b.env.u).toBe(a.env.y) // u: the 2D pen's y on the table
+      expect(b.instructions).toEqual([point(a.env.x!, a.env.y! * detCos(th3), a.env.y! * detSin(th3))])
+      // the arms: origin → elbow (arm 1 on the table) → pen
+      const [, elbow, pen] = b.overlay!
+      if (elbow?.type !== 'point' || pen?.type !== 'point') throw new Error('expected points')
+      expect(Math.hypot(elbow.x, elbow.y, elbow.z!)).toBeCloseTo(100, 10)
+      expect(Math.hypot(pen.x - elbow.x, pen.y - elbow.y, pen.z! - elbow.z!)).toBeCloseTo(100, 10)
+    }
+    expect(ball.inspect(1).evaluations[2]!.symbolic).toBe('θ₃ = (n × dt × π²) mod 2π')
+  })
+
+  it('stays inside the ball of radius (r1 + r2) × scale', () => {
+    const store = storeOf('two-arm-ball', 1500)
+    for (let i = 0; i < store.count; i++) {
+      const { instruction: g } = decodeRecord(store.chunks[0]!, i)
+      if (g.type !== 'point') throw new Error('expected points')
+      expect(Math.hypot(g.x, g.y, g.z!)).toBeLessThanOrEqual(200 + 1e-9)
     }
   })
 
-  it('is the torus with R = 0', () => {
-    const sphere = storeOf('two-arm-sphere', 300, { radius: 1.5 })
-    const torus = storeOf('two-arm-torus', 300, { r1: 0, r2: 1.5 })
-    for (let i = 0; i < 300; i++) {
-      const a = decodeRecord(sphere.chunks[0]!, i).instruction
-      const b = decodeRecord(torus.chunks[0]!, i).instruction
-      expect(a).toEqual(b)
+  it('with 22/7 the table turns exactly (22/7)² times as fast', () => {
+    const r = makeRunner('two-arm-ball', 100, { dt: 0.05 }, 'integer', 'frac-22-7')
+    r.advance(5)
+    expect(r.inspect(1).evaluations[2]!.symbolic).toBe('θ₃ = (n × dt × (22/7)²) mod 2π')
+    for (let n = 1; n <= 5; n++) {
+      const d = r.inspect(n).env.theta3! - (484 / 49) * (n * 0.05)
+      const k = Math.round(d / (2 * Math.PI))
+      expect(Math.abs(d - k * 2 * Math.PI)).toBeLessThan(1e-12)
     }
   })
 })

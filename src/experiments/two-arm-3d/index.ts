@@ -12,7 +12,7 @@ import type {
 } from '../core/types'
 
 /**
- * 3D views of the Two-Arm Rotation (Experiment 04). All use exactly the same angles —
+ * 3D versions of the Two-Arm Rotation (Experiment 04). All use exactly the same angles —
  *   θ₁ = (n × dt) mod 2π,  θ₂ = (n × dt × C) mod 2π  (reduced exactly in BigInt) —
  * and emit one point (x, y, z) per step; the 3D view joins consecutive steps with straight
  * segments, as Two-Arm joins consecutive pen positions. 2D views show the projection (x, y).
@@ -46,18 +46,37 @@ const torusFormulas: FormulaSet = [
   assign('z', mul(v('scale'), mul(v('r2'), sin(v('theta2')))), 'pen z: arm 2 turns in the vertical plane'),
 ]
 
+/** θ₃: the turntable of the Ball machine turns C² times as fast as arm 1 (exact BigInt reduction). */
+const theta3 = assign(
+  'theta3',
+  modTau([v('n'), v('dt')], true, true),
+  'the table turns C² times as fast (exact BigInt reduction)',
+)
+
 /**
- * Sphere: θ₁ as longitude and θ₂ as latitude on a sphere of radius r — the torus with R = 0.
- * θ₂ runs through a full turn, so the curve passes from pole to pole on both sides; with C
- * irrational it never closes and gradually covers the whole sphere.
+ * Ball: the 2D Two-Arm machine itself (arms r1, r2 at speeds 1 and C on its table), with the
+ * whole table turning about the x axis at speed C². On the table the pen reaches the disk of
+ * radius r1 + r2; turning the disk about its diameter sweeps the solid ball. Whether the pen
+ * fills the ball is decided by the three speeds 1 : C : C²: for π they are rationally
+ * independent (π is transcendental), so the path never closes and comes arbitrarily close to
+ * every point inside; for a fraction p/q the path closes.
  */
-const sphereFormulas: FormulaSet = [
+const ballFormulas: FormulaSet = [
   theta1,
   theta2,
-  assign('rho', mul(v('radius'), cos(v('theta2'))), 'distance from the axis (latitude θ₂)'),
-  assign('x', mul(v('scale'), mul(v('rho'), cos(v('theta1')))), 'x (longitude θ₁)'),
-  assign('y', mul(v('scale'), mul(v('rho'), sin(v('theta1')))), 'y (longitude θ₁)'),
-  assign('z', mul(v('scale'), mul(v('radius'), sin(v('theta2')))), 'z (latitude θ₂)'),
+  theta3,
+  assign(
+    'x',
+    mul(v('scale'), add(mul(v('r1'), cos(v('theta1'))), mul(v('r2'), cos(v('theta2'))))),
+    'pen x on the table (as Two-Arm)',
+  ),
+  assign(
+    'u',
+    mul(v('scale'), add(mul(v('r1'), sin(v('theta1'))), mul(v('r2'), sin(v('theta2'))))),
+    'pen y on the table (as Two-Arm)',
+  ),
+  assign('y', mul(v('u'), cos(v('theta3'))), 'the table turned by θ₃ about the x axis'),
+  assign('z', mul(v('u'), sin(v('theta3'))), 'the table turned by θ₃ about the x axis'),
 ]
 
 /** Height: the Two-Arm pen position lifted by time, z proportional to t = n × dt. */
@@ -81,7 +100,8 @@ const symbols = {
   theta1: 'θ₁',
   theta2: 'θ₂',
   rho: 'ρ',
-  radius: 'r',
+  theta3: 'θ₃',
+  u: 'u[n]',
   x: 'x[n]',
   y: 'y[n]',
   z: 'z[n]',
@@ -200,20 +220,25 @@ export const twoArmTorus: ExperimentDefinition = {
   create: () => new PointPath(torusFormulas, torusArms),
 }
 
-export const twoArmSphere: ExperimentDefinition = {
-  id: 'two-arm-sphere',
-  name: 'Two-Arm 3D: Sphere',
+/** Elbow of the Ball machine: the tip of arm 1 on the turned table. */
+const ballArms: Arms = (env) => {
+  const ex = env.scale! * env.r1! * detCos(env.theta1!)
+  const eu = env.scale! * env.r1! * detSin(env.theta1!)
+  const c = detCos(env.theta3!)
+  const s = detSin(env.theta3!)
+  return [point(0, 0, 0), point(ex, eu * c, eu * s), point(env.x!, env.y!, env.z!)]
+}
+
+export const twoArmBall: ExperimentDefinition = {
+  id: 'two-arm-ball',
+  name: 'Two-Arm 3D: Ball (turning table)',
   description:
-    '{C} two-arm angles on a sphere: longitude θ₁ = t, latitude θ₂ = {C}·t (the torus with R = 0; never closes when {C} is irrational)',
+    '{C} two-arm machine (speeds 1 and {C}) whose table turns about the x axis at speed {C}²: the pen stays in the ball of radius arm 1 + arm 2 and fills it only if 1, {C}, {C}² are rationally independent',
   view: '3d',
-  parameters: [
-    DT,
-    { key: 'radius', label: 'SPHERE r', type: 'number', default: 2, min: 0, max: 5, step: 0.05 },
-    SCALE,
-  ],
-  formulas: sphereFormulas,
+  parameters: [DT, ARM1, ARM2, SCALE, DRAW_ARMS],
+  formulas: ballFormulas,
   symbols,
-  create: () => new PointPath(sphereFormulas),
+  create: () => new PointPath(ballFormulas, ballArms),
 }
 
 export const twoArmHeight: ExperimentDefinition = {
@@ -241,10 +266,10 @@ export const twoArmHeight: ExperimentDefinition = {
   create: () => new PointPath(heightFormulas),
 }
 
-/** The Two-Arm family: the same angles as the 2D pen path, on a sphere, a torus, or lifted by time. */
+/** The Two-Arm family: the 2D machine, arm 2 turned vertical (torus), the table turned (ball), or lifted by time. */
 export const TWO_ARM_VIEWS = [
   { id: 'two-arm', label: '2D' },
-  { id: twoArmSphere.id, label: 'Sphere' },
   { id: twoArmTorus.id, label: 'Torus' },
+  { id: 'two-arm-ball', label: 'Ball' },
   { id: twoArmHeight.id, label: 'Height' },
 ] as const

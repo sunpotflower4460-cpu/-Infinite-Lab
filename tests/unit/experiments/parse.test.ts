@@ -101,7 +101,9 @@ describe('parseExpr', () => {
       ['n × C', /C can only be used exactly/, 4, 5],
       ['sin(C × n)', /C can only be used exactly/, 4, 5],
       ['(n × π) mod 2π', /π as a factor/, 5, 6],
-      ['(C × C × n) mod 2π', /only once/, 5, 6],
+      ['(C × C × C × n) mod 2π', /at most twice/, 9, 10],
+      ['(C × C × n) mod 360', /only once/, 5, 6],
+      ['n²', /only the constant/, 1, 2],
       ['(n × C) mod dt', /positive whole number or 2π/, 12, 14],
       ['(n × C) mod -1', /positive whole number or 2π/, 12, 14],
       ['(n × C) mod 7.5', /positive whole number or 2π/, 12, 15],
@@ -227,3 +229,13 @@ function collectVars(e: Expr, out = new Set<string>()): Set<string> {
 function normalise(e: Expr): unknown {
   return JSON.parse(JSON.stringify(e))
 }
+
+describe('C² in an exact reduction', () => {
+  it('"(n × dt × C²) mod 2π" and "(n × dt × C × C) mod 2π" are the squared-constant reduction', () => {
+    for (const text of ['(n × dt × C²) mod 2π', '(n × dt × C × C) mod 2π']) {
+      const e = parseExpr(text, { variables: ['n', 'dt'], allowConstant: true })
+      expect(e).toMatchObject({ kind: 'modTau', withConstant: true, squared: true })
+      expect(renderExpr(e)).toBe('(n × dt × C²) mod 2π')
+    }
+  })
+})

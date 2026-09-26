@@ -89,18 +89,6 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
     },
   },
   {
-    id: 'pi-two-arm-sphere',
-    name: 'Pi Two-Arm 3D: Sphere',
-    description:
-      'The two-arm angles (θ₁ = t, θ₂ = πt, dt = 0.05) as longitude and latitude on a sphere (r = 2); 3D view',
-    config: {
-      constant: 'pi',
-      precision: 100_000,
-      experiment: 'two-arm-sphere',
-      parameters: { dt: 0.05, radius: 2, scale: 100 },
-    },
-  },
-  {
     id: 'pi-two-arm-torus',
     name: 'Pi Two-Arm 3D: Torus',
     description:
@@ -110,6 +98,18 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
       precision: 100_000,
       experiment: 'two-arm-torus',
       parameters: { dt: 0.05, r1: 1.3, r2: 1, scale: 100, drawArms: true },
+    },
+  },
+  {
+    id: 'pi-two-arm-ball',
+    name: 'Pi Two-Arm 3D: Ball',
+    description:
+      'Two-arm machine (speeds 1 and π, dt = 0.05) on a table turning π² times as fast: the pen fills a ball; 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-ball',
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, drawArms: true },
     },
   },
   {

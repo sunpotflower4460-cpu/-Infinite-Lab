@@ -30,6 +30,12 @@ function isImplicitProduct(e: Expr & { kind: 'bin' }): boolean {
   return e.op === '*' && e.left.kind === 'num' && e.right.kind === 'pi'
 }
 
+/** C or C², e.g. "π²", "(22/7)²". */
+function constantText(symbol: string, squared?: boolean): string {
+  if (!squared) return symbol
+  return /^[\p{L}\p{N}√]+$/u.test(symbol) ? `${symbol}²` : `(${symbol})²`
+}
+
 export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
   const fmt = opts.format ?? exactFloat
   const go = (x: Expr): string => {
@@ -48,7 +54,7 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
       case 'call':
         return `${x.fn}(${go(x.arg)})`
       case 'modTau':
-        return `(${[...x.factors.map((f, i) => wrap(f, 2, i > 0)), ...(x.withConstant ? [opts.symbols?.C ?? 'C'] : [])].join(' × ')}) mod 2π`
+        return `(${[...x.factors.map((f, i) => wrap(f, 2, i > 0)), ...(x.withConstant ? [constantText(opts.symbols?.C ?? 'C', x.squared)] : [])].join(' × ')}) mod 2π`
       case 'constMod':
         return `(${[...x.factors.map((f, i) => wrap(f, 2, i > 0)), opts.symbols?.C ?? 'C'].join(' × ')}) mod ${fmt(x.modulus)}`
       case 'bin': {

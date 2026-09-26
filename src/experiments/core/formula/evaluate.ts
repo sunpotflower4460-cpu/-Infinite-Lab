@@ -46,6 +46,7 @@ export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
         e.factors.map((f) => evaluate(f, env, ctx)),
         e.withConstant ? ctx.constant! : null,
         ctx.pi,
+        e.squared ? 2 : 1,
       )
     }
     case 'call': {

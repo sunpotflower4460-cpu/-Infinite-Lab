@@ -20,7 +20,7 @@ export type Expr =
   /**
    * (f₁ × … × fₖ [× C]) mod 2π, evaluated exactly in BigInt (π and C to ≈ 120 decimals).
    */
-  | { kind: 'modTau'; factors: Expr[]; withConstant: boolean }
+  | { kind: 'modTau'; factors: Expr[]; withConstant: boolean; /** C² instead of C */ squared?: boolean }
 
 export type BinOp = '+' | '-' | '*' | '/' | 'mod'
 /** sin/cos via detmath; abs and sqrt are exact / correctly rounded in IEEE-754 (deterministic). */
@@ -53,11 +53,10 @@ export const neg = (arg: Expr): Expr => ({ kind: 'neg', arg })
 export const sin = (arg: Expr): Expr => ({ kind: 'call', fn: 'sin', arg })
 export const cos = (arg: Expr): Expr => ({ kind: 'call', fn: 'cos', arg })
 export const constMod = (factors: Expr[], modulus: number): Expr => ({ kind: 'constMod', factors, modulus })
-export const modTau = (factors: Expr[], withConstant = false): Expr => ({
-  kind: 'modTau',
-  factors,
-  withConstant,
-})
+export const modTau = (factors: Expr[], withConstant = false, squared = false): Expr =>
+  squared
+    ? { kind: 'modTau', factors, withConstant: true, squared }
+    : { kind: 'modTau', factors, withConstant }
 export const assign = (target: string, expr: Expr, note?: string): Formula => ({ target, expr, note })
 
 /** All variable names referenced by an expression. */
