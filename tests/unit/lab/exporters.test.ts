@@ -68,3 +68,28 @@ describe('SVG export', () => {
     expect(svg).toMatch(/d="M [^ ]+ 2 A 2 2 0 1 1 2 [^"]+"/)
   })
 })
+
+describe('Microscope range export', () => {
+  it('CSV and SVG contain exactly the records of steps [from, to], framed to them', () => {
+    const store = walkStore(300) // 2 records per step
+    const from = store.firstIndexOfStep(101)
+    const to = store.countUpToStep(150)
+    const csvRows = geometryCsv(store, to, from).join('').trim().split('\n').slice(1)
+    expect(csvRows).toHaveLength(100)
+    const steps = csvRows.map((r) => Number(r.split(',')[0]))
+    expect(Math.min(...steps)).toBe(101)
+    expect(Math.max(...steps)).toBe(150)
+
+    const svg = geometrySvg(store, to, 't', 'd', from).join('')
+    const svgSteps = [...svg.matchAll(/data-step="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(svgSteps).toHaveLength(100)
+    expect(Math.min(...svgSteps)).toBe(101)
+    // the viewBox is the range's bounding box (plus padding), not the whole walk's
+    const b = store.boundsBetween(from, to)!
+    const vb = /viewBox="([^"]+)"/.exec(svg)![1]!.split(' ').map(Number)
+    const pad = Math.max(b.maxX - b.minX, b.maxY - b.minY) * 0.04
+    expect(vb[0]).toBeCloseTo(b.minX - pad, 9)
+    expect(vb[2]).toBeCloseTo(b.maxX - b.minX + 2 * pad, 9)
+    expect(store.boundsUpTo(store.count)!.minX).toBeLessThanOrEqual(b.minX)
+  })
+})

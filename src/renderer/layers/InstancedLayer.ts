@@ -5,8 +5,8 @@ import { COLORS, type GeometryLayer, type LayerFrame, type LayerStyle } from './
 
 /** Records per GPU chunk. Only the chunk being appended to is re-uploaded. */
 export const INSTANCED_CHUNK_RECORDS = 16384
-const CIRCLE_FLOATS = 5 // cx, cy, r, arcStart, arcEnd
-const LINE_FLOATS = 4 // x0, y0, x1, y1
+const CIRCLE_FLOATS = 6 // cx, cy, r, arcStart, arcSweep, record index
+const LINE_FLOATS = 5 // x0, y0, x1, y1, record index
 const FULL_CIRCLE_SWEEP = 7 // > 2π even in float32: a full circle
 
 // Shared transform: Pixi's global/local matrices map layer units to clip space.
@@ -15,6 +15,13 @@ uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
 uniform float uPxPerUnit;
+// Microscope: instances whose record index is below uRangeStart are context (faded or hidden).
+// Record indices are exact in float32 up to 2^24 (≈ 16.7 M records).
+uniform float uRangeStart;
+uniform float uContextAlpha;
+float fadeFor(float index) {
+  return index < uRangeStart ? uContextAlpha : 1.0;
+}
 vec4 toClip(vec2 p) {
   mat3 m = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
   return vec4((m * vec3(p, 1.0)).xy, 0.0, 1.0);
@@ -26,11 +33,14 @@ in vec2 aPosition;   // quad corner, −1…1
 in vec2 aCenter;
 in float aRadius;
 in vec2 aArc;
+in float aIndex;
 ${TRANSFORM}
 out vec2 vPx;        // pixel offset from the centre (layer orientation)
 out float vRadiusPx;
 out vec2 vArc;
+out float vFade;
 void main() {
+  vFade = fadeFor(aIndex);
   float rpx = aRadius * uPxPerUnit;
   float extent = max(rpx, 0.0) + 2.0;
   gl_Position = toClip(aCenter + aPosition * (extent / uPxPerUnit));
@@ -48,6 +58,7 @@ const float TAU = 6.28318530718;
 in vec2 vPx;
 in float vRadiusPx;
 in vec2 vArc;
+in float vFade;
 uniform vec4 uTint;
 uniform float uDotAlpha;
 out vec4 finalColor;
@@ -64,6 +75,7 @@ void main() {
       if (rel > sweep) a = 0.0;
     }
   }
+  a *= vFade;
   if (a <= 0.0) discard;
   finalColor = vec4(uTint.rgb * a, a);
 }
@@ -73,9 +85,12 @@ const LINE_VERTEX = /* glsl */ `
 in vec2 aPosition;   // x: 0…1 along the segment, y: −1…1 across
 in vec2 aP0;
 in vec2 aP1;
+in float aIndex;
 ${TRANSFORM}
 out float vAcrossPx;
+out float vFade;
 void main() {
+  vFade = fadeFor(aIndex);
   vec2 d = aP1 - aP0;
   float len = length(d);
   vec2 dir = len > 0.0 ? d / len : vec2(1.0, 0.0);
@@ -90,10 +105,11 @@ void main() {
 
 const LINE_FRAGMENT = /* glsl */ `precision highp float;
 in float vAcrossPx;
+in float vFade;
 uniform vec4 uTint;
 out vec4 finalColor;
 void main() {
-  float a = clamp(1.0 - abs(vAcrossPx), 0.0, 1.0) * uTint.a;
+  float a = clamp(1.0 - abs(vAcrossPx), 0.0, 1.0) * uTint.a * vFade;
   if (a <= 0.0) discard;
   finalColor = vec4(uTint.rgb * a, a);
 }
@@ -179,11 +195,15 @@ export class InstancedLayer implements GeometryLayer {
   })
   private readonly circleUniforms = new UniformGroup({
     uPxPerUnit: { value: 1, type: 'f32' },
+    uRangeStart: { value: 0, type: 'f32' },
+    uContextAlpha: { value: 1, type: 'f32' },
     uTint: { value: rgba(COLORS.circle, COLORS.circleAlpha), type: 'vec4<f32>' },
     uDotAlpha: { value: COLORS.pointAlpha, type: 'f32' },
   })
   private readonly lineUniforms = new UniformGroup({
     uPxPerUnit: { value: 1, type: 'f32' },
+    uRangeStart: { value: 0, type: 'f32' },
+    uContextAlpha: { value: 1, type: 'f32' },
     uTint: { value: rgba(COLORS.line, COLORS.lineAlpha), type: 'vec4<f32>' },
   })
   private readonly circleShader = Shader.from({
@@ -244,11 +264,12 @@ export class InstancedLayer implements GeometryLayer {
           (d[o + 3]! - oy) * s,
           (d[o + 4]! - ox) * s,
           (d[o + 5]! - oy) * s,
+          index,
         ])
       } else {
         const r = kind === KIND.point ? 0 : Math.max(0, d[o + 4]!) * s
         const [a0, a1] = kind === KIND.arc ? [d[o + 5]!, d[o + 6]!] : [0, FULL_CIRCLE_SWEEP]
-        chunk.circles.push(index, [(d[o + 2]! - ox) * s, (d[o + 3]! - oy) * s, r, a0, a1])
+        chunk.circles.push(index, [(d[o + 2]! - ox) * s, (d[o + 3]! - oy) * s, r, a0, a1, index])
       }
       chunk.filled++
       chunk.uploaded = false
@@ -287,6 +308,13 @@ export class InstancedLayer implements GeometryLayer {
             offset: 12,
             instance: true,
           },
+          aIndex: {
+            buffer: circles.buffer,
+            format: 'float32',
+            stride: CIRCLE_FLOATS * 4,
+            offset: 20,
+            instance: true,
+          },
         },
         indexBuffer: new Uint16Array([0, 1, 2, 0, 2, 3]),
         instanceCount: 0,
@@ -308,6 +336,13 @@ export class InstancedLayer implements GeometryLayer {
             offset: 8,
             instance: true,
           },
+          aIndex: {
+            buffer: lines.buffer,
+            format: 'float32',
+            stride: LINE_FLOATS * 4,
+            offset: 16,
+            instance: true,
+          },
         },
         indexBuffer: new Uint16Array([0, 1, 2, 0, 2, 3]),
         instanceCount: 0,
@@ -325,6 +360,13 @@ export class InstancedLayer implements GeometryLayer {
     this.circleUniforms.uniforms.uTint = rgba(style.circle, style.circleAlpha)
     this.circleUniforms.uniforms.uDotAlpha = style.pointAlpha
     this.lineUniforms.uniforms.uTint = rgba(style.line, style.lineAlpha)
+  }
+
+  setContext(startIndex: number, alpha: number): void {
+    for (const u of [this.circleUniforms, this.lineUniforms]) {
+      u.uniforms.uRangeStart = startIndex
+      u.uniforms.uContextAlpha = alpha
+    }
   }
 
   setPixelScale(pxPerUnit: number): void {

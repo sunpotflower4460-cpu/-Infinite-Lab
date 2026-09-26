@@ -26,7 +26,8 @@ import { PixiRenderer } from '../renderer/PixiRenderer'
 import type { Look } from '../renderer/layers/GeometryLayer'
 import { filmSpeed } from './filmSpeed'
 import { saveFilmInfo, type FilmInfoLevel } from '../film/explain'
-import { createLabStore, SPEEDS, useLab, type LabStore } from '../state/labStore'
+import { encodeVideo, frameSteps, videoSize, type VideoFormat, type VideoPace } from '../lab/video'
+import { createLabStore, SPEEDS, useLab, type LabStore, type Microscope } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
 import { version as APP_VERSION } from '../../package.json'
@@ -298,6 +299,7 @@ export class LabController {
   private seekLane(step: number, options: { inspect?: boolean } = {}): void {
     const s = this.store.getState()
     if (s.phase !== 'ready') return
+    this.dropMicroscope() // moving along the Timeline leaves the Microscope
     const target = Math.max(0, Math.min(Math.round(step), s.totalSteps))
     if (target > s.currentStep) {
       this.leaveView()
@@ -332,9 +334,50 @@ export class LabController {
   }
 
   private leaveView(): void {
+    this.dropMicroscope()
     if (this.store.getState().viewStep === null) return
     this.store.setState({ viewStep: null, inspected: null })
     this.renderer.setVisibleStep(Infinity)
+  }
+
+  // ---- Mathematical Microscope (spec §38) --------------------------------------------
+
+  /**
+   * Show only steps [from, to] of the computed geometry, framed to fill the view; earlier steps
+   * stay as faint context (or are hidden), later ones are hidden, clicks pick inside the range.
+   * Compare Mode applies the same range to both lanes.
+   */
+  setMicroscope(from: number, to: number, context: Microscope['context'] = 'dim'): void {
+    const s = this.store.getState()
+    if (s.phase !== 'ready' || s.currentStep < 1) return
+    this.stopLockstep()
+    if (s.playing) this.pause()
+    const hi = Math.max(1, Math.min(Math.round(to), s.currentStep))
+    const lo = Math.max(1, Math.min(Math.round(from), hi))
+    const view = hi === s.currentStep ? null : hi
+    const microscope: Microscope = { from: lo, to: hi, context }
+    this.store.setState({ microscope, viewStep: view, follow: false })
+    this.renderer.setStepRange({ from: lo, to: hi, contextAlpha: context === 'dim' ? 0.12 : 0 })
+    const pinned = s.inspected?.step
+    if (pinned === undefined || pinned < lo || pinned > hi) this.queueInspect(hi)
+    if (this.peer && !this.owner) this.peer.setMicroscope(lo, hi, context)
+  }
+
+  /** Leave the Microscope and show everything that has been computed again. */
+  clearMicroscope(): void {
+    if (!this.store.getState().microscope) return
+    this.dropMicroscope()
+    this.store.setState({ viewStep: null, inspected: null })
+    this.renderer.setVisibleStep(Infinity)
+    this.fitAll()
+    if (this.peer && !this.owner) this.peer.clearMicroscope()
+  }
+
+  /** Forget the range without moving the camera (the caller decides what to show next). */
+  private dropMicroscope(): void {
+    if (!this.store.getState().microscope) return
+    this.store.setState({ microscope: null })
+    this.renderer.setStepRange(null)
   }
 
   // ---- inspection ------------------------------------------------------------------
@@ -409,6 +452,7 @@ export class LabController {
    * only — the geometry is the Two-Arm Rotation's, bit for bit.
    */
   startFilm(): void {
+    setHash('#film')
     this.disableCompare()
     this.setContinuous(false)
     this.stopFilmClock()
@@ -425,6 +469,7 @@ export class LabController {
   }
 
   stopFilm(): void {
+    setHash('#lab') // a reload stays in the lab
     this.filmPending = false
     this.stopFilmClock()
     this.pause()
@@ -734,7 +779,8 @@ export class LabController {
   private fileStem(): string {
     const s = this.store.getState()
     const step = s.viewStep ?? s.currentStep
-    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${step}`
+    const range = s.microscope ? `${s.microscope.from}-${s.microscope.to}` : String(step)
+    return `pi-infinite-lab_${s.experimentId}_${s.constantId}_${range}`
   }
 
   private download(blob: Blob, name: string): void {
@@ -751,11 +797,13 @@ export class LabController {
     try {
       const s = this.store.getState()
       const count = this.renderer.visibleRecords
+      // Microscope: only the range (the faint context is not part of the data)
+      const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
       if (format === 'png') {
         this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count), { type: 'text/csv' }),
+          new Blob(geometryCsv(this.renderer.store, count, from), { type: 'text/csv' }),
           `${this.fileStem()}.csv`,
         )
       } else {
@@ -767,12 +815,86 @@ export class LabController {
           ...formulaLines(def, symbol),
           `parameters ${JSON.stringify(s.params)}`,
         ].join('\n')
-        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc)
+        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc, from)
         this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
       }
     } catch (err) {
       this.reportError(`${format.toUpperCase()} export failed`, err)
     }
+  }
+
+  // ---- video export (spec §28) ----------------------------------------------------------
+
+  private videoAbort: AbortController | null = null
+
+  /**
+   * Record the drawing of the shown steps (the Microscope range, or step 1 up to the Timeline
+   * position) as MP4 / WebM: rendered offline, frame by frame, framed on the final picture.
+   */
+  async exportVideo(o: {
+    format: VideoFormat
+    seconds: number
+    pace: VideoPace
+    glow: boolean
+  }): Promise<void> {
+    const s = this.store.getState()
+    if (s.phase !== 'ready' || s.currentStep < 1 || this.videoAbort) return
+    if (s.film) this.stopFilmClock()
+    this.stopLockstep()
+    if (s.playing) this.pause()
+    const from = s.microscope?.from ?? 1
+    const to = s.microscope?.to ?? s.viewStep ?? s.currentStep
+    const fps = 30
+    const frames = Math.max(2, Math.round(o.seconds * fps))
+    const steps = frameSteps(from, to, frames, o.pace)
+    const view = this.renderer.saveView()
+    const look = s.look
+    const abort = new AbortController()
+    this.videoAbort = abort
+    this.store.setState({ video: { status: 'recording', done: 0, total: frames } })
+    try {
+      if (o.glow) this.renderer.setLook('luminous')
+      this.renderer.frameSteps(from, to)
+      const first = this.renderer.renderStep(from)
+      const size = videoSize(first.width, first.height)
+      let shown = 0
+      const { blob, codec } = await encodeVideo({
+        format: o.format,
+        fps,
+        ...size,
+        frames,
+        draw: (i, ctx) => ctx.drawImage(this.renderer.renderStep(steps[i]!), 0, 0, size.width, size.height),
+        onProgress: (done, total) => {
+          if (done - shown >= 15 || done === total) {
+            shown = done
+            this.store.setState({ video: { status: 'recording', done, total } })
+          }
+        },
+        signal: abort.signal,
+      })
+      const name = `${this.fileStem()}.${o.format}`
+      this.download(blob, name)
+      this.store.setState({ video: { status: 'done', name, codec, bytes: blob.size } })
+    } catch (err) {
+      const cancelled = err instanceof DOMException && err.name === 'AbortError'
+      this.store.setState({
+        video: cancelled
+          ? { status: 'idle' }
+          : { status: 'error', message: err instanceof Error ? err.message : String(err) },
+      })
+    } finally {
+      this.videoAbort = null
+      if (o.glow) this.renderer.setLook(look)
+      this.renderer.restoreView(view)
+      const st = this.store.getState()
+      if (st.film)
+        this.renderer.setHighlight(st.filmInfo === 'off' ? null : (st.currentTrace?.overlay ?? null))
+      else this.renderer.setHighlight(highlightOf(st.inspected ?? st.currentTrace))
+    }
+  }
+
+  cancelVideo(): void {
+    this.videoAbort?.abort()
   }
 
   // ---- Pattern Detection / AI Observer -----------------------------------------------------
@@ -925,6 +1047,7 @@ export class LabController {
       currentTrace: null,
       inspected: null,
       viewStep: null,
+      microscope: null,
       finished: false,
       playing: false,
       waiting: false,
@@ -1017,6 +1140,16 @@ export class LabController {
         this.store.setState({ phase: 'error', error: msg.message, playing: false })
         break
     }
+  }
+}
+
+/** Reflect the screen in the URL without adding history entries or firing hashchange. */
+function setHash(hash: '#film' | '#lab'): void {
+  if (typeof window === 'undefined' || window.location.hash === hash) return
+  try {
+    window.history.replaceState(window.history.state, '', hash)
+  } catch {
+    // sandboxed frames may refuse; the screen itself still switches
   }
 }
 

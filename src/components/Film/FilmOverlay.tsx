@@ -2,6 +2,8 @@ import { getController } from '../../app/LabController'
 import { filmNumbers, PI_CONVERGENTS, stageFor, type FilmInfoLevel } from '../../film/explain'
 import { useLab } from '../../state/labStore'
 import { formatExact, formatInt } from '../../utils/format'
+import { webCodecsAvailable } from '../../lab/video'
+import { VideoStatus } from '../Status/VideoExport'
 
 const LEVELS: { id: FilmInfoLevel; label: string }[] = [
   { id: 'simple', label: 'かんたん' },
@@ -54,6 +56,7 @@ export function FilmOverlay() {
             </button>
           ))}
         </div>
+        <FilmSave />
         <button className="film-close" onClick={() => c.stopFilm()} aria-label="Close film">
           ✕
         </button>
@@ -197,5 +200,36 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
         </li>
       </ul>
     </>
+  )
+}
+
+/** Save what has been drawn so far as an MP4, with the film's accelerating pace. */
+function FilmSave() {
+  const c = getController()
+  const video = useLab((s) => s.video)
+  const step = useLab((s) => s.currentStep)
+  if (!webCodecsAvailable()) return null
+  const recording = video.status === 'recording'
+  return (
+    <div className="film-save">
+      {recording ? (
+        <button onClick={() => c.cancelVideo()} aria-label="Cancel video">
+          {Math.round((100 * video.done) / video.total)}% ✕
+        </button>
+      ) : (
+        <button
+          onClick={() => void c.exportVideo({ format: 'mp4', seconds: 20, pace: 'film', glow: true })}
+          disabled={step < 2}
+          aria-label="Save film as video"
+        >
+          ⤓ 保存
+        </button>
+      )}
+      {video.status === 'done' || video.status === 'error' ? (
+        <div className="film-toast">
+          <VideoStatus />
+        </div>
+      ) : null}
+    </div>
   )
 }

@@ -5,7 +5,7 @@ const num = (s: string | null) => Number((s ?? '').replace(/[^0-9]/g, ''))
 test('vertical slice: compute π → play → pause → step → inspect → reset', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(String(e)))
-  await page.goto('/')
+  await page.goto('/#lab')
 
   // π computed (1,000 digits by default) and the rule is shown before anything runs.
   await expect(page.getByTestId('digit-stream')).toContainText('3.14159265358979')
@@ -62,7 +62,7 @@ test('vertical slice: compute π → play → pause → step → inspect → res
 })
 
 test('MAX speed consumes all digits and stops', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await expect(page.getByTestId('digit-stream')).toContainText('3.14159')
   await page.getByRole('radio', { name: 'MAX' }).click()
   await page.getByRole('button', { name: 'Play' }).click()
@@ -72,7 +72,7 @@ test('MAX speed consumes all digits and stops', async ({ page }) => {
 })
 
 test('parameter edits apply on Enter, are clamped, and restart the experiment', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/#lab')
   await expect(page.getByTestId('digit-stream')).toContainText('3.14159')
   await page.getByRole('button', { name: 'Step' }).click()
   await expect(page.getByTestId('current-step')).toHaveText('1')

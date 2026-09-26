@@ -13,7 +13,7 @@ async function goTo(page: Page, step: number) {
 
 test.describe('Formula Playground (spec §10)', () => {
   test('typed formulas are executed and shown as executed; invalid drafts do not run', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByLabel('Experiment').selectOption('playground')
     const formulas = page.getByTestId('formulas-current')
@@ -45,7 +45,7 @@ test.describe('Formula Playground (spec §10)', () => {
   })
 
   test('formulas travel with the JSON export and reproduce on import', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByTestId('preset').selectOption('playground-turning')
     await expect(page.getByTestId('status')).toContainText('10,000 digits')
@@ -77,7 +77,7 @@ test.describe('Formula Playground (spec §10)', () => {
   })
 
   test('a formula that produces an invalid value stops with the step and the reason', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/#lab')
     await ready(page)
     await page.getByLabel('Experiment').selectOption('playground')
     await page.getByLabel('RADIUS formula').fill('digit − 3')
@@ -99,6 +99,21 @@ test.describe('Formula Playground (spec §10)', () => {
 })
 
 test.describe('Film mode (the reference video look)', () => {
+  test('the app opens on the π film; after closing it, a reload stays in the lab', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByTestId('film')).toBeVisible()
+    await expect(page.getByTestId('film-pi')).toContainText('π = 3.14159')
+    await page.getByRole('button', { name: 'Close film' }).click()
+    await expect(page.getByTestId('film')).toBeHidden()
+    await page.reload()
+    await expect(page.getByTestId('digit-stream')).toContainText('3.14159')
+    await expect(page.getByTestId('film')).toHaveCount(0)
+    // and the lab's button opens it again
+    await page.getByRole('button', { name: '▶ π の模様を見る' }).click()
+    await expect(page.getByTestId('film')).toBeVisible()
+    await expect(page).toHaveURL(/#film$/)
+  })
+
   test('#film opens full-screen, draws the π two-arm rule and speeds up; ✕ returns to the lab', async ({
     page,
   }) => {
@@ -143,8 +158,108 @@ test.describe('Film mode (the reference video look)', () => {
 
     // the same rule as the Two-Arm preset
     await page.getByRole('button', { name: 'Close film' }).click()
+    await expect(page).toHaveURL(/#lab$/)
     await expect(film).toBeHidden()
     await expect(page.getByTestId('formulas-current')).toContainText('θ₂ = (n × dt × π) mod 2π')
     await expect(page.getByRole('button', { name: 'Export JSON' })).toBeVisible()
+  })
+})
+
+test.describe('Mathematical Microscope (spec §38)', () => {
+  test('a step range is framed, picked and exported on its own; Exit shows everything again', async ({
+    page,
+  }) => {
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 400)
+    await page.getByLabel('Microscope from step').fill('100')
+    await page.getByLabel('Microscope to step').fill('150')
+    await page.getByRole('button', { name: 'Zoom' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toContainText('steps 100–150')
+    await expect(page.getByTestId('microscope-range')).toHaveText('100–150')
+
+    // clicks anywhere only ever select steps inside the range
+    const canvas = page.getByTestId('lab-canvas')
+    const box = (await canvas.boundingBox())!
+    for (const [fx, fy] of [
+      [0.5, 0.5],
+      [0.3, 0.4],
+      [0.7, 0.6],
+      [0.45, 0.55],
+    ]) {
+      await page.mouse.click(box.x + box.width * fx!, box.y + box.height * fy!)
+      await expect
+        .poll(async () => Number((await page.getByTestId('inspector-step').textContent())!.replace(/,/g, '')))
+        .toBeGreaterThanOrEqual(100)
+      expect(
+        Number((await page.getByTestId('inspector-step').textContent())!.replace(/,/g, '')),
+      ).toBeLessThanOrEqual(150)
+    }
+
+    // SVG export = exactly the range
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'SVG', exact: true }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe('pi-infinite-lab_digit-circle-walk_pi_100-150.svg')
+    const svg = readFileSync(await download.path(), 'utf8')
+    const steps = [...svg.matchAll(/data-step="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(steps).toHaveLength(102) // 51 steps × (path line + circle)
+    expect(Math.min(...steps)).toBe(100)
+    expect(Math.max(...steps)).toBe(150)
+
+    // hidden context, then exit
+    await page.getByRole('button', { name: 'hidden' }).click()
+    await expect(page.getByRole('button', { name: 'hidden' })).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Exit microscope view' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toHaveCount(0)
+    await expect(page.getByTestId('timeline')).toContainText('400 / 1,001')
+  })
+
+  test('±50 around the inspected step; playing leaves the Microscope', async ({ page }) => {
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 300)
+    await page.getByLabel('Inspect step').fill('200')
+    await page.getByLabel('Inspect step').press('Enter')
+    await expect(page.getByTestId('inspector-step')).toHaveText('200')
+    await page.getByRole('button', { name: '±50', exact: true }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toContainText('steps 150–250')
+    await page.getByRole('button', { name: 'Play' }).click()
+    await expect(page.getByTestId('microscope-badge-0')).toHaveCount(0)
+  })
+})
+
+test.describe('Video export (spec §28)', () => {
+  test('records the drawing as WebM and MP4 (or explains why it cannot)', async ({ page }) => {
+    test.setTimeout(120_000)
+    await page.goto('/#lab')
+    await ready(page)
+    await goTo(page, 200)
+    const hasEncoder = await page.evaluate(() => typeof VideoEncoder !== 'undefined')
+    const button = page.getByRole('button', { name: 'Video', exact: true })
+    if (!hasEncoder) {
+      await expect(button).toBeDisabled()
+      await expect(button).toHaveAttribute('title', /no WebCodecs/)
+      return
+    }
+    await button.click()
+    await page.getByLabel('Video length').selectOption('2')
+    for (const format of ['webm', 'mp4'] as const) {
+      await page.getByLabel('Video format').selectOption(format)
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 90_000 }),
+        page.getByRole('button', { name: 'Record' }).click(),
+      ])
+      expect(download.suggestedFilename()).toBe(`pi-infinite-lab_digit-circle-walk_pi_200.${format}`)
+      const bytes = readFileSync(await download.path())
+      expect(bytes.length).toBeGreaterThan(20_000) // a blank or blurred video compresses to a few KB
+      if (format === 'webm')
+        expect(bytes.subarray(0, 4).toString('hex')).toBe('1a45dfa3') // EBML
+      else expect(bytes.subarray(4, 8).toString('latin1')).toBe('ftyp')
+      await expect(page.getByTestId('video-status')).toContainText(`saved`)
+    }
+    // the view is back where it was
+    await expect(page.getByTestId('timeline')).toContainText('200 / 1,001')
   })
 })

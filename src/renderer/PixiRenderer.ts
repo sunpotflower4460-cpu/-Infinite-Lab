@@ -114,6 +114,8 @@ export class PixiRenderer implements Renderer {
   clear(): void {
     this.store.clear()
     this.layer.clear()
+    this.range = null
+    this.layer.setContext(0, 1)
     this.visibleStep = Infinity
     this.highlightData = null
     this.highlight.clear()
@@ -186,6 +188,63 @@ export class PixiRenderer implements Renderer {
     )
   }
 
+  // ---- video frames -------------------------------------------------------------------
+
+  /** Everything a recording changes, so it can be put back afterwards. */
+  saveView(): { cx: number; cy: number; zoom: number; follow: boolean; framed: Bounds | null; step: number } {
+    const c = this.camera
+    return {
+      cx: c.cx,
+      cy: c.cy,
+      zoom: c.zoom,
+      follow: this.follow,
+      framed: this.framed,
+      step: this.visibleStep,
+    }
+  }
+
+  restoreView(v: ReturnType<PixiRenderer['saveView']>): void {
+    this.camera.centerOn(v.cx, v.cy)
+    this.camera.zoom = v.zoom
+    this.follow = v.follow
+    this.framed = v.framed
+    this.visibleStep = v.step
+    this.needsFullRebuild = true
+    this.applyCamera()
+    this.drawHighlight()
+  }
+
+  /** Frame the geometry of steps [fromStep, toStep] for recording (precision frame rebuilt now). */
+  frameSteps(fromStep: number, toStep: number): void {
+    const b = this.store.boundsBetween(
+      this.store.firstIndexOfStep(fromStep),
+      this.store.countUpToStep(toStep),
+    )
+    if (b) this.fitTo(b)
+    if (this.rebuildTimer) clearTimeout(this.rebuildTimer)
+    this.rebuildTimer = undefined
+    this.needsFullRebuild = true
+  }
+
+  /**
+   * Draw the geometry of steps ≤ `step` right now and return the picture (device pixels).
+   * Uses the same extract path as PNG export, so it works without a preserved WebGL buffer.
+   */
+  renderStep(step: number, highlight: GeometryInstruction[] | null = null): HTMLCanvasElement {
+    const app = this.app
+    if (!app) throw new Error('renderer not ready')
+    this.visibleStep = step
+    this.highlightData = highlight
+    this.drawHighlight()
+    this.needsRender = true
+    this.frame()
+    return app.renderer.extract.canvas({
+      target: app.stage,
+      frame: new Rectangle(0, 0, this.camera.width, this.camera.height),
+      clearColor: LOOKS[this.look].background,
+    }) as HTMLCanvasElement
+  }
+
   /** Records currently shown (Timeline cut-off applied). */
   get visibleRecords(): number {
     return this.visibleCount()
@@ -213,6 +272,7 @@ export class PixiRenderer implements Renderer {
     this.layer.destroy()
     this.layer = next
     next.setStyle(LOOKS[this.look])
+    if (this.range) next.setContext(this.store.firstIndexOfStep(this.range.from), this.range.alpha)
     this.world.addChildAt(next.container, 0)
     this.needsFullRebuild = true
   }
@@ -252,6 +312,28 @@ export class PixiRenderer implements Renderer {
     this.needsRender = true
   }
 
+  /** Microscope range: steps before `from` are faded context (alpha 0 = hidden); null = none. */
+  private range: { from: number; alpha: number } | null = null
+
+  /**
+   * Mathematical Microscope: show steps [from, to] and frame them; earlier steps stay as faded
+   * (or hidden) context, later ones are hidden. Clicks only pick inside the range.
+   */
+  setStepRange(range: { from: number; to: number; contextAlpha: number } | null): void {
+    if (!range) {
+      this.range = null
+      this.layer.setContext(0, 1)
+      this.setVisibleStep(Infinity)
+      return
+    }
+    this.range = { from: range.from, alpha: range.contextAlpha }
+    const start = this.store.firstIndexOfStep(range.from)
+    this.layer.setContext(start, range.contextAlpha)
+    this.setVisibleStep(range.to)
+    const b = this.store.boundsBetween(start, this.store.countUpToStep(range.to))
+    if (b) this.fitTo(b)
+  }
+
   /**
    * Step of the visible geometry nearest to screen point (sx, sy), within `tolerancePx`.
    * Circles are hit on their circumference or centre, lines anywhere along the segment.
@@ -262,7 +344,9 @@ export class PixiRenderer implements Renderer {
     // Score = distance, with path lines penalised so circles/points win when both are in range.
     let bestScore = Infinity
     let bestStep: number | null = null
+    const minStep = this.range?.from ?? 0
     this.store.forEachRecordNear(wx, wy, tol, this.visibleCount(), (d, o) => {
+      if (d[o + 1]! < minStep) return // Microscope: context is not pickable
       const kind = d[o]
       let dist: number
       if (kind === KIND.line) {

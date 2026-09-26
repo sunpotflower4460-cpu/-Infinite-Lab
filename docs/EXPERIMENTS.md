@@ -119,6 +119,25 @@ y[n] = scale × (r1 × sin(θ₁) + r2 × sin(θ₂))
 
 r1 = r2 のとき、どのループも中心を通る。C が無理数なら曲線は閉じない（C の有理近似 p/q で p − q 枚の花びらにほぼ閉じる。π ≈ 22/7 → 15 枚、355/113 → 242 枚）。digit は使わず、桁数は step 数の上限だけを決める。
 
+## 05 Formula Playground — `{C} digits through your own formulas`（v0.5、仕様 §10）
+
+ANGLE / RADIUS / DISTANCE を式で書くと、その式が既存の式木（Formula AST）に変換され、そのまま実行・表示される（表示 = 実行）。骨格は固定:
+
+```
+angle    = （ANGLE の式）
+radius   = （RADIUS の式）
+distance = （DISTANCE の式）
+x[n] = x[n−1] + cos(angle) × distance
+y[n] = y[n−1] + sin(angle) × distance      → 半径 radius の circle（と前の点からの line）
+```
+
+- 使える名前: `n`（step）、`digit`、`angle_prev`、`x_prev`、`y_prev`、`π`。関数: `sin cos abs sqrt`。演算子: `+ − × / mod ( )`、`2π` のような数と名前の積。
+- すべて float64（π = 3.141592653589793）。ただし選択中の定数 `C` は厳密な形でだけ使える: `(… × C) mod 2π` と `(… × C) mod 整数` は BigInt で約 120 桁の C を使って計算する。`n × C` のように float64 に丸める書き方はエラーにして理由を示す（大きな n で桁が失われるため）。
+- `(f × g) mod 2π`（2 つ以上の因子の積）も BigInt で厳密に計算する。和や単独の値の `mod 2π` は float64 の mod。
+- 表示された式を貼り直すと同じ式木になる（3,000 個のランダムな式木と全実験の式で、計算結果がビット単位で一致することをテスト）。
+- 値が有限でない（0 で割った等）・半径が負のときは、その step と理由を示して止まる。式を直せば新しく実行し直す。
+- 式は設定・Export（ファイル形式 v3）・履歴・Compare に含まれる。
+
 ## Reference Reconstruction（v0.4）
 
 参照動画（`docs/reference/`）の生成規則を、仕様 §40 の手順で検証する（`tools/reference/analyze.py` → `docs/reference/ANALYSIS.md`）。

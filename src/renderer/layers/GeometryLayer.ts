@@ -74,6 +74,11 @@ export interface GeometryLayer {
   sync(store: GeometryStore, visibleCount: number, frame: LayerFrame, full: boolean): boolean
   /** Colours and opacities (takes effect on the next sync). */
   setStyle(style: LayerStyle): void
+  /**
+   * Mathematical Microscope: records before `startIndex` are context for a step range and are
+   * drawn at `alpha` times their usual opacity (0 = hidden). startIndex 0 = no range.
+   */
+  setContext(startIndex: number, alpha: number): void
   /** Camera zoom changed within the bucket (pixel-size dependent parameters). */
   setPixelScale(pxPerUnit: number): void
   clear(): void
