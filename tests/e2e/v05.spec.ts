@@ -112,6 +112,8 @@ test.describe('Film mode (the reference video look)', () => {
 
     // tap pauses, tap resumes
     await page.getByRole('button', { name: 'Pause film' }).click()
+    // the worker's "paused" status comes after every batch it sent: read T once it has arrived
+    await expect(page.getByRole('button', { name: 'Play film' })).toBeVisible()
     const paused = await time()
     await page.waitForTimeout(600)
     expect(await time()).toBe(paused)
