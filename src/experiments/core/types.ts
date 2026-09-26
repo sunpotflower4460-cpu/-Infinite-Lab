@@ -87,7 +87,25 @@ export interface ExperimentDefinition {
   formulas: FormulaSet
   /** Display names for variables in formulas. */
   symbols: SymbolTable
+  /** '3d': emits points with z and is shown in the 3D view (default: 2D). */
+  view?: '3d'
+  /**
+   * The region the rule can reach, when it is known in advance (e.g. a two-arm machine reaches
+   * the disk of radius arm 1 + arm 2). Views frame it from step 1 instead of zooming into the
+   * first few segments. Presentation only.
+   */
+  extent?(params: Record<string, number>): Extent
   create(): GeometryExperiment
+}
+
+/** Axis-aligned box in world coordinates (z ignored by 2D views). */
+export interface Extent {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+  minZ: number
+  maxZ: number
 }
 
 export interface StepTrace {

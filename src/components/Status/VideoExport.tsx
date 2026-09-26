@@ -3,6 +3,7 @@ import { getController } from '../../app/LabController'
 import { webCodecsAvailable, type VideoFormat, type VideoPace } from '../../lab/video'
 import { useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
+import { useDefinition } from '../useDefinition'
 
 /** iPhone / iPad Safari plays MP4 (H.264) best; elsewhere MP4 is the safe default too. */
 const DEFAULT_FORMAT: VideoFormat = 'mp4'
@@ -25,6 +26,7 @@ export function VideoExport() {
   const [seconds, setSeconds] = useState(10)
   const [pace, setPace] = useState<VideoPace>('linear')
   const [glow, setGlow] = useState(false)
+  const is3d = useDefinition().view === '3d'
   const supported = webCodecsAvailable()
   const recording = video.status === 'recording'
   const button = useRef<HTMLButtonElement>(null)
@@ -37,7 +39,13 @@ export function VideoExport() {
         onClick={() => setOpen(!open)}
         disabled={!supported}
         className={open ? 'active' : ''}
-        title={supported ? 'Record the drawing as a video' : 'This browser has no WebCodecs video encoder'}
+        title={
+          !supported
+            ? 'This browser has no WebCodecs video encoder'
+            : is3d
+              ? 'Record the drawing in the 3D view as a video (turning if ⟳ Rotate is on)'
+              : 'Record the drawing as a video'
+        }
         aria-expanded={open}
       >
         Video

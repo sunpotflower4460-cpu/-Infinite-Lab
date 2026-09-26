@@ -10,6 +10,7 @@ import {
   defaultParams,
   type DigitStart,
   type ExperimentDefinition,
+  type Extent,
   type ParamValue,
   type StepTrace,
 } from '../experiments/core/types'
@@ -142,6 +143,20 @@ export class LabController {
     this.cancelPending()
     const def = getExperiment(experimentId)
     this.store.setState({ experimentId, params: defaultParams(def.parameters) })
+    this.initSimulation()
+  }
+
+  /**
+   * Switch between experiments that share parameters (the Two-Arm 2D / Torus / Height views):
+   * parameters with the same key keep their values, the others take their defaults.
+   */
+  switchView(experimentId: string): void {
+    this.cancelPending()
+    const def = getExperiment(experimentId)
+    const current = this.store.getState().params
+    const params = defaultParams(def.parameters)
+    for (const key of Object.keys(params)) if (Object.hasOwn(current, key)) params[key] = current[key]!
+    this.store.setState({ experimentId, params })
     this.initSimulation()
   }
 
@@ -397,6 +412,29 @@ export class LabController {
       else lane.inspect(step)
     }
   }
+
+  /** The region the current rule can reach (see ExperimentDefinition.extent), or null. */
+  extent(): Extent | null {
+    const def = this.definition()
+    if (!def.extent) return null
+    const params = this.store.getState().params
+    const numeric: Record<string, number> = {}
+    for (const [k, v] of Object.entries(params)) if (typeof v === 'number') numeric[k] = v
+    return def.extent(numeric)
+  }
+
+  /** A click in the 3D view (same behaviour as a click on the 2D canvas). */
+  pickStep(step: number | null): void {
+    this.onPicked(step)
+  }
+
+  /** The 3D view, while one is mounted for this lane (PNG export of 3D experiments). */
+  view3d: {
+    snapshotPng(): Promise<Blob>
+    beginRecording(fromStep: number, toStep: number, look: Look): HTMLCanvasElement
+    renderRecordingStep(step: number, frame: number): HTMLCanvasElement
+    endRecording(): void
+  } | null = null
 
   /** For a Compare Mode lane: the main lab that owns it. */
   private owner: LabController | null = null
@@ -799,11 +837,13 @@ export class LabController {
       const count = this.renderer.visibleRecords
       // Microscope: only the range (the faint context is not part of the data)
       const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
+      const is3d = this.definition().view === '3d'
       if (format === 'png') {
-        this.download(await this.renderer.snapshotPng(), `${this.fileStem()}.png`)
+        const png = is3d && this.view3d ? this.view3d.snapshotPng() : this.renderer.snapshotPng()
+        this.download(await png, `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count, from), { type: 'text/csv' }),
+          new Blob(geometryCsv(this.renderer.store, count, from, is3d), { type: 'text/csv' }),
           `${this.fileStem()}.csv`,
         )
       } else {
@@ -852,10 +892,18 @@ export class LabController {
     const abort = new AbortController()
     this.videoAbort = abort
     this.store.setState({ video: { status: 'recording', done: 0, total: frames } })
+    // 3D experiments record the 3D view (camera as framed, turning if ⟳ Rotate is on)
+    const view3d = this.definition().view === '3d' ? this.view3d : null
+    const renderStep = view3d
+      ? (step: number, frame: number) => view3d.renderRecordingStep(step, frame)
+      : (step: number) => this.renderer.renderStep(step)
     try {
-      if (o.glow) this.renderer.setLook('luminous')
-      this.renderer.frameSteps(from, to)
-      const first = this.renderer.renderStep(from)
+      if (view3d) view3d.beginRecording(from, to, o.glow ? 'luminous' : look)
+      else {
+        if (o.glow) this.renderer.setLook('luminous')
+        this.renderer.frameSteps(from, to)
+      }
+      const first = renderStep(from, 0)
       const size = videoSize(first.width, first.height)
       let shown = 0
       const { blob, codec } = await encodeVideo({
@@ -863,7 +911,7 @@ export class LabController {
         fps,
         ...size,
         frames,
-        draw: (i, ctx) => ctx.drawImage(this.renderer.renderStep(steps[i]!), 0, 0, size.width, size.height),
+        draw: (i, ctx) => ctx.drawImage(renderStep(steps[i]!, i), 0, 0, size.width, size.height),
         onProgress: (done, total) => {
           if (done - shown >= 15 || done === total) {
             shown = done
@@ -884,7 +932,8 @@ export class LabController {
       })
     } finally {
       this.videoAbort = null
-      if (o.glow) this.renderer.setLook(look)
+      view3d?.endRecording()
+      if (o.glow && !view3d) this.renderer.setLook(look)
       this.renderer.restoreView(view)
       const st = this.store.getState()
       if (st.film)
@@ -1039,6 +1088,7 @@ export class LabController {
   private resetView(): void {
     this.aiRequestId++ // an answer still in flight belongs to the previous run
     this.store.setState({ patterns: null, ai: { status: 'idle' } })
+    this.renderer.extent = this.extent()
     this.renderer.clear()
     this.seekTarget = null
     this.store.setState({

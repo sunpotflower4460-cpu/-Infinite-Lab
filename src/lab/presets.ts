@@ -89,6 +89,42 @@ const RAW: { id: string; name: string; description: string; config: unknown }[] 
     },
   },
   {
+    id: 'pi-two-arm-torus',
+    name: 'Pi Two-Arm 3D: Torus',
+    description:
+      'Two-arm machine with arm 2 turning π× as fast in the vertical plane (arms 1.3 and 1, dt = 0.05): the pen fills a torus; 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-torus',
+      parameters: { dt: 0.05, r1: 1.3, r2: 1, scale: 100, drawArms: true },
+    },
+  },
+  {
+    id: 'pi-two-arm-ball',
+    name: 'Pi Two-Arm 3D: Ball',
+    description:
+      'Two-arm machine (speeds 1 and π, dt = 0.05) on a table turning π² times as fast: the pen fills a ball; 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-ball',
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, drawArms: true },
+    },
+  },
+  {
+    id: 'pi-two-arm-height',
+    name: 'Pi Two-Arm 3D: Height',
+    description:
+      'The two-arm pen path e^{it} + e^{iπt} (dt = 0.05) lifted by time, z = 100 × 0.01 × t; 3D view',
+    config: {
+      constant: 'pi',
+      precision: 100_000,
+      experiment: 'two-arm-height',
+      parameters: { dt: 0.05, r1: 1, r2: 1, scale: 100, rise: 0.01 },
+    },
+  },
+  {
     id: 'playground-spec',
     name: 'Playground: spec example',
     description: 'Formula Playground with ANGLE = digit × π / 5, RADIUS = digit × 2, DISTANCE = 5',

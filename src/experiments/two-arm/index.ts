@@ -107,5 +107,11 @@ export const twoArm: ExperimentDefinition = {
   ],
   formulas,
   symbols,
+  extent: (p) => disk(p.scale! * (Math.abs(p.r1!) + Math.abs(p.r2!))),
   create: () => new TwoArm(),
+}
+
+/** The disk of radius `r` around the origin (flat). */
+export function disk(r: number) {
+  return { minX: -r, maxX: r, minY: -r, maxY: r, minZ: 0, maxZ: 0 }
 }

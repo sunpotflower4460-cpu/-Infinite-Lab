@@ -43,13 +43,14 @@
 
 ## 実験 (v0.2)
 
-| 実験                      | 規則（Inspector に表示される式そのもの）                                                                                                                  |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **01 Digit Circle Walk**  | `angle = digit / 10 × 2π`, `x[n] = x[n−1] + cos(angle) × distance`, `radius = radiusBase + digit × radiusScale`                                           |
-| **02 Circle Chain**       | `r[n] = digit × radiusScale`, `θ[n] = (cumulative × θ[n−1] + digit / 10 × 2π) mod 2π`, 中心 = 前の円周上 `x[n] = x[n−1] + cos(θ[n]) × r[n−1]`             |
-| **03 Pi Rotation**        | `φ[n]° = (n × modifier × C) mod 360`（BigInt で厳密に計算、累積誤差なし）, `x[n] = x[n−1] + cos(φ[n]/180 × π) × distance`                                 |
-| **04 Two-Arm Rotation**   | `θ₁ = (n × dt) mod 2π`, `θ₂ = (n × dt × C) mod 2π`（BigInt で厳密）, `x[n] = scale × (r1·cos θ₁ + r2·cos θ₂)` — 参照動画の候補規則                        |
-| **05 Formula Playground** | ANGLE / RADIUS / DISTANCE を自分の式で（例 `digit × π / 5`）。`x[n] = x[n−1] + cos(angle) × distance` の歩行で円を置く。`(n × C) mod 2π` は BigInt で厳密 |
+| 実験                      | 規則（Inspector に表示される式そのもの）                                                                                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **01 Digit Circle Walk**  | `angle = digit / 10 × 2π`, `x[n] = x[n−1] + cos(angle) × distance`, `radius = radiusBase + digit × radiusScale`                                                                                                        |
+| **02 Circle Chain**       | `r[n] = digit × radiusScale`, `θ[n] = (cumulative × θ[n−1] + digit / 10 × 2π) mod 2π`, 中心 = 前の円周上 `x[n] = x[n−1] + cos(θ[n]) × r[n−1]`                                                                          |
+| **03 Pi Rotation**        | `φ[n]° = (n × modifier × C) mod 360`（BigInt で厳密に計算、累積誤差なし）, `x[n] = x[n−1] + cos(φ[n]/180 × π) × distance`                                                                                              |
+| **04 Two-Arm Rotation**   | `θ₁ = (n × dt) mod 2π`, `θ₂ = (n × dt × C) mod 2π`（BigInt で厳密）, `x[n] = scale × (r1·cos θ₁ + r2·cos θ₂)` — 参照動画の候補規則                                                                                     |
+| **05 Formula Playground** | ANGLE / RADIUS / DISTANCE を自分の式で（例 `digit × π / 5`）。`x[n] = x[n−1] + cos(angle) × distance` の歩行で円を置く。`(n × C) mod 2π` は BigInt で厳密                                                              |
+| **06 Two-Arm 3D**         | 04 の装置を立体に: 腕 2 を縦に回す **Torus**、台ごと π² 倍で回す **Ball**、時間で持ち上げる **Height**。角度はすべて BigInt で厳密。右上の 2D / Torus / Ball / Height で切り替え、**vs 22/7** で分数の場合と並べて比較 |
 
 C は選択中の定数（既定 π）。詳細は [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)。
 
@@ -76,6 +77,7 @@ Inspector には、実行された式そのもの（表示用に別途書かれ�
 - **Reference Reconstruction**: 参照動画（`docs/reference/`）を候補の式と比較し、一致しない候補を棄却（`tools/reference/analyze.py` → `docs/reference/ANALYSIS.md`）。動画は花の段階で 15 回対称が出てその後消える — これと矛盾しないのは速さの比 π（とこの動画では区別できない 355/113）だけ
 - **Patterns（計測）**: 表示中の図形の重心・広がり・回転対称性（有意性つき）・出発点への回帰・消費した桁の頻度と χ² を計算
 - **AI Observer（DeepSeek）**: 計測した事実を DeepSeek に渡し、「観測（事実の言い換え）」と「推測（未検証）」を分けて回答させる。回答は常に「AI の推測（未検証）」として表示。API キーは利用者が入力し、このブラウザにだけ保存（エクスポートや履歴には含めない）。ブラウザから DeepSeek に直接届かない環境（CORS など）では、接続先 URL を中継サーバーに変更できる
+- **3D ビュー（v0.6）**: 2D の「π は閉じないので埋め尽くす」を立体で。トーラスの表面、球の中身（速さ 1 : π : π²）を埋めていく。**vs 22/7** で閉じる場合と並べて見られる。比較用の値 22/7・355/113・3.14 は Constant でも選べる。ドラッグで回転、クリックでその step の式を表示（詳細は [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)）
 - **描画**: 既定は GPU インスタンス描画（SDF）。20 万オブジェクトで JS メモリ +0.7 MB（テッセレーション方式は +147 MB）。Scientific Mode で切り替え可能
 
 ## 使い方

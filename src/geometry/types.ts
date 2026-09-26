@@ -19,6 +19,11 @@ export interface PointInstruction {
   type: 'point'
   x: number
   y: number
+  /**
+   * Height for 3D experiments (absent = 0). 2D views show the point at (x, y) — its projection
+   * onto the z = 0 plane; the 3D view joins the points of consecutive steps.
+   */
+  z?: number
 }
 /**
  * Arc: starts at `startAngle` and runs counter-clockwise (mathematical orientation) through
@@ -56,7 +61,8 @@ export const line = (x1: number, y1: number, x2: number, y2: number): LineInstru
   x2,
   y2,
 })
-export const point = (x: number, y: number): PointInstruction => ({ type: 'point', x, y })
+export const point = (x: number, y: number, z?: number): PointInstruction =>
+  z === undefined ? { type: 'point', x, y } : { type: 'point', x, y, z }
 export const arc = (
   x: number,
   y: number,

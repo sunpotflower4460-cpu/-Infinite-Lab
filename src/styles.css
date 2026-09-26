@@ -1131,3 +1131,64 @@ input:not([type]) {
   background: rgba(0, 0, 0, 0.55);
   color: #d8dce8;
 }
+
+/* ---- 3D view (Two-Arm Torus / Height) ------------------------------------------ */
+
+.stage-3d,
+.stage-3d-canvas {
+  position: absolute;
+  inset: 0;
+}
+.stage-3d-canvas {
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.stage-3d-canvas:active {
+  cursor: grabbing;
+}
+.stage-3d-canvas canvas {
+  display: block;
+}
+.stage-3d-rotate {
+  position: absolute;
+  top: 46px;
+  right: 10px;
+  background: rgba(10, 12, 20, 0.8);
+  font-size: 11px;
+}
+.view-switch {
+  display: flex;
+}
+.view-switch button {
+  border-radius: 0;
+}
+.view-switch button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.view-switch button:last-child {
+  border-radius: 0 6px 6px 0;
+}
+.view-switch button + button {
+  margin-left: -1px;
+}
+/* the active (or hovered) segment is drawn above its neighbours so its whole border shows */
+.view-switch button:hover,
+.view-switch button.active {
+  position: relative;
+  z-index: 1;
+}
+/* no WebGL: a note over the 2D (top) view, which stays interactive underneath */
+.stage-3d-notice {
+  position: absolute;
+  left: 12px;
+  bottom: 28px;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(10, 12, 20, 0.85);
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+}

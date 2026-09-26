@@ -104,9 +104,11 @@ export function productModTau(
   factors: number[],
   constant: BinaryConstant | null,
   pi: BinaryConstant,
+  /** C² instead of C (e.g. a third arm turning π² times as fast). */
+  power: 1 | 2 = 1,
 ): number {
-  let M = constant ? constant.raw : 1n
-  let E = constant ? -constant.bits : 0
+  let M = constant ? constant.raw ** BigInt(power) : 1n
+  let E = constant ? -constant.bits * power : 0
   for (const f of factors) {
     const d = decomposeDouble(f)
     M *= d.mant

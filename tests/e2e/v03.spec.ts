@@ -71,7 +71,8 @@ test('both geometry layers draw the same structure', async ({ page }) => {
   await ready(page)
   await page.getByLabel('Go to step').fill('1000')
   await page.getByLabel('Go to step').press('Enter')
-  await expect(page.getByTestId('current-step')).toHaveText('1,000')
+  // computing 1,000 steps can exceed the default 5 s when the machine is busy (parallel tests)
+  await expect(page.getByTestId('current-step')).toHaveText('1,000', { timeout: 20_000 })
   const scientific = page.getByText('Scientific Mode').first()
   await scientific.click()
   const backend = await page.locator('.sci-row', { hasText: 'Renderer backend' }).locator('dd').textContent()
@@ -169,11 +170,13 @@ test('Compare Mode runs π and e in lockstep under identical conditions', async 
   await expect(page.getByLabel('Compare constant')).toHaveValue('e')
   await expect(page.getByTestId('lane-readout-0')).toContainText('π')
 
-  await page.getByRole('radio', { name: '100x' }).click()
+  // 10x = 100 steps/s: the 1,000 digits last ~10 s, so Pause is still enabled when we click it
+  // (at 100x = 1,000 steps/s both lanes could finish before the click, disabling Pause)
+  await page.getByRole('radio', { name: '10x' }).click()
   await page.getByRole('button', { name: 'Play' }).click()
   await expect
     .poll(async () => Number((await page.getByTestId('current-step').textContent())!.replace(/,/g, '')))
-    .toBeGreaterThan(100)
+    .toBeGreaterThan(20)
   await page.getByRole('button', { name: 'Pause' }).click()
   await expect(page.getByRole('button', { name: 'Play' })).toBeVisible()
 

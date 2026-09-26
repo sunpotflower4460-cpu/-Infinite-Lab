@@ -20,12 +20,13 @@ import type { Expr, FnName } from './ast'
  *
  *   (f × g × …) mod 2π    → modTau([f, g, …])             a product of two or more factors
  *   (f × … × C) mod 2π    → modTau([f, …], withConstant)
+ *   (f × … × C²) mod 2π   → modTau([f, …], withConstant, squared)   C² = C × C (both exact)
  *   (f × … × C) mod 360   → constMod([f, …], 360)          any positive whole number
  *
  * Any other "x mod 2π" (a sum, a single value) is the ordinary float64 mod with 2π = 2 × fl(π),
  * like every π in a formula — this is how Circle Chain's direction has always been computed.
  *
- * `C` — the selected constant — may appear only as one factor of such a reduction. Anywhere
+ * `C` — the selected constant — may appear only as one factor (or C² / C × C in a mod 2π) of such a reduction. Anywhere
  * else it would have to be rounded to float64 first, and n × C loses every digit that makes
  * the constant interesting once n is large, so that is refused with an explanation.
  */
@@ -107,6 +108,13 @@ function tokenize(src: string): Token[] {
     } else if (Object.hasOwn(OPS, ch)) {
       i++
       out.push({ kind: 'op', text: OPS[ch]!, start, end: i })
+    } else if (ch === '²') {
+      // C² = C × C: only the constant may be squared (inside an exact mod 2π reduction)
+      const prev = out[out.length - 1]
+      if (prev?.kind !== 'name' || prev.text !== 'C')
+        throw new FormulaSyntaxError('only the constant can be squared (C²)', i, i + 1)
+      i++
+      out.push({ kind: 'op', text: OPS['×']!, start, end: i }, { kind: 'name', text: 'C', start, end: i })
     } else if (ch === '^') {
       throw new FormulaSyntaxError('powers are not supported: write the product (x × x)', i, i + 1)
     } else {
@@ -251,8 +259,11 @@ export function parseExpr(src: string, options: ParseOptions): Expr {
     const constants = factors.filter(isConstantMark)
     const rest = factors.filter((f) => !isConstantMark(f))
     if (isTwoPi(right) && (constants.length > 0 || factors.length > 1)) {
-      if (constants.length > 1)
-        throw new FormulaSyntaxError('C may appear only once in a reduction', ...range(constants[1]!))
+      if (constants.length > 2)
+        throw new FormulaSyntaxError(
+          'C may appear at most twice (C²) in a reduction mod 2π',
+          ...range(constants[2]!),
+        )
       for (const f of rest) {
         if (f.kind === 'pi')
           throw new FormulaSyntaxError(
@@ -260,6 +271,7 @@ export function parseExpr(src: string, options: ParseOptions): Expr {
             ...range(f),
           )
       }
+      if (constants.length === 2) return { kind: 'modTau', factors: rest, withConstant: true, squared: true }
       return { kind: 'modTau', factors: rest, withConstant: constants.length === 1 }
     }
     if (constants.length === 0) return { kind: 'bin', op: 'mod', left, right }
