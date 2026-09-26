@@ -67,6 +67,9 @@ export class Scene3D {
   private readonly guideLine: Line
   private lastGuide: GeometryInstruction[] | null = null
   private uploaded = 0
+  private generation = -1
+  private lastFollow = false
+  private savedView: { target: Vector3; position: Vector3 } | null = null
   private readonly min = new Vector3(Infinity, Infinity, Infinity)
   private readonly max = new Vector3(-Infinity, -Infinity, -Infinity)
   private frameId = 0
@@ -207,6 +210,7 @@ export class Scene3D {
     this.sync()
     const store = this.source.store
     this.recording = { from: store.firstIndexOfStep(fromStep), to: store.countUpToStep(toStep), look }
+    this.savedView = { target: this.controls.target.clone(), position: this.camera.position.clone() }
     this.goal = null
     this.fit()
     return this.canvas
@@ -232,6 +236,12 @@ export class Scene3D {
 
   endRecording(): void {
     this.recording = null
+    if (this.savedView) {
+      // the view is back where it was (as the 2D view after a recording)
+      this.controls.target.copy(this.savedView.target)
+      this.camera.position.copy(this.savedView.position)
+      this.savedView = null
+    }
     this.lastState = ''
     this.lastGuide = null
     this.controls.update()
@@ -257,7 +267,14 @@ export class Scene3D {
     this.controls.dispose()
     this.shown.dispose()
     this.context.dispose()
+    this.marker.geometry.dispose()
+    this.guideLine.geometry.dispose()
+    for (const m of [this.lineMaterial, this.contextMaterial, this.marker.material, this.guideLine.material])
+      (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose())
     this.renderer.dispose()
+    // release the GL context now: browsers keep only ~16, and the oldest (possibly the 2D
+    // canvas's) is dropped when switching 2D ↔ 3D often
+    this.renderer.forceContextLoss()
     this.canvas.remove()
   }
 
@@ -283,9 +300,14 @@ export class Scene3D {
     }
     const rangeKey = range ? `${range.from}-${to}` : ''
     if (rangeKey !== this.lastRange) {
+      const leaving = this.lastRange !== '' && !range
       this.lastRange = rangeKey
-      if (range) this.fit() // entering / moving the Microscope frames its range, as in 2D
+      // entering / moving the Microscope frames its range, leaving it frames everything (as in 2D)
+      if (range || leaving) this.fit()
     }
+    const follow = this.source.follow()
+    if (follow && !this.lastFollow && this.lastFit !== 0) this.fit(true) // Fit All pressed
+    this.lastFollow = follow
     const now = performance.now()
     if (this.source.follow() && (grew || this.lastFit === 0) && now - this.lastFit > FIT_INTERVAL_MS) {
       const first = this.lastFit === 0
@@ -305,7 +327,10 @@ export class Scene3D {
   /** Upload records appended since the last frame; start over after a reset. Returns true if new. */
   private sync(): boolean {
     const store = this.source.store
-    if (store.count < this.uploaded) this.reset()
+    if (store.generation !== this.generation || store.count < this.uploaded) {
+      this.generation = store.generation // a restart (clear), even if the new run already caught up
+      this.reset()
+    }
     if (store.count === this.uploaded) return false
     this.reserve(store.count)
     const p = this.positions

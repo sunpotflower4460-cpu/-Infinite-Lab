@@ -85,6 +85,10 @@ export class GeometryBatchWriter {
   }
 }
 
+/**
+ * One record back as an instruction. A point's z is returned only when it is non-zero: the bytes
+ * of a 3D point at z = 0 and of a 2D point are identical (that is what keeps 2D digests stable).
+ */
 export function decodeRecord(
   data: Float64Array,
   index: number,

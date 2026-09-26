@@ -20,6 +20,8 @@ export class GeometryStore {
   readonly chunkBounds: Bounds[] = []
   count = 0
   bounds: Bounds | null = null
+  /** Incremented by clear(): lets readers (the 3D view) notice a restart even if the count grew back. */
+  generation = 0
 
   append(batch: GeometryBatch): void {
     const src = batch.data
@@ -191,6 +193,7 @@ export class GeometryStore {
   }
 
   clear(): void {
+    this.generation++
     this.chunks.length = 0
     this.chunkBounds.length = 0
     this.count = 0

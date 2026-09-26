@@ -12,7 +12,7 @@ export function Stage3D({ controller }: { controller: LabController }) {
   const scene = useRef<Scene3D | null>(null)
   const [rotating, setRotating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [webgl] = useState(webglAvailable)
+  const webgl = webglAvailable()
 
   useEffect(() => {
     if (!webgl) return // the 2D canvas underneath stays visible: the top view (x, y)
@@ -78,12 +78,21 @@ export function Stage3D({ controller }: { controller: LabController }) {
   )
 }
 
-/** Whether this browser can create a WebGL context (three.js needs one; 2D has fallbacks). */
+let webglProbe: boolean | undefined
+
+/**
+ * Whether this browser can create a WebGL context (three.js needs one; 2D has fallbacks).
+ * Probed once, and the probe's context is released right away.
+ */
 function webglAvailable(): boolean {
+  if (webglProbe !== undefined) return webglProbe
   try {
     const c = document.createElement('canvas')
-    return !!(c.getContext('webgl2') ?? c.getContext('webgl'))
+    const gl = c.getContext('webgl2') ?? c.getContext('webgl')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    webglProbe = !!gl
   } catch {
-    return false
+    webglProbe = false
   }
+  return webglProbe
 }
