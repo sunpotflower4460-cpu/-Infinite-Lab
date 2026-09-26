@@ -126,13 +126,14 @@ npm run lint
 npm run build
 ```
 
-| ドキュメント                                 | 内容                                     |
-| -------------------------------------------- | ---------------------------------------- |
-| [docs/VISION.md](docs/VISION.md)             | 思想と原則                               |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | パイプライン・Worker・Renderer の構成    |
-| [docs/MATHEMATICS.md](docs/MATHEMATICS.md)   | π 計算、精度、決定性、検証               |
-| [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)   | 実験の定義と追加方法                     |
-| [docs/ROADMAP.md](docs/ROADMAP.md)           | マイルストーンと v0.1 Definition of Done |
+| ドキュメント                                           | 内容                                                       |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| [docs/VISION.md](docs/VISION.md)                       | 思想と原則                                                 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)           | パイプライン・Worker・Renderer の構成                      |
+| [docs/MATHEMATICS.md](docs/MATHEMATICS.md)             | π 計算、精度、決定性、検証                                 |
+| [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)             | 実験の定義と追加方法                                       |
+| [docs/ROADMAP.md](docs/ROADMAP.md)                     | マイルストーンと v0.1 Definition of Done                   |
+| [docs/REAL_DEVICE_CHECK.md](docs/REAL_DEVICE_CHECK.md) | 実機（Mac + iPhone）での確認手順（Claude Code への依頼書） |
 
 ## 技術スタック
 
