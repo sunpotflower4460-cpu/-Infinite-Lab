@@ -1,12 +1,11 @@
-# Publishes the app to GitHub Pages on every push to main, so it can be opened on a phone:
+# Publishes the app to GitHub Pages, so it can be opened on a phone:
 #   https://<owner>.github.io/<repo>/        (lab)
 #   https://<owner>.github.io/<repo>/#film   (Film mode)
-# One-time repository setting: Settings → Pages → Build and deployment → Source: GitHub Actions.
+# Manual only (Actions → pages → Run workflow). Needs, once:
+# Settings → Pages → Build and deployment → Source: GitHub Actions.
 name: pages
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

@@ -12,15 +12,15 @@
 
 ## 参照動画の模様を見る（Film mode）
 
-**https://sunpotflower4460-cpu.github.io/-Infinite-Lab/#film** （スマホでも開けます）
+アプリ上部の **▶ Film**、または URL の末尾に `#film` を付けて開きます（例: `http://localhost:5173/#film`）。
 
 参照動画（`docs/reference/`）と同じ規則 — 2 本の腕をつなぎ、2 本目を 1 本目の **π 倍** の速さで回したときのペン先の軌跡
 `e^{it} + e^{iπt}` — を、白い光の線で全画面に描きます。時間とともに描画が加速し、花 → 網目 → 光る球へと変わっていきます。
 画面をタップで一時停止 / 再開、✕ で実験画面（Two-Arm Rotation、式と各 step を確認できる）に戻ります。
 π は 3.14 ではなく約 120 桁の精度で角度を厳密に計算しています。
 
-> 公開には一度だけリポジトリの設定が必要です: Settings → Pages → Build and deployment → Source を **GitHub Actions** にする。
-> 以後 main に入るたびに自動で公開されます（`.github/workflows/pages.yml`）。
+> GitHub Pages での公開用ワークフロー（`.github/workflows/pages.yml`）は手動実行のみです。使う場合は
+> Settings → Pages → Source を **GitHub Actions** にしてから Actions → pages → Run workflow。
 
 ## 定数 (v0.2)
 
