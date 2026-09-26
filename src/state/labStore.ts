@@ -4,6 +4,7 @@ import { digitCircleWalk } from '../experiments/digit-circle-walk'
 import { DEFAULT_SOURCES, type PlaygroundSources } from '../experiments/playground'
 import type { HistoryEntry } from '../lab/history'
 import type { Look } from '../renderer/layers/GeometryLayer'
+import { loadFilmInfo, type FilmInfoLevel } from '../film/explain'
 import type { PatternFacts } from '../analysis/patterns'
 import type { ObserverAnswer } from '../ai/deepseek'
 
@@ -70,6 +71,8 @@ export interface LabState {
   look: Look
   /** Film mode: full-screen playback that speeds up like the reference video. */
   film: boolean
+  /** How much Film mode explains: plain words, the full mathematics, or nothing. */
+  filmInfo: FilmInfoLevel
   scientific: boolean
   /** Pattern Detection results (measured) and the step they describe. */
   patterns: { facts: PatternFacts; step: number } | null
@@ -124,6 +127,7 @@ function initialState(): LabState {
     scientific: false,
     look: 'lab',
     film: false,
+    filmInfo: loadFilmInfo(),
     patterns: null,
     ai: { status: 'idle' },
     sheet: null,

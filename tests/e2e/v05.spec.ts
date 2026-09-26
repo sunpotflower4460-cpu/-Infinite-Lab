@@ -120,7 +120,28 @@ test.describe('Film mode (the reference video look)', () => {
     await page.getByRole('button', { name: 'Play film' }).click()
     await expect.poll(time).toBeGreaterThan(paused)
 
-    // the same rule as the Two-Arm preset, without the arms
+    // plain words first: π = 3.14…, the arms' turns, what is happening now
+    await expect(page.getByTestId('film-pi')).toContainText('π = 3.14159265358979')
+    await expect(page.getByTestId('film-counters')).toContainText('先 ÷ 根元')
+    await expect(page.getByTestId('film-counters')).toContainText('3.14159')
+    await expect(page.getByTestId('film-stage')).toContainText('π')
+
+    // experts: the executed formulas with live values, and the convergents of π
+    await page.getByRole('radio', { name: '専門' }).click()
+    await expect(page.getByTestId('film-math')).toContainText('θ₂ = (n × dt × π) mod 2π = ')
+    await expect(page.getByTestId('film-convergents')).toContainText('355/113')
+    await expect(page.getByTestId('film-pi')).toContainText('3.14159265358979323846264338327950288419')
+
+    // nothing, like the reference video
+    await page.getByRole('radio', { name: '説明なし' }).click()
+    await expect(page.getByTestId('film-panel')).toHaveCount(0)
+    await expect(page.getByTestId('film-time')).toBeVisible()
+
+    // the choice is remembered
+    await page.reload()
+    await expect(page.getByRole('radio', { name: '説明なし' })).toHaveAttribute('aria-checked', 'true')
+
+    // the same rule as the Two-Arm preset
     await page.getByRole('button', { name: 'Close film' }).click()
     await expect(film).toBeHidden()
     await expect(page.getByTestId('formulas-current')).toContainText('θ₂ = (n × dt × π) mod 2π')

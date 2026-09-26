@@ -25,6 +25,7 @@ import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
 import type { Look } from '../renderer/layers/GeometryLayer'
 import { filmSpeed } from './filmSpeed'
+import { saveFilmInfo, type FilmInfoLevel } from '../film/explain'
 import { createLabStore, SPEEDS, useLab, type LabStore } from '../state/labStore'
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
@@ -441,6 +442,15 @@ export class LabController {
     } else if (!this.store.getState().finished) {
       this.startFilmClock()
     }
+  }
+
+  /** Film explanations: plain / expert / none (remembered in this browser). */
+  setFilmInfo(level: FilmInfoLevel): void {
+    saveFilmInfo(level)
+    this.store.setState({ filmInfo: level })
+    if (level === 'off') this.renderer.setHighlight(null)
+    else if (this.store.getState().film)
+      this.renderer.setHighlight(this.store.getState().currentTrace?.overlay ?? null)
   }
 
   setLook(look: Look): void {
@@ -952,9 +962,12 @@ export class LabController {
         this.renderer.append({ data: msg.data, count: msg.count })
         this.postSim({ type: 'ack', generation: msg.generation })
         const inspected = this.store.getState().inspected
-        // Film mode shows only the drawing, as in the reference video (no pen / arm marker).
-        if (msg.trace && !inspected && !this.store.getState().film)
-          this.renderer.setHighlight(highlightOf(msg.trace))
+        if (msg.trace && !inspected) {
+          const st = this.store.getState()
+          // Film mode: the arms as a guide (unless explanations are off, like the reference video)
+          if (!st.film) this.renderer.setHighlight(highlightOf(msg.trace))
+          else this.renderer.setHighlight(st.filmInfo === 'off' ? null : (msg.trace.overlay ?? null))
+        }
         this.store.setState({
           currentStep: msg.currentStep,
           totalSteps: msg.totalSteps,
