@@ -260,7 +260,10 @@ export function parseExpr(src: string, options: ParseOptions): Expr {
     const rest = factors.filter((f) => !isConstantMark(f))
     if (isTwoPi(right) && (constants.length > 0 || factors.length > 1)) {
       if (constants.length > 2)
-        throw new FormulaSyntaxError('C may appear at most twice (C²) in a reduction mod 2π', ...range(constants[2]!))
+        throw new FormulaSyntaxError(
+          'C may appear at most twice (C²) in a reduction mod 2π',
+          ...range(constants[2]!),
+        )
       for (const f of rest) {
         if (f.kind === 'pi')
           throw new FormulaSyntaxError(
