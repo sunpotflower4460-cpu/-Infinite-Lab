@@ -15,7 +15,7 @@ import {
 } from '../experiments/core/types'
 import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
-import { MAX_PRECISION, nextPrecision, type LabConfig } from '../lab/config'
+import { digitLimit, nextPrecision, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { detectPatterns } from '../analysis/patterns'
@@ -563,7 +563,7 @@ export class LabController {
     this.store.setState({ scientific })
   }
 
-  /** Infinite Mode (spec §37): continuous computation until paused (up to MAX_PRECISION digits). */
+  /** Infinite Mode (spec §37): continuous computation until paused (up to digitLimit() digits). */
   setContinuous(on: boolean): void {
     this.store.setState({ continuous: on })
     this.postSim({ type: 'setContinuous', on })
@@ -575,7 +575,7 @@ export class LabController {
     const s = this.store.getState()
     const loaded = this.loaded
     if (!s.continuous || s.phase !== 'ready' || this.extendRequestId !== null || !loaded) return
-    if (loaded.precision >= MAX_PRECISION || loaded.constantId !== s.constantId) {
+    if (loaded.precision >= digitLimit() || loaded.constantId !== s.constantId) {
       // No extension can come: let a waiting worker finish instead of waiting forever.
       if (s.waiting) this.postSim({ type: 'setContinuous', on: false })
       return

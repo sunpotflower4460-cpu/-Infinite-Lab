@@ -106,7 +106,8 @@ test('Infinite Mode keeps computing digits and the result stays reproducible', a
   await page.getByTestId('precision').selectOption('100')
   await expect(page.getByTestId('status')).toContainText('100 digits')
   await page.getByRole('button', { name: '∞ Infinite' }).click()
-  await page.getByRole('radio', { name: 'MAX' }).click()
+  // 1,000x rather than MAX: MAX can use up every computable digit before the pause below
+  await page.getByRole('radio', { name: '1,000x' }).click()
   await page.getByRole('button', { name: 'Play' }).click()
   // 101 steps from 100 digits, then continues on 10,000 → 20,000 digits…
   await expect

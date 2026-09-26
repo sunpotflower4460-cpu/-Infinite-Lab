@@ -43,6 +43,18 @@ describe('continuous computation', () => {
     expect(nextPrecision(MAX_PRECISION)).toBe(MAX_PRECISION)
   })
 
+  it('stops at the browser BigInt limit (Firefox: 2^20 bits → 142,000 digits)', async () => {
+    const { digitsForBits, maxBigIntBits } = await import('../../../src/math/bigintLimit')
+    const firefox = digitsForBits(2 ** 20)
+    expect(firefox).toBe(142_000)
+    // the largest intermediate, ~2·d digits, fits in 2^20 bits with room to spare
+    expect(2 * firefox * Math.log2(10)).toBeLessThan(0.91 * 2 ** 20)
+    expect(nextPrecision(80_000, firefox)).toBe(firefox)
+    expect(nextPrecision(firefox, firefox)).toBe(firefox)
+    // V8 (this test run) has no practical limit below 1,000,000 digits
+    expect(digitsForBits(maxBigIntBits())).toBeGreaterThanOrEqual(MAX_PRECISION)
+  })
+
   it('configs accept extended precisions but not beyond the limit', () => {
     expect(parseConfig({ experiment: 'circle-chain', precision: 40_000 }).precision).toBe(40_000)
     expect(() => parseConfig({ experiment: 'circle-chain', precision: MAX_PRECISION + 1 })).toThrow(

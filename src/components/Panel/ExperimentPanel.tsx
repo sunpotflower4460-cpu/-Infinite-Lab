@@ -8,6 +8,7 @@ import { PRESETS } from '../../lab/presets'
 import { CONSTANTS } from '../../math/constants'
 import { HistoryPanel } from '../History/HistoryPanel'
 import { PRECISIONS, useLab } from '../../state/labStore'
+import { digitLimit } from '../../lab/config'
 import { formatInt } from '../../utils/format'
 
 export function ExperimentPanel() {
@@ -81,7 +82,7 @@ export function ExperimentPanel() {
           aria-label="Precision"
           data-testid="precision"
         >
-          {PRECISIONS.map((p) => (
+          {PRECISIONS.filter((p) => p <= digitLimit()).map((p) => (
             <option key={p} value={p}>
               {formatInt(p)} digits
             </option>

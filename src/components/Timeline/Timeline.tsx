@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
 import { formatInt } from '../../utils/format'
-import { MAX_PRECISION } from '../../lab/config'
+import { digitLimit, MAX_PRECISION } from '../../lab/config'
 
 /**
  * Timeline (spec §18): 0 ──●── total. Dragging back hides later geometry without
@@ -89,8 +89,8 @@ export function Timeline() {
       )}
       {finished && viewStep === null && !extending && (
         <span className="badge">
-          {continuous && precision >= MAX_PRECISION
-            ? `${formatInt(MAX_PRECISION)}-digit limit reached`
+          {continuous && precision >= digitLimit()
+            ? `${formatInt(digitLimit())}-digit limit reached${digitLimit() < MAX_PRECISION ? ' (this browser’s BigInt limit)' : ''}`
             : 'all computed digits consumed'}
         </span>
       )}

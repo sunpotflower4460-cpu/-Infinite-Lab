@@ -2,14 +2,23 @@ import type { DigitStart, ParamValues } from '../experiments/core/types'
 import { PLAYGROUND_ID, parseSources, type PlaygroundSources } from '../experiments/playground'
 import { EXPERIMENTS } from '../experiments/registry'
 import { CONSTANTS } from '../math/constants'
+import { digitsForBits, maxBigIntBits } from '../math/bigintLimit'
 
 export const PRECISIONS = [100, 1_000, 10_000, 100_000] as const
 /** Upper limit of computed digits (Infinite Mode extends up to here; ~112 MB of exact geometry). */
 export const MAX_PRECISION = 1_000_000
 
-/** Next precision for continuous computation: double, at least 10,000, capped at MAX_PRECISION. */
-export function nextPrecision(current: number): number {
-  return Math.min(MAX_PRECISION, Math.max(current * 2, 10_000))
+/**
+ * Most digits this browser can compute: MAX_PRECISION, or less where the engine caps BigInt
+ * size (Firefox: about 140,000 digits; see math/bigintLimit.ts).
+ */
+export function digitLimit(): number {
+  return Math.min(MAX_PRECISION, digitsForBits(maxBigIntBits()))
+}
+
+/** Next precision for continuous computation: double, at least 10,000, capped at digitLimit(). */
+export function nextPrecision(current: number, limit = digitLimit()): number {
+  return Math.min(limit, Math.max(current * 2, 10_000))
 }
 
 /** Everything that determines the geometry (together with a step count). */
@@ -48,6 +57,8 @@ export function parseConfig(input: unknown): LabConfig {
   ) {
     throw new Error(`unsupported precision ${String(precision)} (1 – ${MAX_PRECISION})`)
   }
+  if (precision > digitLimit())
+    throw new Error(`this browser can compute at most ${digitLimit()} digits (BigInt size limit)`)
   const digitStart = o.digitStart === undefined ? 'integer' : o.digitStart
   if (digitStart !== 'integer' && digitStart !== 'fractional')
     throw new Error(`invalid digitStart ${String(digitStart)}`)
