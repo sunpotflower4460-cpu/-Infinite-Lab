@@ -270,6 +270,20 @@ input:not([type]) {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 6px 24px;
 }
+/* One line per formula: values grow while playing, and a wrapping line would change the
+   footer height and move the transport buttons under the pointer. Full text in the title. */
+.bottom-formula .formula {
+  min-width: 0;
+}
+.bottom-formula .formula .symbolic,
+.bottom-formula .formula .substituted {
+  line-height: 18px;
+  height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
 
 /* ---- stage ------------------------------------------------------------------ */
 
@@ -673,8 +687,16 @@ input:not([type]) {
   .bottom-formula {
     display: none;
   }
+  /* fixed columns: growing numbers must not change the number of rows (see .bottom-formula) */
   .status-strip {
-    gap: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px 14px;
+  }
+  .reading-value {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .reading-value {
     font-size: 13px;

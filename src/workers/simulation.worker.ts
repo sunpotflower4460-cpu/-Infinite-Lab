@@ -140,7 +140,9 @@ ctx.onmessage = (e: MessageEvent<SimRequest>) => {
             type: 'status',
             playing: false,
             currentStep: sim.runner.currentStep,
-            finished: sim.runner.finished,
+            // In Infinite Mode the end of the digits is not the end: more are coming,
+            // so Play must stay available (it waits again if they have not arrived yet).
+            finished: sim.runner.finished && !continuous,
           })
         break
       case 'step':

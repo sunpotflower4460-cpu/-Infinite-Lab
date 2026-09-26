@@ -1,5 +1,21 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// On failure, print what the app itself reported (the CI log is often all there is).
+test.afterEach(async ({ page }, info) => {
+  if (info.status === info.expectedStatus) return
+  const text = async (sel: string) =>
+    (
+      await page
+        .locator(sel)
+        .allTextContents()
+        .catch(() => [])
+    ).join(' | ') || '—'
+  console.log(
+    `[diagnostics] ${info.title}\n  error: ${await text('.error')}\n  status: ${await text('[data-testid="status"]')}` +
+      `\n  timeline: ${await text('[data-testid="timeline"]')}\n  verify: ${await text('[data-testid="verify"]')}`,
+  )
+})
+
 async function ready(page: Page, text = '3.14159') {
   await expect(page.getByTestId('digit-stream')).toContainText(text)
 }
@@ -120,6 +136,29 @@ test('Infinite Mode keeps computing digits and the result stays reproducible', a
   await expect(page.getByTestId('verify')).toContainText('reproduced', { timeout: 60_000 })
 })
 
+/** Values grow while playing; the layout must not move the transport buttons under the pointer. */
+async function transportStaysPut(page: Page) {
+  await page.goto('/')
+  await ready(page)
+  await page.getByRole('radio', { name: '10x' }).click()
+  const box = async () => (await page.getByRole('button', { name: /^(Play|Pause)$/ }).boundingBox())!
+  const start = await box()
+  await page.getByRole('button', { name: 'Play' }).click()
+  let drift = 0
+  for (let i = 0; i < 12; i++) {
+    const b = await box()
+    drift = Math.max(drift, Math.abs(b.x - start.x), Math.abs(b.y - start.y))
+    await page.waitForTimeout(150)
+  }
+  await page.getByRole('button', { name: 'Pause' }).click()
+  // a wrapped formula line moves the buttons by a whole line (~18 px); allow sub-pixel rounding
+  expect(drift).toBeLessThan(1)
+}
+
+test('the transport buttons stay in place while values grow during playback', async ({ page }) => {
+  await transportStaysPut(page)
+})
+
 test('Compare Mode runs π and e in lockstep under identical conditions', async ({ page }) => {
   await page.goto('/')
   await ready(page)
@@ -201,6 +240,10 @@ test('PNG / SVG / CSV export the visible geometry', async ({ page }) => {
 test.describe('mobile layout (spec §30)', () => {
   test.skip(({ browserName }) => browserName === 'firefox', 'Playwright cannot emulate mobile in Firefox')
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('the transport buttons stay in place while values grow', async ({ page }) => {
+    await transportStaysPut(page)
+  })
 
   test('canvas first, Setup and Inspector as bottom sheets', async ({ page }) => {
     await page.goto('/')
