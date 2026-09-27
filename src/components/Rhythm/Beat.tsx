@@ -320,8 +320,8 @@ export function OneCell() {
           </button>
           {first && first.s === s && (
             <span className="small">
-              γ を 0.005 刻みで上げると、最初に取り込まれるのは <b>γ = {first.g ?? '0.3 まででなし'}</b>{' '}
-              <Tag kind="測定" />
+              γ を 0.005 から 0.005 刻みで上げると、最初に取り込まれるのは{' '}
+              <b>γ = {first.g ?? '0.3 まででなし'}</b> <Tag kind="測定" />
             </span>
           )}
         </div>

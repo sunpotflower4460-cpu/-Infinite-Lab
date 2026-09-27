@@ -279,9 +279,13 @@ export function runCell(
   return { ...lockOfSeries(th, qmax, tol), strobe: th }
 }
 
-/** Smallest γ on the report's grid (0, 0.005, …, 0.3) that captures a cell at this s (null: none). */
+/**
+ * Smallest γ on the report's grid (0.005, 0.01, …, 0.3) that captures a cell at this s (null: none).
+ * γ = 0 is left out: with no beat there is nothing to be captured by, though a ratio that is exactly a
+ * fraction (s = 1/2) passes the same test.
+ */
 export function firstCapture(s: number, step = 0.005, max = 0.3): number | null {
-  for (let i = 0; i * step <= max + 1e-12; i++) {
+  for (let i = 1; i * step <= max + 1e-12; i++) {
     const g = +(i * step).toFixed(6)
     if (runCell(s, g).locked) return g
   }

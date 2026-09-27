@@ -97,6 +97,11 @@ describe('one cell under a beat (report B)', () => {
     expect(firstCapture(Math.SQRT1_2)).toBeCloseTo(0.07, 6)
   })
 
+  it('with no beat nothing is captured: γ = 0 is not counted as the first capture', () => {
+    expect(runCell(0.5, 0).locked).toBe(true) // exactly 1/2: the test alone cannot tell
+    expect(firstCapture(0.5)).toBe(0.005)
+  })
+
   it('the shipped Arnold-tongue map (research code) agrees with this port, cell by cell', () => {
     const t = tongues as {
       s0: number

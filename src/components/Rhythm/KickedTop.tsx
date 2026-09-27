@@ -235,7 +235,7 @@ function Barcode() {
   const start = () => {
     setCols([])
     setStarted(true)
-    worker.send({ kind: 'barcode', Ks: K_GRID, n: 1001, N: 20000 })
+    worker.send({ kind: 'barcode', Ks: K_GRID, n: 4001, N: 20000 })
   }
   useEffect(() => {
     const el = canvas.current
@@ -287,11 +287,11 @@ function Barcode() {
           ) : (
             <>
               <Tag kind="測定" />
-              （始め方 1001 通りで計算）
+              （報告と同じ、始め方 4001 通りで計算）
             </>
           )
         ) : (
-          <button onClick={start}>この画面で計算して描く（10 秒ほど）</button>
+          <button onClick={start}>この画面で計算して描く（1〜2 分ほど）</button>
         )}
       </figcaption>
     </figure>

@@ -77,8 +77,9 @@ export function LiveMedium({
     setResult(null)
     report.current?.(null)
     worker.send({ kind: 'beat', s: BEATS.find((x) => x.id === liveBeat.beat)!.w, gamma: liveBeat.gamma })
+    // also when the medium restarts after coming back on screen, so it runs with the beat shown
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveBeat])
+  }, [liveBeat, visible])
 
   useEffect(() => {
     const el = canvas.current

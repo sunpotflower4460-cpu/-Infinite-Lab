@@ -32,6 +32,12 @@ test.describe('rhythm textbook (#rhythm)', () => {
 
     // 1: the knocks are counted
     await expect(page.getByTestId('room-two')).toContainText(/コツン [1-9]\d* 回/)
+    // an exact fraction hits exactly its denominator's number of places (no rounding splits)
+    await page.getByTestId('room-two').getByRole('button', { name: '1/3', exact: true }).click()
+    await page.getByTestId('room-two').getByRole('button', { name: '早送り' }).click()
+    await expect(page.getByTestId('room-two')).toContainText(
+      /コツン [1-9]\d+ 回・押された場所 3 \/ 72 か所・いちばん多い場所に 3[34]%/,
+    )
 
     // 2: 1/π sits on 7/22 and 113/355; 1/φ's nearest fraction is far
     const near = page.getByTestId('room-near')

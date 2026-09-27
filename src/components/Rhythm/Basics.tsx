@@ -45,7 +45,8 @@ export function TwoRotations() {
       s.phase -= 1
       s.beats++
       const pos = (s.beats * r.w) % 1 // where the inner hand is at this knock
-      s.bins[Math.floor(pos * BINS) % BINS]!++
+      // (+1e-9: k·(1/3) in floating point may land a hair below the bin edge, e.g. 23.9999999 for 24)
+      s.bins[Math.floor(pos * BINS + 1e-9) % BINS]!++
       s.marks.push(pos)
       if (s.marks.length > 400) s.marks.shift()
     }
@@ -148,7 +149,8 @@ export function TwoRotations() {
         <>1/2 では棒が 2 本だけ伸び続け、黄金比では棒が円じゅうに薄く散らばるところ</>,
         <>
           <Dot color={C_PI} />
-          1/π は、3 本の腕のように回りながら、約 22 か所に集まるところ（1/π が 1/3 と 7/22 に近いから）
+          1/π は、はじめの 22 回で 22 か所に当たり、そのあとは 22 回ごとにその少し隣へずれて当たるところ（1/π
+          が 7/22 に近いから）。黄金比は 100 回ほどで 72 か所すべてが埋まります
         </>,
       ]}
       figure={
