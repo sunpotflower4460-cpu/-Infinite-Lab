@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { getController } from './LabController'
 import { useLab } from '../state/labStore'
 import { LabCanvas } from '../components/Canvas/LabCanvas'
@@ -12,10 +13,16 @@ import { ExperimentPanel } from '../components/Panel/ExperimentPanel'
 import { StatusStrip } from '../components/Status/StatusStrip'
 import { FileActions } from '../components/Status/FileActions'
 import { GoldenRoom } from '../components/Golden/GoldenRoom'
+
 import { openRoom, useRoom } from '../golden/room'
 import { GuideLayer } from '../components/Guide/GuideLayer'
 import { useGuideContext } from '../guide/context'
 import { labGuideContext } from './guideContext'
+
+// the rhythm textbook is large (live simulations): loaded when it is opened
+const RhythmRoom = lazy(() =>
+  import('../components/Rhythm/RhythmRoom').then((m) => ({ default: m.RhythmRoom })),
+)
 
 export function App() {
   const scientific = useLab((s) => s.scientific)
@@ -48,8 +55,19 @@ export function App() {
         >
           ▶ π の模様を見る
         </button>
-        <button className="room-open" onClick={openRoom} title="Golden ratio and π, side by side">
+        <button
+          className="room-open"
+          onClick={() => openRoom('golden')}
+          title="Golden ratio and π, side by side"
+        >
           φ と π の部屋
+        </button>
+        <button
+          className="room-open"
+          onClick={() => openRoom('rhythm')}
+          title="A moving textbook: which rhythms get captured"
+        >
+          リズムの教科書
         </button>
         <CompareToggle />
         <FileActions />
@@ -99,7 +117,12 @@ export function App() {
         </div>
         {error && <div className="error">Error: {error}</div>}
       </footer>
-      {room && <GoldenRoom />}
+      {room === 'golden' && <GoldenRoom />}
+      {room === 'rhythm' && (
+        <Suspense fallback={<div className="room room-loading">読み込み中…</div>}>
+          <RhythmRoom />
+        </Suspense>
+      )}
       <GuideLayer />
     </div>
   )
