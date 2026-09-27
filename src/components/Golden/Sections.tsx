@@ -20,7 +20,7 @@ import {
   wallSteps,
   type CircleTest,
 } from '../../golden/golden'
-import { closeRoom } from '../../golden/room'
+import { closeRoom, openRoom } from '../../golden/room'
 import { parseConfig } from '../../lab/config'
 import { computePhi } from '../../math/constants/phi'
 import { computePi } from '../../math/constants/pi'
@@ -33,7 +33,7 @@ const C_FRAC = '#8a93ad'
  * One topic: the one-line gist first (enough to follow the whole room), then what to look at
  * in the picture, then the explanation. Detailed numbers go into a collapsed "くわしく".
  */
-function Section({
+export function Section({
   id,
   n,
   title,
@@ -82,16 +82,20 @@ function Section({
   )
 }
 
-const Tag = ({ kind }: { kind: '測定' | '文献' }) => (
-  <span
-    className={`room-tag room-tag-${kind}`}
-    title={kind === '測定' ? 'このページでその場で計算した値' : '数学の文献にある値'}
-  >
+const TAG_TITLE = {
+  測定: 'このページでその場で計算した値',
+  文献: '数学の文献にある値',
+  報告: '研究の報告書で計算して測った値',
+  読み方: '測った値ではなく、解釈やたとえ話',
+} as const
+
+export const Tag = ({ kind }: { kind: keyof typeof TAG_TITLE }) => (
+  <span className={`room-tag room-tag-${kind}`} title={TAG_TITLE[kind]}>
     {kind}
   </span>
 )
 
-function More({ children, label = 'くわしい数字を見る' }: { children: ReactNode; label?: string }) {
+export function More({ children, label = 'くわしい数字を見る' }: { children: ReactNode; label?: string }) {
   return (
     <details className="room-more">
       <summary>{label}</summary>
@@ -100,7 +104,9 @@ function More({ children, label = 'くわしい数字を見る' }: { children: R
   )
 }
 
-const Dot = ({ color }: { color: string }) => <span className="room-dot" style={{ background: color }} />
+export const Dot = ({ color }: { color: string }) => (
+  <span className="room-dot" style={{ background: color }} />
+)
 
 // ---- 1 ---------------------------------------------------------------------------------------
 
@@ -936,6 +942,13 @@ export function Summary() {
           のリズムはいつも新しい所へ行き、面を早く埋め、揺さぶっても最後まで壊れない。
         </li>
       </ol>
+      <p>
+        <b>続き：</b>
+        「揺さぶりに強い・弱い」を、外の拍子に「捕まる・捕まらない」まで広げて、心臓との対応まで動かして見る教科書があります。{' '}
+        <button className="primary" onClick={() => openRoom('rhythm')}>
+          リズムの教科書へ →
+        </button>
+      </p>
       <details className="room-more">
         <summary>ことば</summary>
         <dl className="room-glossary">
