@@ -141,7 +141,9 @@ function FilmStage({ text, id }: { text: string; id: string }) {
         ? text
         : experiment === 'two-arm-sphere-lift'
           ? 'π の二本腕の座標を球面へ持ち上げています。有限の点は均一に球面を埋めるとは限りません。'
-          : 'π の回転速度比による3D実験です。詳細な数式は「専門」で確認できます。'}
+          : experiment === 'two-arm-torus'
+            ? '2Dと同じ2つの回転角で、大円と管の周りを進みます。R>rなら穴が開きます。有限のstepで均一に埋まるとは限りません。'
+            : 'π の回転速度比による3D実験です。詳細な数式は「専門」で確認できます。'}
     </p>
   )
 }
@@ -161,10 +163,12 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
       <PiValue decimals={40} />
       {id !== 'two-arm' && <FormulaViewer source="current" compact />}
       <div className="film-math mono" data-testid="film-math">
-        <div>
-          x(t) + i·y(t) = r₁·e<sup>iθ₁</sup> + r₂·e<sup>iθ₂</sup>, r₁ = {String(params.r1)}, r₂ ={' '}
-          {String(params.r2)}, ×{String(params.scale)}
-        </div>
+        {id === 'two-arm' && (
+          <div data-testid="film-flat-formula">
+            x(t) + i·y(t) = r₁·e<sup>iθ₁</sup> + r₂·e<sup>iθ₂</sup>, r₁ = {String(params.r1)}, r₂ ={' '}
+            {String(params.r2)}, ×{String(params.scale)}
+          </div>
+        )}
         <div>θ₁ = (n × dt) mod 2π = {value('theta1')}</div>
         <div>θ₂ = (n × dt × π) mod 2π = {value('theta2')}</div>
         <div>
@@ -179,12 +183,16 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
         <div>速さ {formatInt(Math.round(sps))} steps/s（映像と同じく指数的に加速）</div>
       </div>
       <table className="film-convergents mono" data-testid="film-convergents">
-        <caption>π に近い分数（連分数の近似分数）: q 周でほぼ閉じ、p − q 回対称</caption>
+        <caption>
+          {id === 'two-arm-torus'
+            ? 'π に近い分数: R>rならq周（大円）・p周（管）で閉じる連続時間の軌跡。固定dtの有限サンプルでの閉鎖は保証しません。'
+            : '2DのTwo-Armでの目安（連分数の近似分数）: q 周でほぼ閉じ、p − q 回対称'}
+        </caption>
         <thead>
           <tr>
             <th>p/q</th>
             <th>π − p/q</th>
-            <th>対称</th>
+            <th>{id === 'two-arm-torus' ? '大円 / 管' : '対称'}</th>
             <th>q 周</th>
           </tr>
         </thead>
@@ -195,7 +203,7 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
                 {p}/{q}
               </td>
               <td>{(Math.PI - p / q).toExponential(2)}</td>
-              <td>{p - q}</td>
+              <td>{id === 'two-arm-torus' ? `${q} / ${p}` : p - q}</td>
               <td>{turns1 >= q ? '✓' : ''}</td>
             </tr>
           ))}

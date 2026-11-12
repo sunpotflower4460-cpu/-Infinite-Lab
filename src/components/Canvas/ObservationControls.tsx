@@ -1,5 +1,6 @@
 import { useStore } from 'zustand'
 import type { LabController } from '../../app/LabController'
+import { TorusReadout } from './TorusReadout'
 import { TWO_ARM_VIEWS } from '../../experiments/two-arm-3d'
 import { overlayRule, type OverlayMode, type Presentation } from '../../lab/presentation'
 
@@ -88,6 +89,17 @@ export function ObservationControls({
           <details className="observation-options">
             <summary>調整</summary>
             <div>
+              {id === 'two-arm-torus' && (
+                <div className="torus-presets" role="group" aria-label="トーラスの腕長">
+                  <span>腕長プリセット（半径はscale倍）</span>
+                  <button onClick={() => controller.switchView(id, { r1: 1.3, r2: 1 })}>
+                    穴あり 腕1=1.3, 腕2=1
+                  </button>
+                  <button onClick={() => controller.switchView(id, { r1: 1, r2: 1 })}>
+                    穴なし 腕1=腕2=1
+                  </button>
+                </div>
+              )}
               <label>
                 配色{' '}
                 <select
@@ -155,6 +167,7 @@ export function ObservationControls({
       <div className="observation-rule" data-testid="overlay-rule">
         {overlayRule(p.mode)}
       </div>
+      {id === 'two-arm-torus' && <TorusReadout controller={controller} />}
       {id === 'two-arm-sphere-lift' && (
         <div className="observation-rule">
           x・yは2Dと同一。z = 2·scale·√(r₁r₂)·sin δ。点は球面、結ぶ線分は弦です。

@@ -1718,3 +1718,18 @@ input:not([type]) {
 .lab[data-film='on'] .stage-3d {
   background: #000;
 }
+.torus-presets {
+  display: grid;
+  gap: 6px;
+}
+.torus-presets > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+/* Torus includes a radius readout: keep camera controls below that readout. */
+.lab[data-film='on'] .stage[data-experiment='two-arm-torus'] .stage-3d-rotate {
+  top: 220px;
+}
+.lab[data-film='on'] .stage[data-experiment='two-arm-torus'] .camera-presets {
+  top: 256px;
+}

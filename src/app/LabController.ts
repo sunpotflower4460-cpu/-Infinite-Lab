@@ -13,11 +13,12 @@ import {
   type ExperimentDefinition,
   type Extent,
   type ParamValue,
+  type ParamValues,
   type StepTrace,
 } from '../experiments/core/types'
 import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
-import { digitLimit, nextPrecision, type LabConfig } from '../lab/config'
+import { digitLimit, nextPrecision, parseConfig, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { detectPatterns } from '../analysis/patterns'
@@ -169,10 +170,20 @@ export class LabController {
    * Switch between experiments that share parameters (the Two-Arm 2D / Torus / Height views):
    * parameters with the same key keep their values, the others take their defaults.
    */
-  switchView(experimentId: string): void {
-    this.cancelPending()
+  switchView(experimentId: string, overrides: ParamValues = {}): void {
     const def = getExperiment(experimentId)
     const state = this.store.getState()
+    const params = defaultParams(def.parameters)
+    for (const key of Object.keys(params))
+      if (Object.hasOwn(state.params, key)) params[key] = state.params[key]!
+    const validated = parseConfig({
+      constant: state.constantId,
+      precision: state.precision,
+      experiment: experimentId,
+      digitStart: state.digitStart,
+      parameters: { ...params, ...overrides },
+    }).parameters
+    this.cancelPending()
     const step = state.viewStep ?? state.currentStep
     this.switchResume = state.playing || state.lockstepPlaying
     this.switchFollow = state.follow
@@ -184,10 +195,7 @@ export class LabController {
     this.store.setState((s) => ({
       presentation: { ...s.presentation, camera2d: { cx: view.cx, cy: view.cy, zoom: view.zoom } },
     }))
-    const current = state.params
-    const params = defaultParams(def.parameters)
-    for (const key of Object.keys(params)) if (Object.hasOwn(current, key)) params[key] = current[key]!
-    this.store.setState({ experimentId, params })
+    this.store.setState({ experimentId, params: validated })
     this.initSimulation()
   }
 

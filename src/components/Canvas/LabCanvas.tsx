@@ -35,7 +35,7 @@ export function LabCanvas({
   }, [controller])
 
   return (
-    <div className="stage" data-testid={`lane-${lane}`}>
+    <div className="stage" data-testid={`lane-${lane}`} data-experiment={experimentId}>
       <div className="stage-canvas" ref={host} />
       {is3d && <Stage3D controller={controller} />}
       {lane === 0 && <ScientificOverlay />}

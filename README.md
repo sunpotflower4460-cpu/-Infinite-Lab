@@ -165,3 +165,5 @@ Film / Labの「形 → **Sphere**」は、元の2Dのx・yを変えずに点を
 点は `x²+y²+z² = [scale·(r₁+r₂)]²` をfloat64誤差の範囲で満たします。サンプル間の直線は球面の弦です。有限のstepで均等に埋まること、陰陽でS字境界が現れることは保証しません。JSON / Historyは重ね方・Trail・配色・カメラを保存します。PNG / 動画は現在の描画、SVGはx/yへの正射影、CSVは元／派生を区別した座標を保存します。
 
 [数式・操作・データ互換性](docs/EXPERIMENTS.md#sphere-lift左右鏡像陰陽v07) · [検証結果と比較画像](docs/validation/SPHERE_LIFT.md)
+
+トーラスも同じ精度で観察できます。**Torus → 調整 → 穴あり 腕1=1.3, 腕2=1 → 陰陽** で、πの2つの回転角から生じるドーナツ面の軌跡とその中心反転を描きます。腕長が等しい場合は穴が閉じるホーントーラスです。Torusは2Dの回転角を保ち、x/yはトーラスの式で変換します。[数式・半径の意味](docs/EXPERIMENTS.md#torusを同じ精度で観察する)・[検証](docs/validation/TORUS.md)。

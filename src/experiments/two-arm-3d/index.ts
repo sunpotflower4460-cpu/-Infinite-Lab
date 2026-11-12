@@ -43,8 +43,10 @@ const theta2 = assign(
  * Arm 1 (length r1) turns in the horizontal plane at speed 1; arm 2 (length r2), attached at its
  * tip, turns C times as fast in the vertical plane that contains arm 1. The pen can only reach
  * the torus with R = r1, r = r2 — as the 2D pen can only reach the disk of radius r1 + r2 — and
- * whether it fills it is decided by C: a fraction p/q closes after q turns (a (q, p) torus knot),
- * an irrational C never closes and covers the torus densely.
+ * continuous-time coverage is decided by C: a fraction p/q closes after q turns (for R > r,
+ * a (q, p) torus knot); irrational C gives a dense continuous trajectory. With fixed dt,
+ * finite discrete samples need not close or uniformly cover the surface.
+ * R = r is a horn torus, R < r a spindle; negative rho must retain its sign.
  */
 const torusFormulas: FormulaSet = [
   theta1,
@@ -220,7 +222,7 @@ export const twoArmTorus: ExperimentDefinition = {
   id: 'two-arm-torus',
   name: 'Two-Arm 3D: Torus (vertical arm 2)',
   description:
-    '{C} two-arm machine with arm 2 turning in the vertical plane, {C}× as fast as arm 1: the pen stays on a torus (R = arm 1, r = arm 2) and fills it only if {C} is irrational',
+    '{C} two-arm machine with arm 2 turning in the vertical plane: same angles as 2D, different x/y. Torus R = arm 1, r = arm 2; a hole exists if R > r. Finite samples need not be uniform.',
   view: '3d',
   parameters: [
     DT,
