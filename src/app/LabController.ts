@@ -1,3 +1,4 @@
+import { DEFAULT_PRESENTATION, parsePresentation, type Presentation, type Flow } from '../lab/presentation'
 import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment, resolveExperiment } from '../experiments/registry'
 import {
@@ -60,11 +61,14 @@ export class LabController {
   /** Digest to verify once `seekTarget` has been reached. */
   private pendingVerify: string | null = null
   /** Forward seek in progress: the step we are computing up to. */
+  private switchResume = false
+  private switchFollow = false
   private seekTarget: number | null = null
   /** Request id of an in-flight continuous-computation extension (null = none). */
   private extendRequestId: number | null = null
   /** Compare Mode: the second lane (same experiment, another constant). */
   peer: LabController | null = null
+  private unsubscribePresentation: (() => void) | null = null
   private unsubscribeMirror: (() => void) | null = null
   /** Compare Mode playback clock (requestAnimationFrame id). */
   private clockFrame: number | null = null
@@ -81,7 +85,19 @@ export class LabController {
     this.mathWorker.onmessage = (e: MessageEvent<MathResponse>) => this.onMath(e.data)
     this.simWorker.onmessage = (e: MessageEvent<SimResponse>) => this.onSim(e.data)
     this.renderer.onUserCamera = () => this.store.setState({ follow: false })
-    this.renderer.onPick = (step) => this.onPicked(step)
+    this.renderer.onPick = (step, flow) => this.onPicked(step, flow)
+    this.unsubscribePresentation = this.store.subscribe((s, prev) => {
+      if (s.presentation !== prev.presentation) {
+        // Camera updates during orbit do not restyle/rebuild geometry.
+        if (
+          ['mode', 'trail', 'palette', 'opacity', 'width', 'glow', 'flow'].some(
+            (key) =>
+              s.presentation[key as keyof Presentation] !== prev.presentation[key as keyof Presentation],
+          )
+        )
+          this.renderer.setPresentation(s.presentation)
+      }
+    })
     this.store.setState({ history: loadHistory(browserStorage()) })
   }
 
@@ -105,6 +121,7 @@ export class LabController {
     if (this.statsTimer) clearInterval(this.statsTimer)
     this.mathWorker.terminate()
     this.simWorker.terminate()
+    this.unsubscribePresentation?.()
     this.renderer.destroy()
   }
 
@@ -122,6 +139,8 @@ export class LabController {
   /** A manual change supersedes any pending restore / import and its verification. */
   private cancelPending(): void {
     this.pending = null
+    this.switchResume = false
+    this.store.setState({ switching: null })
     this.pendingVerify = null
     this.store.setState({ verify: { status: 'idle' } })
   }
@@ -153,7 +172,19 @@ export class LabController {
   switchView(experimentId: string): void {
     this.cancelPending()
     const def = getExperiment(experimentId)
-    const current = this.store.getState().params
+    const state = this.store.getState()
+    const step = state.viewStep ?? state.currentStep
+    this.switchResume = state.playing || state.lockstepPlaying
+    this.switchFollow = state.follow
+    this.stopFilmClock()
+    this.pause()
+    this.pending = { seek: step || null, verify: null }
+    this.store.setState({ switching: step })
+    const view = this.renderer.saveView()
+    this.store.setState((s) => ({
+      presentation: { ...s.presentation, camera2d: { cx: view.cx, cy: view.cy, zoom: view.zoom } },
+    }))
+    const current = state.params
     const params = defaultParams(def.parameters)
     for (const key of Object.keys(params)) if (Object.hasOwn(current, key)) params[key] = current[key]!
     this.store.setState({ experimentId, params })
@@ -196,6 +227,16 @@ export class LabController {
       experiment: s.experimentId,
       digitStart: s.digitStart,
       parameters: { ...s.params },
+      presentation: {
+        ...s.presentation,
+        look: s.look,
+        camera: this.view3d?.cameraView() ?? s.presentation.camera,
+        camera2d: {
+          cx: this.renderer.camera.cx,
+          cy: this.renderer.camera.cy,
+          zoom: this.renderer.camera.zoom,
+        },
+      },
       ...(s.experimentId === PLAYGROUND_ID ? { formulas: { ...s.formulas } } : {}),
     }
   }
@@ -205,6 +246,8 @@ export class LabController {
     this.pendingVerify = null
     this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null, note }
     this.store.setState({
+      presentation: parsePresentation(config.presentation),
+      look: config.presentation?.look ?? 'lab',
       constantId: config.constant,
       precision: config.precision,
       chosenPrecision: config.precision,
@@ -214,6 +257,8 @@ export class LabController {
       formulas: config.formulas ?? DEFAULT_SOURCES,
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
+    this.renderer.setLook(this.store.getState().look)
+    this.renderer.setPresentation(this.store.getState().presentation)
     const loaded = this.loaded
     const computing = this.store.getState().phase === 'computing'
     if (
@@ -305,6 +350,8 @@ export class LabController {
    * (nothing is recomputed); going beyond the computed head computes the missing steps.
    */
   seek(step: number, options: { inspect?: boolean } = {}): void {
+    const switching = this.store.getState().switching
+    if (switching !== null && step !== switching) return
     this.stopLockstep() // a Timeline move pauses Compare playback, like it pauses a single lane
     this.seekLane(step, options)
     this.peer?.seekLane(step, options)
@@ -402,7 +449,8 @@ export class LabController {
   }
 
   /** A click in either lane inspects that step in both (same step, different constant). */
-  private onPicked(step: number | null): void {
+  private onPicked(step: number | null, flow: Flow = 'original'): void {
+    this.store.setState({ selectedFlow: flow })
     if (step !== null && typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches) {
       ;(this.owner ?? this).store.setState({ sheet: 'inspector' })
     }
@@ -424,12 +472,15 @@ export class LabController {
   }
 
   /** A click in the 3D view (same behaviour as a click on the 2D canvas). */
-  pickStep(step: number | null): void {
-    this.onPicked(step)
+  pickStep(step: number | null, flow?: Flow): void {
+    this.onPicked(step, flow)
   }
 
   /** The 3D view, while one is mounted for this lane (PNG export of 3D experiments). */
   view3d: {
+    cameraView(): NonNullable<Presentation['camera']>
+    restoreCamera(view: NonNullable<Presentation['camera']>): void
+    preset(view: 'top' | 'oblique'): void
     snapshotPng(): Promise<Blob>
     beginRecording(fromStep: number, toStep: number, look: Look): HTMLCanvasElement
     renderRecordingStep(step: number, frame: number): HTMLCanvasElement
@@ -464,16 +515,18 @@ export class LabController {
           s.precision !== prev.precision
         ) {
           this.stopLockstep()
-          this.peer?.applyConfig({
-            ...this.currentConfig(),
-            constant: this.store.getState().compareConstant ?? 'e',
-          })
+          this.peer?.applyConfig(
+            {
+              ...this.currentConfig(),
+              constant: this.store.getState().compareConstant ?? 'e',
+            },
+            s.viewStep ?? s.currentStep,
+          )
         }
       })
     }
     this.store.setState({ compareConstant: constantId })
     peer.applyConfig({ ...this.currentConfig(), constant: constantId })
-    // restart the main lane too, so both start from step 0 under identical conditions
     this.initSimulation()
     return peer
   }
@@ -503,7 +556,7 @@ export class LabController {
     const reach = ((p.r1 as number) + (p.r2 as number)) * (p.scale as number) // |z| ≤ (r1 + r2)·scale
     this.renderer.fitTo({ minX: -reach, minY: -reach, maxX: reach, maxY: reach })
     this.filmPending = true
-    this.applyConfig(preset.config)
+    this.applyConfig({ ...preset.config, presentation: { ...DEFAULT_PRESENTATION, look: 'luminous' } })
   }
 
   stopFilm(): void {
@@ -536,8 +589,26 @@ export class LabController {
       this.renderer.setHighlight(this.store.getState().currentTrace?.overlay ?? null)
   }
 
+  setPresentation(update: Partial<Presentation>): void {
+    const p = parsePresentation({ ...this.store.getState().presentation, ...update })
+    this.store.setState({ presentation: p, selectedFlow: 'original' })
+    if (this.peer && !this.owner) this.peer.setPresentation(update)
+  }
+
+  private finishSwitch(): void {
+    const s = this.store.getState()
+    if (s.switching === null) return
+    this.store.setState({ switching: null, follow: this.switchFollow })
+    this.renderer.follow = this.switchFollow
+    if (this.switchResume) {
+      this.switchResume = false
+      if (s.film) this.startFilmClock()
+      else this.play()
+    }
+  }
+
   setLook(look: Look): void {
-    this.store.setState({ look })
+    this.store.setState((s) => ({ look, presentation: { ...s.presentation, look } }))
     this.renderer.setLook(look)
   }
 
@@ -836,14 +907,18 @@ export class LabController {
       const s = this.store.getState()
       const count = this.renderer.visibleRecords
       // Microscope: only the range (the faint context is not part of the data)
-      const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
+      const fromStep = Math.max(
+        s.microscope?.from ?? 0,
+        s.presentation.trail ? (s.viewStep ?? s.currentStep) - s.presentation.trail + 1 : 0,
+      )
+      const from = fromStep ? this.renderer.store.firstIndexOfStep(fromStep) : 0
       const is3d = this.definition().view === '3d'
       if (format === 'png') {
         const png = is3d && this.view3d ? this.view3d.snapshotPng() : this.renderer.snapshotPng()
         this.download(await png, `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count, from, is3d), { type: 'text/csv' }),
+          new Blob(geometryCsv(this.renderer.store, count, from, is3d, s.presentation), { type: 'text/csv' }),
           `${this.fileStem()}.csv`,
         )
       } else {
@@ -855,7 +930,15 @@ export class LabController {
           ...formulaLines(def, symbol),
           `parameters ${JSON.stringify(s.params)}`,
         ].join('\n')
-        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc, from)
+        const parts = geometrySvg(
+          this.renderer.store,
+          count,
+          `π Infinite Lab — ${def.name}`,
+          desc,
+          from,
+          s.presentation,
+          is3d,
+        )
         this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
       }
     } catch (err) {
@@ -901,7 +984,7 @@ export class LabController {
       if (view3d) view3d.beginRecording(from, to, o.glow ? 'luminous' : look)
       else {
         if (o.glow) this.renderer.setLook('luminous')
-        this.renderer.frameSteps(from, to)
+        // Keep the current camera for recording, as PNG does.
       }
       const first = renderStep(from, 0)
       const size = videoSize(first.width, first.height)
@@ -1101,7 +1184,7 @@ export class LabController {
       finished: false,
       playing: false,
       waiting: false,
-      follow: true,
+      follow: this.store.getState().switching !== null ? this.switchFollow : true,
       stepsPerSecond: 0,
     })
   }
@@ -1124,8 +1207,20 @@ export class LabController {
           this.pendingVerify = pending.verify
           this.verifyNote = pending.note
         }
+        const p = this.store.getState().presentation
+        if (p.camera2d) {
+          this.renderer.restoreView({ ...p.camera2d, follow: false, framed: null, step: Infinity })
+          this.store.setState({ follow: false })
+        }
+        if (p.camera) {
+          this.view3d?.restoreCamera(p.camera)
+          this.store.setState({ follow: false })
+        }
         if (pending?.seek) this.seek(pending.seek)
-        else void this.verifyIfPending() // e.g. a 0-step file
+        else {
+          this.finishSwitch()
+          void this.verifyIfPending()
+        } // e.g. a 0-step file
         break
       }
       case 'reset':
@@ -1156,7 +1251,10 @@ export class LabController {
           this.seekTarget = null
           // Batches from before the seek can carry the worker past the target: show the target.
           if (msg.currentStep > target) this.seek(target)
-          else void this.verifyIfPending()
+          else {
+            this.finishSwitch()
+            void this.verifyIfPending()
+          }
         }
         break
       }
@@ -1173,7 +1271,10 @@ export class LabController {
           const target = this.seekTarget
           this.seekTarget = null
           if (msg.currentStep > target) this.seek(target)
-          else void this.verifyIfPending()
+          else {
+            this.finishSwitch()
+            void this.verifyIfPending()
+          }
         }
         break
       case 'inspect':

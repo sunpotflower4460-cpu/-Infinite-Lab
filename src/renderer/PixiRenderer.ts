@@ -1,3 +1,4 @@
+import { DEFAULT_PRESENTATION, PALETTES, flowSigns, type Presentation, type Flow } from '../lab/presentation'
 import { Application, Container, Graphics, Rectangle } from 'pixi.js'
 import { KIND, type GeometryBatch } from '../geometry/batch'
 import { GeometryStore } from '../geometry/GeometryStore'
@@ -28,7 +29,10 @@ export class PixiRenderer implements Renderer {
   follow = true
   onUserCamera?: () => void
   /** Called with the step of the geometry under a click (or null for empty space). */
-  onPick?: (step: number | null) => void
+  onPick?: (step: number | null, flow?: Flow) => void
+  private pickedFlow: Flow = 'original'
+  private presentation: Presentation = { ...DEFAULT_PRESENTATION }
+  private derived: GeometryLayer | null = null
 
   private app: Application | undefined
   private world = new Container()
@@ -114,6 +118,7 @@ export class PixiRenderer implements Renderer {
   clear(): void {
     this.store.clear()
     this.layer.clear()
+    this.derived?.clear()
     this.range = null
     this.layer.setContext(0, 1)
     this.visibleStep = Infinity
@@ -134,7 +139,7 @@ export class PixiRenderer implements Renderer {
 
   fitAll(): void {
     this.framed = null
-    const b = union(this.store.bounds, this.extent)
+    const b = this.symmetricBounds(union(this.store.bounds, this.extent))
     if (!b) {
       this.camera.centerOn(0, 0)
     } else {
@@ -154,9 +159,57 @@ export class PixiRenderer implements Renderer {
   /** Presentation palette (see LOOKS); the data is unchanged. */
   setLook(look: Look): void {
     this.look = look
-    this.layer.setStyle(LOOKS[look])
+    this.applyStyles()
     if (this.app) this.app.renderer.background.color = LOOKS[look].background
     this.needsRender = true
+  }
+
+  setPresentation(p: Presentation): void {
+    const oldMode = this.presentation.mode
+    this.presentation = p
+    if (p.mode !== 'solo' && !this.derived) {
+      this.derived = this.layer instanceof InstancedLayer ? new InstancedLayer() : new GraphicsLayer()
+      this.world.addChildAt(this.derived.container, Math.min(1, this.world.children.length))
+      this.needsFullRebuild = true
+    } else if (p.mode === 'solo' && this.derived) {
+      this.world.removeChild(this.derived.container)
+      this.derived.destroy()
+      this.derived = null
+    }
+    this.applyStyles()
+    if (oldMode !== p.mode && this.follow) this.fitAll()
+    this.needsRender = true
+  }
+
+  private applyStyles(): void {
+    const p = this.presentation
+    const base = LOOKS[this.look]
+    const [a, b] = PALETTES[p.palette]
+    const style = (color: number) => ({
+      ...base,
+      line: color,
+      point: color,
+      circle: color,
+      lineAlpha: p.opacity * (1 + p.glow * 0.5),
+      circleAlpha: p.opacity,
+      pointAlpha: p.opacity,
+      width: p.width,
+    })
+    this.layer.container.blendMode = p.mode === 'solo' ? 'add' : 'normal'
+    if (this.derived) this.derived.container.blendMode = 'normal'
+    this.layer.setStyle(p.mode === 'solo' ? base : style(a))
+    this.derived?.setStyle(style(b))
+  }
+
+  private symmetricBounds(b: Bounds | null): Bounds | null {
+    if (!b || this.presentation.mode === 'solo') return b
+    const [sx, sy] = flowSigns(this.presentation.mode)
+    return union(b, {
+      minX: Math.min(b.minX * sx, b.maxX * sx),
+      maxX: Math.max(b.minX * sx, b.maxX * sx),
+      minY: Math.min(b.minY * sy, b.maxY * sy),
+      maxY: Math.max(b.minY * sy, b.maxY * sy),
+    })
   }
 
   center(): void {
@@ -169,6 +222,7 @@ export class PixiRenderer implements Renderer {
     this.resizeObserver?.disconnect()
     for (const f of this.cleanup) f()
     this.layer.destroy()
+    this.derived?.destroy()
     if (this.rebuildTimer) clearTimeout(this.rebuildTimer)
     this.app?.destroy(true, { children: true })
     this.app = undefined
@@ -223,7 +277,7 @@ export class PixiRenderer implements Renderer {
       this.store.firstIndexOfStep(fromStep),
       this.store.countUpToStep(toStep),
     )
-    if (b) this.fitTo(b)
+    if (b) this.fitTo(this.symmetricBounds(b)!)
     if (this.rebuildTimer) clearTimeout(this.rebuildTimer)
     this.rebuildTimer = undefined
     this.needsFullRebuild = true
@@ -277,6 +331,13 @@ export class PixiRenderer implements Renderer {
     next.setStyle(LOOKS[this.look])
     if (this.range) next.setContext(this.store.firstIndexOfStep(this.range.from), this.range.alpha)
     this.world.addChildAt(next.container, 0)
+    if (this.derived) {
+      this.world.removeChild(this.derived.container)
+      this.derived.destroy()
+      this.derived = null
+      this.setPresentation(this.presentation)
+    }
+    this.applyStyles()
     this.needsFullRebuild = true
   }
 
@@ -307,7 +368,26 @@ export class PixiRenderer implements Renderer {
     const full = this.needsFullRebuild
     this.needsFullRebuild = false
     if (full) this.rebuildView()
-    if (this.layer.sync(this.store, this.visibleCount(), this.layerFrame(), full)) this.needsRender = true
+    const count = this.visibleCount()
+    const head = count ? this.store.stepAt(count - 1) : 0
+    const trail = this.presentation.trail
+    const start = Math.max(this.range?.from ?? 0, trail ? head - trail + 1 : 0)
+    const first = start ? this.store.firstIndexOfStep(start) : 0
+    const alpha = trail ? 0 : (this.range?.alpha ?? 1)
+    this.layer.setContext(first, alpha)
+    this.derived?.setContext(first, alpha)
+    this.layer.container.visible = this.presentation.mode === 'solo' || this.presentation.flow !== 'derived'
+    if (this.layer.sync(this.store, count, this.layerFrame(), full)) this.needsRender = true
+    if (this.derived) {
+      const [sx, sy] = flowSigns(this.presentation.mode)
+      this.derived.container.scale.set(sx, sy)
+      this.derived.container.position.set(
+        (sx - 1) * this.originX * this.bucket,
+        (sy - 1) * this.originY * this.bucket,
+      )
+      this.derived.container.visible = this.presentation.flow !== 'original'
+      if (this.derived.sync(this.store, count, this.layerFrame(), full)) this.needsRender = true
+    }
     const now = performance.now()
     if (this.needsRender && this.app) {
       this.needsRender = false
@@ -348,7 +428,7 @@ export class PixiRenderer implements Renderer {
     this.layer.setContext(start, range.contextAlpha)
     this.setVisibleStep(range.to)
     const b = this.store.boundsBetween(start, this.store.countUpToStep(range.to))
-    if (b) this.fitTo(b)
+    if (b) this.fitTo(this.symmetricBounds(b)!)
   }
 
   /**
@@ -361,27 +441,41 @@ export class PixiRenderer implements Renderer {
     // Score = distance, with path lines penalised so circles/points win when both are in range.
     let bestScore = Infinity
     let bestStep: number | null = null
-    const minStep = this.range?.from ?? 0
-    this.store.forEachRecordNear(wx, wy, tol, this.visibleCount(), (d, o) => {
-      if (d[o + 1]! < minStep) return // Microscope: context is not pickable
-      const kind = d[o]
-      let dist: number
-      if (kind === KIND.line) {
-        dist = segmentDistance(wx, wy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!)
-      } else if (kind === KIND.arc) {
-        dist = arcDistance(wx, wy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!)
-      } else {
-        const c = Math.hypot(wx - d[o + 2]!, wy - d[o + 3]!)
-        dist = kind === KIND.point ? c : Math.min(c, Math.abs(c - d[o + 4]!))
-      }
-      if (dist > tol) return
-      const score = kind === KIND.line ? dist + tol : dist
-      if (score <= bestScore) {
-        // ≤ : on ties the later step (drawn on top) wins
-        bestScore = score
-        bestStep = d[o + 1]!
-      }
-    })
+    const count = this.visibleCount()
+    const head = count ? this.store.stepAt(count - 1) : 0
+    const minStep = Math.max(
+      this.range?.from ?? 0,
+      this.presentation.trail ? head - this.presentation.trail + 1 : 0,
+    )
+    const p = this.presentation
+    const flows: Flow[] =
+      p.mode === 'solo' ? ['original'] : p.flow === 'both' ? ['original', 'derived'] : [p.flow]
+    for (const flow of flows) {
+      const [sx, sy] = flow === 'derived' ? flowSigns(p.mode) : [1, 1, 1]
+      const qx = wx * sx!,
+        qy = wy * sy!
+      this.store.forEachRecordNear(qx, qy, tol, count, (d, o) => {
+        if (d[o + 1]! < minStep) return // Microscope: context is not pickable
+        const kind = d[o]
+        let dist: number
+        if (kind === KIND.line) {
+          dist = segmentDistance(qx, qy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!)
+        } else if (kind === KIND.arc) {
+          dist = arcDistance(qx, qy, d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!)
+        } else {
+          const c = Math.hypot(qx - d[o + 2]!, qy - d[o + 3]!)
+          dist = kind === KIND.point ? c : Math.min(c, Math.abs(c - d[o + 4]!))
+        }
+        if (dist > tol) return
+        const score = kind === KIND.line ? dist + tol : dist
+        if (score <= bestScore) {
+          // ≤ : on ties the later step (drawn on top) wins
+          bestScore = score
+          bestStep = d[o + 1]!
+          this.pickedFlow = flow
+        }
+      })
+    }
     return bestStep
   }
 
@@ -393,6 +487,7 @@ export class PixiRenderer implements Renderer {
     if (ratio > 2 || ratio < 0.5 || drift > 1e6) this.scheduleRebuild()
     this.world.scale.set(c.zoom / this.bucket, -c.zoom / this.bucket)
     this.layer.setPixelScale(c.zoom / this.bucket)
+    this.derived?.setPixelScale(c.zoom / this.bucket)
     this.world.position.set(
       c.width / 2 + (this.originX - c.cx) * c.zoom,
       c.height / 2 + (c.cy - this.originY) * c.zoom,
@@ -508,7 +603,7 @@ export class PixiRenderer implements Renderer {
       const [x, y] = local(e)
       pointers.delete(e.pointerId)
       if (pointers.size === 0 && !multi && Math.hypot(x - downX, y - downY) < 4 && this.onPick) {
-        this.onPick(this.pick(x, y))
+        this.onPick(this.pick(x, y), this.pickedFlow)
       }
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId)
     }

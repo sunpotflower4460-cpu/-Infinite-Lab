@@ -15,6 +15,7 @@ uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
 uniform float uPxPerUnit;
+uniform float uStrokeWidth;
 // Microscope: instances whose record index is below uRangeStart are context (faded or hidden).
 // Record indices are exact in float32 up to 2^24 (≈ 16.7 M records).
 uniform float uRangeStart;
@@ -59,6 +60,7 @@ in vec2 vPx;
 in float vRadiusPx;
 in vec2 vArc;
 in float vFade;
+uniform float uStrokeWidth;
 uniform vec4 uTint;
 uniform float uDotAlpha;
 out vec4 finalColor;
@@ -95,7 +97,7 @@ void main() {
   float len = length(d);
   vec2 dir = len > 0.0 ? d / len : vec2(1.0, 0.0);
   vec2 n = vec2(-dir.y, dir.x);
-  float halfWidth = 1.5; // px, 1 px line + anti-aliasing
+  float halfWidth = uStrokeWidth * 0.5 + 1.0; // px, 1 px line + anti-aliasing
   vec2 p = mix(aP0, aP1, aPosition.x)
          + (n * aPosition.y * halfWidth + dir * (aPosition.x * 2.0 - 1.0) * 0.5) / uPxPerUnit;
   gl_Position = toClip(p);
@@ -106,10 +108,11 @@ void main() {
 const LINE_FRAGMENT = /* glsl */ `precision highp float;
 in float vAcrossPx;
 in float vFade;
+uniform float uStrokeWidth;
 uniform vec4 uTint;
 out vec4 finalColor;
 void main() {
-  float a = clamp(1.0 - abs(vAcrossPx), 0.0, 1.0) * uTint.a * vFade;
+  float a = clamp(uStrokeWidth * 0.5 + 0.5 - abs(vAcrossPx), 0.0, 1.0) * uTint.a * vFade;
   if (a <= 0.0) discard;
   finalColor = vec4(uTint.rgb * a, a);
 }
@@ -197,6 +200,7 @@ export class InstancedLayer implements GeometryLayer {
     uPxPerUnit: { value: 1, type: 'f32' },
     uRangeStart: { value: 0, type: 'f32' },
     uContextAlpha: { value: 1, type: 'f32' },
+    uStrokeWidth: { value: 1, type: 'f32' },
     uTint: { value: rgba(COLORS.circle, COLORS.circleAlpha), type: 'vec4<f32>' },
     uDotAlpha: { value: COLORS.pointAlpha, type: 'f32' },
   })
@@ -204,6 +208,7 @@ export class InstancedLayer implements GeometryLayer {
     uPxPerUnit: { value: 1, type: 'f32' },
     uRangeStart: { value: 0, type: 'f32' },
     uContextAlpha: { value: 1, type: 'f32' },
+    uStrokeWidth: { value: 1, type: 'f32' },
     uTint: { value: rgba(COLORS.line, COLORS.lineAlpha), type: 'vec4<f32>' },
   })
   private readonly circleShader = Shader.from({
@@ -360,6 +365,7 @@ export class InstancedLayer implements GeometryLayer {
     this.circleUniforms.uniforms.uTint = rgba(style.circle, style.circleAlpha)
     this.circleUniforms.uniforms.uDotAlpha = style.pointAlpha
     this.lineUniforms.uniforms.uTint = rgba(style.line, style.lineAlpha)
+    this.lineUniforms.uniforms.uStrokeWidth = style.width ?? 1
   }
 
   setContext(startIndex: number, alpha: number): void {

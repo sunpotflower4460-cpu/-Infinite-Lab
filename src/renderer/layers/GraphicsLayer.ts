@@ -94,7 +94,8 @@ export class GraphicsLayer implements GeometryLayer {
         hasLines = true
       }
     }
-    if (hasLines) g.stroke({ width: 1, color: st.line, alpha: st.lineAlpha * fade, pixelLine: true })
+    if (hasLines)
+      g.stroke({ width: st.width ?? 1, color: st.line, alpha: st.lineAlpha * fade, pixelLine: true })
 
     let hasCircles = false
     for (let i = from; i < to; i++) {

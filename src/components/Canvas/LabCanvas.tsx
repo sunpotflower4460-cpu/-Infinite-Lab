@@ -6,10 +6,7 @@ import { LaneReadout } from '../Compare/LaneReadout'
 import { FilmOverlay } from '../Film/FilmOverlay'
 import { Stage3D } from './Stage3D'
 import { EXPERIMENTS } from '../../experiments/registry'
-import { TWO_ARM_VIEWS } from '../../experiments/two-arm-3d'
-
-/** The fraction the Two-Arm views compare against (π ≈ 22/7: 15 petals, a closed torus knot). */
-const COMPARE_RATIONAL = 'frac-22-7'
+import { ObservationControls } from './ObservationControls'
 
 /**
  * One canvas lane. The main lab always renders lane 0 in the same place in the tree (so its
@@ -32,9 +29,6 @@ export function LabCanvas({
   const microscope = useStore(controller.store, (s) => s.microscope)
   const experimentId = useStore(controller.store, (s) => s.experimentId)
   const is3d = EXPERIMENTS[experimentId]?.view === '3d'
-  // always offered (not only after the Film has switched to Two-Arm): a click starts that view
-  const inFamily = TWO_ARM_VIEWS.some((v) => v.id === experimentId)
-  const views = film ? null : TWO_ARM_VIEWS
 
   useEffect(() => {
     if (host.current) void controller.mount(host.current)
@@ -46,38 +40,8 @@ export function LabCanvas({
       {is3d && <Stage3D controller={controller} />}
       {lane === 0 && <ScientificOverlay />}
       {comparing && <LaneReadout controller={controller} lane={lane} />}
+      {lane === 0 && !film && <ObservationControls controller={controller} />}
       <div className="stage-tools">
-        {views && lane === 0 && (
-          <>
-            <div className="view-switch" role="group" aria-label="Two-Arm view">
-              {views.map((v) => (
-                <button
-                  key={v.id}
-                  className={v.id === experimentId ? 'active' : ''}
-                  aria-pressed={v.id === experimentId}
-                  onClick={() => v.id !== experimentId && controller.switchView(v.id)}
-                  title={EXPERIMENTS[v.id]?.name}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            {inFamily && (
-              <button
-                className={`view-compare ${compareConstant === COMPARE_RATIONAL ? 'active' : ''}`}
-                aria-pressed={compareConstant === COMPARE_RATIONAL}
-                onClick={() =>
-                  compareConstant === COMPARE_RATIONAL
-                    ? controller.disableCompare()
-                    : controller.enableCompare(COMPARE_RATIONAL)
-                }
-                title="Run the same machine with the speed ratio 22/7 next to it: the fraction closes, the constant never does"
-              >
-                vs 22/7
-              </button>
-            )}
-          </>
-        )}
         <button
           onClick={() => controller.fitAll()}
           className={follow ? 'active' : ''}

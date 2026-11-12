@@ -53,7 +53,7 @@ describe('SVG export', () => {
     expect(svg).toContain('data-step="2" cx="3" cy="4"')
     expect(svg).toContain('<path data-step="3" d="M 2 0 A 2 2 0 0 1')
     expect(svg).toContain('<title>π &lt;test&gt;</title>')
-    expect(svg).toContain('<desc>angle = digit / 10 × 2π</desc>')
+    expect(svg).toContain('<desc>angle = digit / 10 × 2π\nSVG: orthographic (x,y) projection;')
     expect(svg).toContain('transform="scale(1,-1)"')
     expect(svg.match(/data-step=/g)).toHaveLength(4)
   })

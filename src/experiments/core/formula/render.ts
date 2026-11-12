@@ -40,6 +40,8 @@ export function renderExpr(e: Expr, opts: RenderOptions = {}): string {
   const fmt = opts.format ?? exactFloat
   const go = (x: Expr): string => {
     switch (x.kind) {
+      case 'halfDifference':
+        return `((${opts.symbols?.C ?? 'C'} − 1) × ${go(x.n)} × ${go(x.dt)} / 2) mod 2π`
       case 'num':
         return fmt(x.value)
       case 'pi':

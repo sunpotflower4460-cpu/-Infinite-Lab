@@ -1,0 +1,50 @@
+[
+  {
+    "port": 4174,
+    "step": 1000,
+    "computeMs": 35,
+    "pngMedianMs": 16.699999999953434,
+    "heap": 56166974,
+    "geometryBytes": 56000
+  },
+  {
+    "port": 4174,
+    "step": 10000,
+    "computeMs": 53,
+    "pngMedianMs": 48,
+    "heap": 57365587,
+    "geometryBytes": 560000
+  },
+  {
+    "port": 4174,
+    "step": 100000,
+    "computeMs": 224,
+    "pngMedianMs": 116.5,
+    "heap": 66605034,
+    "geometryBytes": 5600000
+  },
+  {
+    "port": 4173,
+    "step": 1000,
+    "computeMs": 38,
+    "pngMedianMs": 16.700000000186265,
+    "heap": 55666430,
+    "geometryBytes": 56000
+  },
+  {
+    "port": 4173,
+    "step": 10000,
+    "computeMs": 63,
+    "pngMedianMs": 20.699999999953434,
+    "heap": 59449219,
+    "geometryBytes": 560000
+  },
+  {
+    "port": 4173,
+    "step": 100000,
+    "computeMs": 237,
+    "pngMedianMs": 131,
+    "heap": 71581706,
+    "geometryBytes": 5600000
+  }
+]

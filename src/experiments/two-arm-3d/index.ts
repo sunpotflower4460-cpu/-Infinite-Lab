@@ -1,8 +1,20 @@
 import { point, type GeometryInstruction } from '../../geometry/types'
 import { detCos, detSin } from '../../math/detmath'
-import { disk } from '../two-arm'
+import { disk, twoArmFormulas, twoArm } from '../two-arm'
 import { paramsToEnv, runFormulas, traceSymbols } from '../core/Experiment'
-import { add, assign, cos, modTau, mul, sin, v, type FormulaSet } from '../core/formula'
+import {
+  add,
+  assign,
+  cos,
+  modTau,
+  mul,
+  sin,
+  v,
+  halfDifference,
+  sqrt,
+  num,
+  type FormulaSet,
+} from '../core/formula'
 import type {
   ExperimentDefinition,
   GeometryExperiment,
@@ -98,6 +110,7 @@ const heightFormulas: FormulaSet = [
 ]
 
 const symbols = {
+  delta: 'δ',
   theta1: 'θ₁',
   theta2: 'θ₂',
   rho: 'ρ',
@@ -278,9 +291,44 @@ export const twoArmHeight: ExperimentDefinition = {
   create: () => new PointPath(heightFormulas),
 }
 
+/**
+ * Sphere Lift: exactly the flat pen's x/y, with signed half-phase height.
+ * Every sampled point lies on radius scale·(r1+r2), within float64 error.
+ * Straight segments between samples are chords, not surface geodesics.
+ */
+const sphereFormulas: FormulaSet = [
+  ...twoArmFormulas,
+  assign(
+    'delta',
+    halfDifference(v('n'), v('dt')),
+    'signed half-phase; C−1 formed at 448-bit precision before mod 2π',
+  ),
+  assign(
+    'z',
+    mul(mul(v('scale'), mul(num(2), sqrt(mul(v('r1'), v('r2'))))), sin(v('delta'))),
+    'sphere height; the original x/y remain unchanged',
+  ),
+]
+export const twoArmSphereLift: ExperimentDefinition = {
+  id: 'two-arm-sphere-lift',
+  name: 'Sphere Lift (same x/y as 2D)',
+  description:
+    'Original {C} two-arm x/y lifted by z = scale × 2√(r1 r2) sin((({C}−1)t)/2). Sampled points lie on a sphere; unequal arms visit a band, finite samples are not uniform coverage.',
+  view: '3d',
+  parameters: twoArm.parameters,
+  formulas: sphereFormulas,
+  symbols,
+  extent: (p) => {
+    const r = p.scale! * (p.r1! + p.r2!)
+    return { ...disk(r), minZ: -r, maxZ: r }
+  },
+  create: () => new PointPath(sphereFormulas),
+}
+
 /** The Two-Arm family: the 2D machine, arm 2 turned vertical (torus), the table turned (ball), or lifted by time. */
 export const TWO_ARM_VIEWS = [
   { id: 'two-arm', label: '2D' },
+  { id: twoArmSphereLift.id, label: 'Sphere' },
   { id: twoArmTorus.id, label: 'Torus' },
   { id: 'two-arm-ball', label: 'Ball' },
   { id: twoArmHeight.id, label: 'Height' },

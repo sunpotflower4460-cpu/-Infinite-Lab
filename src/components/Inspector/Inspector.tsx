@@ -1,3 +1,4 @@
+import { overlayRule, transformPoint } from '../../lab/presentation'
 import { useState } from 'react'
 import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
@@ -9,6 +10,8 @@ export function Inspector() {
   const inspected = useLab((s) => s.inspected)
   const current = useLab((s) => s.currentTrace)
   const currentStep = useLab((s) => s.currentStep)
+  const presentation = useLab((s) => s.presentation)
+  const flow = useLab((s) => s.selectedFlow)
   const trace = inspected ?? current
   const [query, setQuery] = useState('')
 
@@ -46,6 +49,26 @@ export function Inspector() {
           <div className="panel-subtitle">Formula</div>
           <FormulaViewer compact />
           <div className="panel-subtitle">Geometry</div>
+          <p data-testid="inspector-flow">
+            {presentation.mode === 'yin-yang'
+              ? flow === 'derived'
+                ? '陽 / derived'
+                : '陰 / original'
+              : flow === 'derived'
+                ? '鏡像 / derived'
+                : '元 / original'}{' '}
+            · step {trace.step}
+          </p>
+          <p className="muted small">{overlayRule(presentation.mode)}</p>
+          {flow === 'derived' && presentation.mode !== 'solo' && trace.env.x !== undefined && (
+            <p className="mono" data-testid="derived-coordinates">
+              P′ = (
+              {transformPoint(trace.env.x, trace.env.y!, trace.env.z ?? 0, presentation.mode)
+                .map(formatExact)
+                .join(', ')}
+              )
+            </p>
+          )}
           <ul className="instructions mono">
             {trace.instructions.map((g, i) => (
               <li key={i}>

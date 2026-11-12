@@ -1,3 +1,4 @@
+import { useStore } from 'zustand'
 import { useEffect, useRef, useState } from 'react'
 import type { LabController } from '../../app/LabController'
 import type { Scene3D } from '../../renderer/Scene3D'
@@ -10,7 +11,7 @@ import type { Scene3D } from '../../renderer/Scene3D'
 export function Stage3D({ controller }: { controller: LabController }) {
   const host = useRef<HTMLDivElement>(null)
   const scene = useRef<Scene3D | null>(null)
-  const [rotating, setRotating] = useState(false)
+  const rotating = useStore(controller.store, (s) => s.presentation.autoRotate)
   const [error, setError] = useState<string | null>(null)
   const webgl = webglAvailable()
 
@@ -22,6 +23,9 @@ export function Stage3D({ controller }: { controller: LabController }) {
         if (cancelled || !host.current) return
         const store = controller.store
         scene.current = new Scene3D(host.current, {
+          presentation: () => store.getState().presentation,
+          selectedFlow: () => store.getState().selectedFlow,
+          onCamera: (camera) => store.setState((s) => ({ presentation: { ...s.presentation, camera } })),
           store: controller.renderer.store,
           visibleRecords: () => controller.renderer.visibleRecords,
           range: () => store.getState().microscope,
@@ -31,13 +35,13 @@ export function Stage3D({ controller }: { controller: LabController }) {
           },
           guide: () => {
             const s = store.getState()
-            return (s.inspected ?? s.currentTrace)?.overlay ?? null
+            return s.film && s.filmInfo === 'off' ? null : ((s.inspected ?? s.currentTrace)?.overlay ?? null)
           },
           look: () => store.getState().look,
           extent: () => controller.extent(),
           follow: () => store.getState().follow,
           onUserCamera: () => store.setState({ follow: false }),
-          onPick: (step) => controller.pickStep(step),
+          onPick: (step, flow) => controller.pickStep(step, flow),
         })
         controller.view3d = scene.current
         controller.renderer.suspended = true // the 2D canvas underneath is covered: do not draw it
@@ -64,11 +68,15 @@ export function Stage3D({ controller }: { controller: LabController }) {
     <div className="stage-3d" data-testid="stage-3d">
       <div className="stage-3d-canvas" ref={host} />
       {error && <div className="stage-busy">3D view unavailable: {error}</div>}
+      <div className="camera-presets">
+        <button onClick={() => scene.current?.preset('top')}>真上から</button>
+        <button onClick={() => scene.current?.preset('oblique')}>斜めから</button>
+      </div>
       <button
         className={`stage-3d-rotate ${rotating ? 'active' : ''}`}
         onClick={() => {
           scene.current?.setAutoRotate(!rotating)
-          setRotating(!rotating)
+          controller.setPresentation({ autoRotate: !rotating })
         }}
         title="Turn the view slowly around the vertical axis"
       >

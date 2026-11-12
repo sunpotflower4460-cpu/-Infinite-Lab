@@ -155,3 +155,13 @@ npm run build
 ## 技術スタック
 
 TypeScript · React · Vite · PixiJS v8 (WebGL) · Web Workers · Zustand · Vitest · Playwright · native BigInt
+
+## 球面・左右対称・陰陽の観察
+
+Film / Labの「形 → **Sphere**」は、元の2Dのx・yを変えずに点を球面へ持ち上げる **Sphere Lift** です。「重ね方 → **左右対称**」は `(−x,y,z)`、「**陰陽**」は `(−x,−y,−z)` の対を表示します。これらは元のπの軌跡に加えた変換であり、π自身に太極図の形が隠されているという主張ではありません。
+
+「真上から」で2Dとの座標の一致、「斜めから」やドラッグで球面の奥行きを観察できます。密になったら **Trail → 300**、「調整」で配色・透明度・線幅・片側のみ表示を試してください。形の切替は現在のstepと共通パラメータを保持します。Filmの3Dでは画面内の再生ボタンで停止・再開できます。元の2D Film・既存実験・vs 22/7の比較も使用できます。
+
+点は `x²+y²+z² = [scale·(r₁+r₂)]²` をfloat64誤差の範囲で満たします。サンプル間の直線は球面の弦です。有限のstepで均等に埋まること、陰陽でS字境界が現れることは保証しません。JSON / Historyは重ね方・Trail・配色・カメラを保存します。PNG / 動画は現在の描画、SVGはx/yへの正射影、CSVは元／派生を区別した座標を保存します。
+
+[数式・操作・データ互換性](docs/EXPERIMENTS.md#sphere-lift左右鏡像陰陽v07) · [検証結果と比較画像](docs/validation/SPHERE_LIFT.md)

@@ -165,3 +165,12 @@ tests/
   e2e/            Playwright
   fixtures/       pi / e / sqrt2 / phi 各 10,000 桁（外部参照値）
 ```
+
+## Sphere Lift / presentation（v0.7）
+
+- Formula ASTの `halfDifference(n,dt)` はC−1を448-bitで計算してからmod 2πへ還元する。Two-Armのx/y式木を共有し、Sphereも1step=1pointを保つ。
+- `lab/presentation.ts` はSolo / Mirror / Yin–Yang、Trail、配色、片側表示、線幅・透明度・明るさ、カメラを表す。JSON v4の `config.presentation` に保存し、旧版はSoloへ戻す。幾何学digestには入れない。
+- 2Dの派生レイヤーは同じGeometryStoreから増分転送し、コンテナ変換で鏡映／反転する。毎フレーム全座標を複製しない。Trailは範囲uniformで指定。
+- 3Dの元／派生ポリラインは同じfloat32位置属性を共有し、物体変換で対を描く。通常の細い線は既存のnative線、太線は `Polyline3D.ts` の画面ピクセル幅付きインスタンス描画。50,000点以上で細線へ戻し、データは間引かない。アンマウント時は両方のgeometry・materialとWebGL contextを解放する。
+- 真上プリセットはOrthographicCamera、斜めはPerspectiveCamera。投影方式・zoomも保存し、真上でzがx/yの拡大率を変えない。ピッキングは各流れの変換後の線分に対して行い、元stepとflowをInspectorへ渡す。
+- 形の切替時は表示stepと共有パラメータを保存し、workerの新しいinitに対するreadyを待って同じstepへseekする。完了後に以前の再生状態を復元する。

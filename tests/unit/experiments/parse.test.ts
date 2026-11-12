@@ -215,6 +215,10 @@ function outcome(f: () => number): number | string {
 }
 
 function collectVars(e: Expr, out = new Set<string>()): Set<string> {
+  if (e.kind === 'halfDifference') {
+    collectVars(e.n, out)
+    collectVars(e.dt, out)
+  }
   if (e.kind === 'var') out.add(e.name)
   if (e.kind === 'bin') {
     collectVars(e.left, out)
