@@ -1,20 +1,40 @@
 import { useEffect } from 'react'
 import { closeRoom } from '../../golden/room'
+import { useGuideContext } from '../../guide/context'
+import { useGuide } from '../../guide/store'
 import { Coincidence, Fractions, Kam, Pentagon, Summary, Sunflower, TorusFill } from './Sections'
 
 /**
  * The "φ and π" room: what the golden ratio and π have in common, and where they are opposites,
  * each point shown by something computed on the spot (see src/golden/golden.ts).
  */
+const roomContext = () => ({
+  page: 'φ と π の部屋',
+  about:
+    '黄金比 φ と π の関係（正五角形、黄金角、分数への近さ、トーラスを埋める速さ、KAM、偶然の一致）を、その場で計算した図と数値で見せるページ',
+})
+
 export function GoldenRoom() {
+  useGuideContext('room', roomContext)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRoom()
+    const onKey = (e: KeyboardEvent) => {
+      // Escape in the AI Guide (or while its pen is out) belongs to the guide
+      if (e.target instanceof Element && e.target.closest('[data-guide-ignore]')) return
+      if (useGuide.getState().drawing) return
+      if (e.key === 'Escape') closeRoom()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   return (
-    <div className="room" role="dialog" aria-label="φ と π の部屋" data-testid="golden-room">
+    <div
+      className="room"
+      role="dialog"
+      aria-label="φ と π の部屋"
+      data-testid="golden-room"
+      data-guide-title="φ と π の部屋"
+    >
       <header className="room-head">
         <div>
           <h2>

@@ -16,6 +16,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "html-to-image": "^1.11.13",
     "mediabunny": "^1.60.0",
     "pixi.js": "^8.21.0",
     "react": "^19.3.0",

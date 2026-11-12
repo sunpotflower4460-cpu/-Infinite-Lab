@@ -24,6 +24,7 @@ import { askObserver, type DeepSeekModel } from '../ai/deepseek'
 import { addHistory, browserStorage, loadHistory, removeHistory, type HistoryEntry } from '../lab/history'
 import { PRESETS } from '../lab/presets'
 import { PixiRenderer } from '../renderer/PixiRenderer'
+import { registerCanvasSnapshot } from '../guide/snapshots'
 import type { Look } from '../renderer/layers/GeometryLayer'
 import { filmSpeed } from './filmSpeed'
 import { saveFilmInfo, type FilmInfoLevel } from '../film/explain'
@@ -89,6 +90,9 @@ export class LabController {
     if (this.mounted) return
     this.mounted = true
     await this.renderer.init(host)
+    // the AI Guide's pen can picture this canvas (WebGL keeps no picture between frames)
+    const canvas = host.querySelector('canvas')
+    if (canvas) registerCanvasSnapshot(canvas, () => this.renderer.snapshotCanvas())
     this.store.setState({
       backend: this.renderer.backend,
       layerMode: this.renderer.layerName.startsWith('Instanced') ? 'instanced' : 'graphics',

@@ -51,11 +51,16 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <section className="room-sec" id={`room-${id}`} data-testid={`room-${id}`}>
+    <section
+      className="room-sec"
+      id={`room-${id}`}
+      data-testid={`room-${id}`}
+      data-guide-title={`${n} ${title}`}
+    >
       <h3>
         <span className="room-n">{n}</span> {title}
       </h3>
-      <p className="room-gist">
+      <p className="room-gist" data-guide-summary>
         <span className="room-gist-label">ひとことで</span>
         {gist}
       </p>
@@ -225,7 +230,7 @@ export function Sunflower() {
       }
     >
       <label className="room-slider">
-        <span>
+        <span data-guide-state>
           1 個ごとに回す角度：<b>{deg.toFixed(3)}°</b>（一周の {(deg / 360).toFixed(5)}）
         </span>
         <input
@@ -478,7 +483,7 @@ export function TorusFill() {
             {RATIOS.map((r, i) => (
               <figure key={r.id}>
                 <FlatTorus a={r.a} turns={turns} color={r.color} />
-                <figcaption>
+                <figcaption data-guide-state>
                   <b style={{ color: r.color }}>{r.label}</b>
                   <br />
                   埋まった割合 {(curves[i]![turns]! * 100).toFixed(1)}%
@@ -531,7 +536,7 @@ export function TorusFill() {
     >
       <TorusDiagram />
       <label className="room-slider">
-        <span>
+        <span data-guide-state>
           根元の腕の周回数：<b>{turns}</b> 周
         </span>
         <input
@@ -782,7 +787,7 @@ export function Kam() {
         など）だと、押す力がいつも同じタイミングで積み重なり、揺れが大きく乱れます（共鳴）。分数から遠いリズムほど押す力がばらけて、乱れにくくなります。黄金比は分数から最も遠いので、いちばん強く揺さぶるまで乱れません。
       </p>
       <label className="room-slider">
-        <span>
+        <span data-guide-state>
           揺さぶりの強さ K：<b>{K.toFixed(3)}</b>
         </span>
         <input
@@ -813,7 +818,7 @@ export function Kam() {
         </thead>
         <tbody>
           {(result?.tests ?? []).map((t) => (
-            <tr key={t.id}>
+            <tr key={t.id} data-guide-state>
               <th style={{ color: KAM_COLORS[t.id] }}>
                 {t.label}（{t.w.toFixed(4)}）
               </th>
