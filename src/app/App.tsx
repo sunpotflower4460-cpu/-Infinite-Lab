@@ -11,6 +11,8 @@ import { MicroscopePanel } from '../components/Microscope/MicroscopePanel'
 import { ExperimentPanel } from '../components/Panel/ExperimentPanel'
 import { StatusStrip } from '../components/Status/StatusStrip'
 import { FileActions } from '../components/Status/FileActions'
+import { GoldenRoom } from '../components/Golden/GoldenRoom'
+import { openRoom, useRoom } from '../golden/room'
 
 export function App() {
   const scientific = useLab((s) => s.scientific)
@@ -21,6 +23,7 @@ export function App() {
   const sheet = useLab((s) => s.sheet)
   const film = useLab((s) => s.film)
   const filmInfo = useLab((s) => s.filmInfo)
+  const room = useRoom((s) => s.open)
   const close = () => useLab.setState({ sheet: null })
   return (
     <div
@@ -40,6 +43,9 @@ export function App() {
           title="Full-screen, like the reference video"
         >
           ▶ π の模様を見る
+        </button>
+        <button className="room-open" onClick={openRoom} title="Golden ratio and π, side by side">
+          φ と π の部屋
         </button>
         <CompareToggle />
         <FileActions />
@@ -89,6 +95,7 @@ export function App() {
         </div>
         {error && <div className="error">Error: {error}</div>}
       </footer>
+      {room && <GoldenRoom />}
     </div>
   )
 }
