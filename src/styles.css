@@ -1382,6 +1382,15 @@ input:not([type]) {
   border-color: #b78cff;
   color: #b78cff;
 }
+.room-tag-報告 {
+  border-color: #7f9cff;
+  color: #7f9cff;
+}
+.room-tag-読み方 {
+  border-color: #e8a0c8;
+  color: #e8a0c8;
+  border-style: dashed;
+}
 .room-slider {
   display: grid;
   gap: 4px;
@@ -1427,6 +1436,176 @@ input:not([type]) {
   .room-body {
     padding-left: 14px;
     padding-right: 14px;
+  }
+}
+
+/* ---- the rhythm textbook (#rhythm) ---------------------------------------------------- */
+
+.room-loading {
+  display: grid;
+  place-items: center;
+}
+.room-square {
+  aspect-ratio: 1;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.room-plane {
+  image-rendering: auto;
+}
+.room-meter,
+.room-verdict {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.room-verdict {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.room-line {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+div.room-cf {
+  font-family: var(--mono);
+  font-size: 12px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.room-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.room-medium-view {
+  position: relative;
+}
+.room-drum {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #04050a;
+  font-size: 11px;
+  pointer-events: none;
+}
+.room-progress {
+  height: 3px;
+  margin-top: 6px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.room-progress div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.room-figure {
+  margin: 12px 0;
+}
+.room-figure canvas {
+  aspect-ratio: 4 / 3;
+}
+.room-kv td:first-child {
+  white-space: nowrap;
+}
+.room-caution {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px dashed #e8a0c8;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.room-caution ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.room-caution li {
+  margin: 4px 0;
+}
+.room-points {
+  margin: 0;
+  padding: 12px 14px 12px 34px;
+  background: var(--panel);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.9;
+}
+.room-terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px 22px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+.room-terms dt {
+  font-weight: 600;
+  color: var(--accent);
+}
+.room-terms dd {
+  margin: 2px 0 0;
+}
+.room-heart svg {
+  display: block;
+  width: 160px;
+  margin: 0 auto;
+}
+.room-heart-node {
+  animation: room-heart-node 1s ease-out infinite;
+}
+.room-heart-wave {
+  transform-origin: 62px 50px;
+  animation: room-heart-wave 1s ease-out infinite;
+}
+@keyframes room-heart-node {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  10% {
+    opacity: 1;
+  }
+}
+@keyframes room-heart-wave {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(14);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-heart-node,
+  .room-heart-wave {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .room-cell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .room-cell .room-square {
+    max-width: 200px;
   }
 }
 
