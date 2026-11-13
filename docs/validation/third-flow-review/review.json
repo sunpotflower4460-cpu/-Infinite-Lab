@@ -1,0 +1,171 @@
+{
+  "errors": [],
+  "captures": [
+    {
+      "step": 126,
+      "params": {
+        "dt": 0.05,
+        "r1": 1.3,
+        "r2": 1,
+        "scale": 100,
+        "drawArms": true
+      },
+      "presentation": {
+        "mode": "yin-yang",
+        "trail": 0,
+        "palette": "gold-blue",
+        "opacity": 0.16,
+        "width": 3,
+        "glow": 0,
+        "flow": "both",
+        "look": "luminous",
+        "thirdFlow": true,
+        "thirdOpacity": 0.95,
+        "thirdQuarter": 1,
+        "torusSurface": true,
+        "autoRotate": false,
+        "camera2d": {
+          "cx": 0,
+          "cy": 0,
+          "zoom": 2.28
+        },
+        "camera": {
+          "position": [
+            375.90992602943646,
+            -501.21323470591443,
+            313.25827169119657
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "projection": "perspective",
+          "zoom": 1
+        }
+      },
+      "camera": {
+        "position": [
+          375.90992602943606,
+          -501.21323470591466,
+          313.2582716911967
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "projection": "perspective",
+        "zoom": 1
+      }
+    },
+    {
+      "step": 126,
+      "params": {
+        "dt": 0.05,
+        "r1": 1.3,
+        "r2": 1,
+        "scale": 100,
+        "drawArms": true
+      },
+      "presentation": {
+        "mode": "yin-yang",
+        "trail": 0,
+        "palette": "gold-blue",
+        "opacity": 0.16,
+        "width": 3,
+        "glow": 0,
+        "flow": "third",
+        "look": "luminous",
+        "thirdFlow": true,
+        "thirdOpacity": 0.95,
+        "thirdQuarter": 1,
+        "torusSurface": true,
+        "autoRotate": false,
+        "camera2d": {
+          "cx": 0,
+          "cy": 0,
+          "zoom": 2.28
+        },
+        "camera": {
+          "position": [
+            375.90992602943646,
+            -501.21323470591443,
+            313.25827169119657
+          ],
+          "target": [
+            0,
+            0,
+            0
+          ],
+          "projection": "perspective",
+          "zoom": 1
+        }
+      },
+      "camera": {
+        "position": [
+          375.90992602943606,
+          -501.21323470591466,
+          313.2582716911967
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "projection": "perspective",
+        "zoom": 1
+      }
+    }
+  ],
+  "rasterColors": [
+    {
+      "width": 1,
+      "colors": [
+        [
+          "102,88,119",
+          1287
+        ],
+        [
+          "153,132,178",
+          1105
+        ],
+        [
+          "203,176,237",
+          751
+        ]
+      ]
+    },
+    {
+      "width": 4,
+      "colors": [
+        [
+          "203,176,237",
+          7275
+        ],
+        [
+          "153,132,178",
+          79
+        ],
+        [
+          "102,88,119",
+          47
+        ],
+        [
+          "107,93,125",
+          26
+        ],
+        [
+          "186,161,217",
+          26
+        ]
+      ]
+    }
+  ],
+  "independent": {
+    "cases": 60,
+    "comparisons": 240,
+    "maxCoordinateError": 2.0745773306864238e-16,
+    "maxSurfaceResidual": 6.767960677827891e-16
+  }
+}

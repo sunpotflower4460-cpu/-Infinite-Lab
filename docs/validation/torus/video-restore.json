@@ -1,0 +1,22 @@
+{
+  "before": {
+    "step": 10000,
+    "viewStep": 1000,
+    "camera": {
+      "position": [415.0211696808642, -553.3615595744845, 345.8509747340529],
+      "target": [0, 0, 0],
+      "projection": "perspective",
+      "zoom": 1
+    }
+  },
+  "after": {
+    "step": 10000,
+    "viewStep": 1000,
+    "camera": {
+      "position": [415.0211696808642, -553.3615595744845, 345.8509747340529],
+      "target": [0, 0, 0],
+      "projection": "perspective",
+      "zoom": 1
+    }
+  }
+}

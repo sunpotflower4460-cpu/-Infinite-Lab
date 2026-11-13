@@ -6,6 +6,7 @@
  * user reads is — structurally — the formula that was executed.
  */
 export type Expr =
+  | { kind: 'halfDifference'; n: Expr; dt: Expr }
   | { kind: 'num'; value: number }
   | { kind: 'var'; name: string }
   | { kind: 'pi' }
@@ -57,11 +58,17 @@ export const modTau = (factors: Expr[], withConstant = false, squared = false): 
   squared
     ? { kind: 'modTau', factors, withConstant: true, squared }
     : { kind: 'modTau', factors, withConstant }
+export const halfDifference = (n: Expr, dt: Expr): Expr => ({ kind: 'halfDifference', n, dt })
+export const sqrt = (arg: Expr): Expr => ({ kind: 'call', fn: 'sqrt', arg })
 export const assign = (target: string, expr: Expr, note?: string): Formula => ({ target, expr, note })
 
 /** All variable names referenced by an expression. */
 export function freeVars(e: Expr, out = new Set<string>()): Set<string> {
   switch (e.kind) {
+    case 'halfDifference':
+      freeVars(e.n, out)
+      freeVars(e.dt, out)
+      break
     case 'var':
       out.add(e.name)
       break

@@ -5,7 +5,7 @@ import { digitCircleWalk } from './digit-circle-walk'
 import { piRotation } from './pi-rotation'
 import { makePlaygroundDefinition, playground, PLAYGROUND_ID, type PlaygroundSources } from './playground'
 import { twoArm } from './two-arm'
-import { twoArmBall, twoArmHeight, twoArmTorus } from './two-arm-3d'
+import { twoArmBall, twoArmHeight, twoArmTorus, twoArmSphereLift } from './two-arm-3d'
 
 /** Available experiments, in display order. */
 export const EXPERIMENTS: Record<string, ExperimentDefinition> = {
@@ -15,6 +15,7 @@ export const EXPERIMENTS: Record<string, ExperimentDefinition> = {
   [twoArm.id]: twoArm,
   [playground.id]: playground,
   [twoArmTorus.id]: twoArmTorus,
+  [twoArmSphereLift.id]: twoArmSphereLift,
   [twoArmBall.id]: twoArmBall,
   [twoArmHeight.id]: twoArmHeight,
 }

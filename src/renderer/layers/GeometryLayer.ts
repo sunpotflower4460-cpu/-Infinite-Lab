@@ -14,6 +14,7 @@ export const COLORS = {
 
 /** Colours and opacities of the drawn geometry (presentation only: never part of the data). */
 export interface LayerStyle {
+  width?: number
   background: number
   line: number
   lineAlpha: number

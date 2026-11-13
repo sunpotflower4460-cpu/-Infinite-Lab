@@ -1,3 +1,4 @@
+import { parsePresentation, type Presentation } from './presentation'
 import type { DigitStart, ParamValues } from '../experiments/core/types'
 import { PLAYGROUND_ID, parseSources, type PlaygroundSources } from '../experiments/playground'
 import { EXPERIMENTS } from '../experiments/registry'
@@ -23,6 +24,7 @@ export function nextPrecision(current: number, limit = digitLimit()): number {
 
 /** Everything that determines the geometry (together with a step count). */
 export interface LabConfig {
+  presentation?: Presentation
   constant: string
   precision: number
   experiment: string
@@ -63,6 +65,7 @@ export function parseConfig(input: unknown): LabConfig {
   if (digitStart !== 'integer' && digitStart !== 'fractional')
     throw new Error(`invalid digitStart ${String(digitStart)}`)
 
+  const presentation = o.presentation === undefined ? {} : { presentation: parsePresentation(o.presentation) }
   const def = EXPERIMENTS[experiment]!
   const given = (o.parameters ?? {}) as Record<string, unknown>
   if (typeof given !== 'object' || given === null || Array.isArray(given)) {
@@ -88,8 +91,8 @@ export function parseConfig(input: unknown): LabConfig {
   }
   if (experiment !== PLAYGROUND_ID) {
     if (o.formulas !== undefined) throw new Error(`formulas are only used by the Formula Playground`)
-    return { constant, precision, experiment, digitStart, parameters }
+    return { constant, precision, experiment, digitStart, parameters, ...presentation }
   }
   const formulas = parseSources(o.formulas ?? {})
-  return { constant, precision, experiment, digitStart, parameters, formulas }
+  return { constant, precision, experiment, digitStart, parameters, formulas, ...presentation }
 }

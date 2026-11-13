@@ -1,3 +1,11 @@
+import {
+  DEFAULT_PRESENTATION,
+  parsePresentation,
+  hasThirdFlow,
+  thirdRule,
+  type Presentation,
+  type Flow,
+} from '../lab/presentation'
 import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment, resolveExperiment } from '../experiments/registry'
 import {
@@ -12,11 +20,12 @@ import {
   type ExperimentDefinition,
   type Extent,
   type ParamValue,
+  type ParamValues,
   type StepTrace,
 } from '../experiments/core/types'
 import type { GeometryInstruction } from '../geometry/types'
 import { geometryDigest } from '../geometry/digest'
-import { digitLimit, nextPrecision, type LabConfig } from '../lab/config'
+import { digitLimit, nextPrecision, parseConfig, type LabConfig } from '../lab/config'
 import { FILE_FORMAT, FILE_VERSION, parseImport, type ExperimentFile } from '../lab/experimentFile'
 import { geometryCsv, geometrySvg } from '../lab/exporters'
 import { detectPatterns } from '../analysis/patterns'
@@ -32,6 +41,13 @@ import { createLabStore, SPEEDS, useLab, type LabStore, type Microscope } from '
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
 import { version as APP_VERSION } from '../../package.json'
+import { ThirdCirclePath } from './ThirdCirclePath'
+import {
+  thirdCircleConfig,
+  thirdCircleSample,
+  thirdCircleFormulaLines,
+  type Point3,
+} from '../lab/thirdCircle'
 
 /**
  * Orchestrates:  math.worker (digits) → simulation.worker (geometry) → renderer, and mirrors
@@ -39,6 +55,11 @@ import { version as APP_VERSION } from '../../package.json'
  */
 export class LabController {
   readonly renderer = new PixiRenderer()
+  readonly thirdCircle = new ThirdCirclePath(this.renderer.store, (count, error) => {
+    this.store.setState({ thirdCircleRecords: count, thirdCircleError: error })
+    this.renderer.invalidateThird()
+  })
+  private cachedThirdFrame: { key: string; value: ReturnType<LabController['makeThirdFrame']> } | null = null
   private readonly mathWorker: Worker
   private readonly simWorker: Worker
   private mathRequestId = 0
@@ -54,17 +75,27 @@ export class LabController {
    * Work to do once the simulation for a restored / imported config is ready: run to
    * `seek` and compare the geometry digest with `verify`. Cancelled by any manual change.
    */
-  private pending: { seek: number | null; verify: string | null; note?: string } | null = null
+  private pending: {
+    seek: number | null
+    verify: string | null
+    note?: string
+    thirdVerify?: string
+  } | null = null
   /** Explanation attached to the next verification result (older file formats). */
   private verifyNote: string | undefined
   /** Digest to verify once `seekTarget` has been reached. */
   private pendingVerify: string | null = null
+  private pendingThirdVerify: string | null = null
+  private thirdSourceReady = false
   /** Forward seek in progress: the step we are computing up to. */
+  private switchResume = false
+  private switchFollow = false
   private seekTarget: number | null = null
   /** Request id of an in-flight continuous-computation extension (null = none). */
   private extendRequestId: number | null = null
   /** Compare Mode: the second lane (same experiment, another constant). */
   peer: LabController | null = null
+  private unsubscribePresentation: (() => void) | null = null
   private unsubscribeMirror: (() => void) | null = null
   /** Compare Mode playback clock (requestAnimationFrame id). */
   private clockFrame: number | null = null
@@ -81,7 +112,47 @@ export class LabController {
     this.mathWorker.onmessage = (e: MessageEvent<MathResponse>) => this.onMath(e.data)
     this.simWorker.onmessage = (e: MessageEvent<SimResponse>) => this.onSim(e.data)
     this.renderer.onUserCamera = () => this.store.setState({ follow: false })
-    this.renderer.onPick = (step) => this.onPicked(step)
+    this.renderer.onPick = (step, flow) => this.onPicked(step, flow)
+    this.unsubscribePresentation = this.store.subscribe((s, prev) => {
+      if (s.presentation !== prev.presentation || s.experimentId !== prev.experimentId) {
+        // Camera updates during orbit do not restyle/rebuild geometry.
+        if (
+          s.experimentId !== prev.experimentId ||
+          [
+            'mode',
+            'trail',
+            'palette',
+            'opacity',
+            'width',
+            'glow',
+            'flow',
+            'thirdFlow',
+            'thirdModel',
+            'thirdRadius',
+            'thirdGuides',
+            'thirdTrace',
+            'thirdOpacity',
+            'thirdQuarter',
+            'torusSurface',
+          ].some(
+            (key) =>
+              s.presentation[key as keyof Presentation] !== prev.presentation[key as keyof Presentation],
+          )
+        )
+          this.renderer.setPresentation(s.presentation, s.experimentId === 'two-arm-torus')
+      }
+      if (s.selectedFlow !== prev.selectedFlow) this.renderer.setHighlightFlow(s.selectedFlow)
+      if (
+        s.presentation !== prev.presentation ||
+        s.params !== prev.params ||
+        s.constantId !== prev.constantId ||
+        s.experimentId !== prev.experimentId ||
+        s.currentStep !== prev.currentStep ||
+        s.objects !== prev.objects
+      )
+        this.syncThirdCircle()
+    })
+    this.renderer.thirdHighlight = () => this.thirdFrame()?.sample.point ?? null
     this.store.setState({ history: loadHistory(browserStorage()) })
   }
 
@@ -105,6 +176,8 @@ export class LabController {
     if (this.statsTimer) clearInterval(this.statsTimer)
     this.mathWorker.terminate()
     this.simWorker.terminate()
+    this.thirdCircle.dispose()
+    this.unsubscribePresentation?.()
     this.renderer.destroy()
   }
 
@@ -122,7 +195,10 @@ export class LabController {
   /** A manual change supersedes any pending restore / import and its verification. */
   private cancelPending(): void {
     this.pending = null
+    this.switchResume = false
+    this.store.setState({ switching: null })
     this.pendingVerify = null
+    this.pendingThirdVerify = null
     this.store.setState({ verify: { status: 'idle' } })
   }
 
@@ -150,13 +226,43 @@ export class LabController {
    * Switch between experiments that share parameters (the Two-Arm 2D / Torus / Height views):
    * parameters with the same key keep their values, the others take their defaults.
    */
-  switchView(experimentId: string): void {
-    this.cancelPending()
+  switchView(experimentId: string, overrides: ParamValues = {}): void {
     const def = getExperiment(experimentId)
-    const current = this.store.getState().params
+    const state = this.store.getState()
     const params = defaultParams(def.parameters)
-    for (const key of Object.keys(params)) if (Object.hasOwn(current, key)) params[key] = current[key]!
-    this.store.setState({ experimentId, params })
+    for (const key of Object.keys(params))
+      if (Object.hasOwn(state.params, key)) params[key] = state.params[key]!
+    const validated = parseConfig({
+      constant: state.constantId,
+      precision: state.precision,
+      experiment: experimentId,
+      digitStart: state.digitStart,
+      parameters: { ...params, ...overrides },
+    }).parameters
+    this.cancelPending()
+    const step = state.viewStep ?? state.currentStep
+    this.switchResume = state.playing || state.lockstepPlaying
+    this.switchFollow = state.follow
+    this.stopFilmClock()
+    this.pause()
+    this.pending = { seek: step || null, verify: null }
+    this.store.setState({ switching: step })
+    const view = this.renderer.saveView()
+    this.store.setState((s) => ({
+      presentation: { ...s.presentation, camera2d: { cx: view.cx, cy: view.cy, zoom: view.zoom } },
+    }))
+    this.store.setState({
+      experimentId,
+      params: validated,
+      selectedFlow: 'original',
+      presentation: {
+        ...this.store.getState().presentation,
+        flow:
+          experimentId !== 'two-arm-torus' && state.presentation.flow === 'third'
+            ? 'both'
+            : state.presentation.flow,
+      },
+    })
     this.initSimulation()
   }
 
@@ -196,15 +302,39 @@ export class LabController {
       experiment: s.experimentId,
       digitStart: s.digitStart,
       parameters: { ...s.params },
+      presentation: {
+        ...s.presentation,
+        look: s.look,
+        camera: this.view3d?.cameraView() ?? s.presentation.camera,
+        camera2d: {
+          cx: this.renderer.camera.cx,
+          cy: this.renderer.camera.cy,
+          zoom: this.renderer.camera.zoom,
+        },
+      },
       ...(s.experimentId === PLAYGROUND_ID ? { formulas: { ...s.formulas } } : {}),
     }
   }
 
   /** Apply a full configuration, then optionally run to `steps` and verify a digest. */
-  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string, note?: string): void {
+  applyConfig(
+    config: LabConfig,
+    steps?: number,
+    expectedDigest?: string,
+    note?: string,
+    thirdVerify?: string,
+  ): void {
     this.pendingVerify = null
-    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null, note }
+    this.pendingThirdVerify = null
+    this.pending = {
+      seek: steps && steps > 0 ? steps : null,
+      verify: expectedDigest ?? null,
+      note,
+      thirdVerify,
+    }
     this.store.setState({
+      presentation: parsePresentation(config.presentation),
+      look: config.presentation?.look ?? 'lab',
       constantId: config.constant,
       precision: config.precision,
       chosenPrecision: config.precision,
@@ -214,6 +344,8 @@ export class LabController {
       formulas: config.formulas ?? DEFAULT_SOURCES,
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
+    this.renderer.setLook(this.store.getState().look)
+    this.renderer.setPresentation(this.store.getState().presentation, config.experiment === 'two-arm-torus')
     const loaded = this.loaded
     const computing = this.store.getState().phase === 'computing'
     if (
@@ -305,6 +437,8 @@ export class LabController {
    * (nothing is recomputed); going beyond the computed head computes the missing steps.
    */
   seek(step: number, options: { inspect?: boolean } = {}): void {
+    const switching = this.store.getState().switching
+    if (switching !== null && step !== switching) return
     this.stopLockstep() // a Timeline move pauses Compare playback, like it pauses a single lane
     this.seekLane(step, options)
     this.peer?.seekLane(step, options)
@@ -402,7 +536,8 @@ export class LabController {
   }
 
   /** A click in either lane inspects that step in both (same step, different constant). */
-  private onPicked(step: number | null): void {
+  private onPicked(step: number | null, flow: Flow = 'original'): void {
+    this.store.setState({ selectedFlow: flow })
     if (step !== null && typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches) {
       ;(this.owner ?? this).store.setState({ sheet: 'inspector' })
     }
@@ -424,12 +559,15 @@ export class LabController {
   }
 
   /** A click in the 3D view (same behaviour as a click on the 2D canvas). */
-  pickStep(step: number | null): void {
-    this.onPicked(step)
+  pickStep(step: number | null, flow?: Flow): void {
+    this.onPicked(step, flow)
   }
 
   /** The 3D view, while one is mounted for this lane (PNG export of 3D experiments). */
   view3d: {
+    cameraView(): NonNullable<Presentation['camera']>
+    restoreCamera(view: NonNullable<Presentation['camera']>): void
+    preset(view: 'top' | 'oblique'): void
     snapshotPng(): Promise<Blob>
     beginRecording(fromStep: number, toStep: number, look: Look): HTMLCanvasElement
     renderRecordingStep(step: number, frame: number): HTMLCanvasElement
@@ -464,16 +602,18 @@ export class LabController {
           s.precision !== prev.precision
         ) {
           this.stopLockstep()
-          this.peer?.applyConfig({
-            ...this.currentConfig(),
-            constant: this.store.getState().compareConstant ?? 'e',
-          })
+          this.peer?.applyConfig(
+            {
+              ...this.currentConfig(),
+              constant: this.store.getState().compareConstant ?? 'e',
+            },
+            s.viewStep ?? s.currentStep,
+          )
         }
       })
     }
     this.store.setState({ compareConstant: constantId })
     peer.applyConfig({ ...this.currentConfig(), constant: constantId })
-    // restart the main lane too, so both start from step 0 under identical conditions
     this.initSimulation()
     return peer
   }
@@ -503,7 +643,7 @@ export class LabController {
     const reach = ((p.r1 as number) + (p.r2 as number)) * (p.scale as number) // |z| ≤ (r1 + r2)·scale
     this.renderer.fitTo({ minX: -reach, minY: -reach, maxX: reach, maxY: reach })
     this.filmPending = true
-    this.applyConfig(preset.config)
+    this.applyConfig({ ...preset.config, presentation: { ...DEFAULT_PRESENTATION, look: 'luminous' } })
   }
 
   stopFilm(): void {
@@ -536,8 +676,101 @@ export class LabController {
       this.renderer.setHighlight(this.store.getState().currentTrace?.overlay ?? null)
   }
 
+  setPresentation(update: Partial<Presentation>): void {
+    if (update.thirdRadius !== undefined || update.thirdModel !== undefined || update.thirdFlow === false)
+      this.cancelPending()
+    const next = { ...this.store.getState().presentation, ...update }
+    if (update.mode && update.mode !== 'yin-yang' && next.thirdModel === 'phase') next.thirdFlow = false
+    if (
+      next.flow === 'third' &&
+      (!next.thirdFlow || (next.thirdModel === 'phase' && next.mode !== 'yin-yang'))
+    )
+      next.flow = 'both'
+    const p = parsePresentation(next)
+    this.store.setState({ presentation: p, selectedFlow: 'original' })
+    if (this.peer && !this.owner) this.peer.setPresentation(update)
+  }
+
+  circleThirdActive(): boolean {
+    const s = this.store.getState()
+    return (
+      s.experimentId === 'two-arm-torus' && s.presentation.thirdFlow && s.presentation.thirdModel === 'circle'
+    )
+  }
+
+  private syncThirdCircle(): void {
+    const s = this.store.getState()
+    this.thirdCircle.sync(
+      this.circleThirdActive() && this.thirdSourceReady
+        ? thirdCircleConfig(s.constantId, s.params, s.presentation)
+        : null,
+    )
+    this.renderer.setThirdStore(this.circleThirdActive() ? this.thirdCircle.store : null)
+    if (
+      s.thirdCircleRecords !== this.thirdCircle.store.count ||
+      s.thirdCircleError !== this.thirdCircle.failure
+    )
+      this.store.setState({
+        thirdCircleRecords: this.thirdCircle.store.count,
+        thirdCircleError: this.thirdCircle.failure,
+      })
+  }
+
+  thirdFrame(step?: number) {
+    if (!this.circleThirdActive() || !this.thirdSourceReady) return null
+    const s = this.store.getState()
+    const n = step ?? (s.inspected ?? s.currentTrace)?.step
+    if (!n) return null
+    const config = thirdCircleConfig(s.constantId, s.params, s.presentation)
+    const key = JSON.stringify([
+      this.renderer.store.generation,
+      Math.min(n, this.renderer.store.count),
+      n,
+      config,
+      s.params.r1,
+      s.params.scale,
+    ])
+    if (this.cachedThirdFrame?.key !== key) this.cachedThirdFrame = { key, value: this.makeThirdFrame(n) }
+    return this.cachedThirdFrame.value
+  }
+
+  private makeThirdFrame(step: number) {
+    const s = this.store.getState(),
+      store = this.renderer.store
+    const index = store.firstIndexOfStep(step)
+    let point: Point3 | null = null
+    store.forEachRecordFrom(index, index + 1, (d, o) => {
+      if (d[o + 1] === step) point = [d[o + 2]!, d[o + 3]!, d[o + 4]!]
+    })
+    if (!point) return null
+    const config = thirdCircleConfig(s.constantId, s.params, s.presentation)
+    const sample = thirdCircleSample(step, point, config)
+    const major = Number(s.params.scale) * Number(s.params.r1),
+      minor = Number(s.params.scale) * Number(s.params.r2)
+    return {
+      step,
+      center: point as Point3,
+      sample,
+      major,
+      minor,
+      elbow: sample.radial.map((x) => x * major) as Point3,
+    }
+  }
+
+  private finishSwitch(): void {
+    const s = this.store.getState()
+    if (s.switching === null) return
+    this.store.setState({ switching: null, follow: this.switchFollow })
+    this.renderer.follow = this.switchFollow
+    if (this.switchResume) {
+      this.switchResume = false
+      if (s.film) this.startFilmClock()
+      else this.play()
+    }
+  }
+
   setLook(look: Look): void {
-    this.store.setState({ look })
+    this.store.setState((s) => ({ look, presentation: { ...s.presentation, look } }))
     this.renderer.setLook(look)
   }
 
@@ -747,19 +980,25 @@ export class LabController {
 
   private async saveToHistoryUnsafe(): Promise<void> {
     const s = this.store.getState()
+    const count = this.renderer.store.count,
+      config = this.currentConfig()
+    if (this.circleThirdActive()) await this.thirdCircle.ready(count)
     const entry: HistoryEntry = {
       id: `${Date.now().toString(36)}-${Math.floor(performance.now()).toString(36)}`,
       timestamp: new Date().toISOString(),
-      config: this.currentConfig(),
+      config,
       steps: s.currentStep,
-      digest: await geometryDigest(this.renderer.store, this.renderer.store.count),
+      digest: await geometryDigest(this.renderer.store, count),
+      ...(this.circleThirdActive()
+        ? { thirdDigest: await geometryDigest(this.thirdCircle.store, count) }
+        : {}),
     }
     this.store.setState({ history: addHistory(browserStorage(), entry) })
   }
 
   restoreHistory(id: string): void {
     const entry = this.store.getState().history.find((e) => e.id === id)
-    if (entry) this.applyConfig(entry.config, entry.steps, entry.digest)
+    if (entry) this.applyConfig(entry.config, entry.steps, entry.digest, undefined, entry.thirdDigest)
   }
 
   deleteHistory(id: string): void {
@@ -770,22 +1009,36 @@ export class LabController {
   async buildExport(): Promise<ExperimentFile> {
     const s = this.store.getState()
     const def = this.definition()
+    const count = this.renderer.store.count
+    const config = this.currentConfig()
+    if (this.circleThirdActive()) await this.thirdCircle.ready(count)
     return {
       format: FILE_FORMAT,
       version: FILE_VERSION,
       createdAt: new Date().toISOString(),
       app: { name: 'π Infinite Lab', version: APP_VERSION },
-      config: this.currentConfig(),
+      config,
       steps: s.currentStep,
       constant: {
         symbol: s.constant?.symbol ?? '',
         algorithm: s.constant?.algorithm ?? '',
         precision: s.constant?.precision ?? s.precision,
       },
-      formulas: formulaLines(def, s.constant?.symbol ?? 'C'),
+      formulas: [
+        ...formulaLines(def, s.constant?.symbol ?? 'C'),
+        ...(this.circleThirdActive() ? thirdCircleFormulaLines(s.constant?.symbol) : []),
+      ],
       result: {
-        geometryRecords: this.renderer.store.count,
-        geometrySha256: await geometryDigest(this.renderer.store, this.renderer.store.count),
+        geometryRecords: count,
+        geometrySha256: await geometryDigest(this.renderer.store, count),
+        ...(this.circleThirdActive()
+          ? {
+              thirdCircle: {
+                geometryRecords: count,
+                geometrySha256: await geometryDigest(this.thirdCircle.store, count),
+              },
+            }
+          : {}),
         finalState: s.currentTrace?.env ?? {},
       },
       notes: [
@@ -793,6 +1046,13 @@ export class LabController {
         'Geometry is evaluated in IEEE-754 float64 with deterministic (fdlibm-port) sin/cos.',
         'geometrySha256 covers all records as little-endian float64 [kind, step, a, b, c, d, e].',
         'Re-running config for `steps` steps must reproduce geometrySha256 exactly.',
+        'Presentation transforms and the optional torus surface guide are excluded from geometrySha256 and geometryRecords.',
+        ...(hasThirdFlow(s.presentation, s.experimentId === 'two-arm-torus')
+          ? [
+              thirdRule(s.presentation),
+              'The third model is an added observation rule; it does not calculate a measured physical energy field.',
+            ]
+          : []),
       ],
     }
   }
@@ -835,16 +1095,34 @@ export class LabController {
     try {
       const s = this.store.getState()
       const count = this.renderer.visibleRecords
+      const dataStem = this.fileStem()
+      if (this.circleThirdActive()) await this.thirdCircle.ready(count)
       // Microscope: only the range (the faint context is not part of the data)
-      const from = s.microscope ? this.renderer.store.firstIndexOfStep(s.microscope.from) : 0
+      const fromStep = Math.max(
+        s.microscope?.from ?? 0,
+        s.presentation.trail ? (s.viewStep ?? s.currentStep) - s.presentation.trail + 1 : 0,
+      )
+      const from = fromStep ? this.renderer.store.firstIndexOfStep(fromStep) : 0
       const is3d = this.definition().view === '3d'
       if (format === 'png') {
+        const name = `${this.fileStem()}.png`
         const png = is3d && this.view3d ? this.view3d.snapshotPng() : this.renderer.snapshotPng()
-        this.download(await png, `${this.fileStem()}.png`)
+        this.download(await png, name)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count, from, is3d), { type: 'text/csv' }),
-          `${this.fileStem()}.csv`,
+          new Blob(
+            geometryCsv(
+              this.renderer.store,
+              count,
+              from,
+              is3d,
+              s.presentation,
+              s.experimentId === 'two-arm-torus',
+              this.circleThirdActive() ? this.thirdCircle.store : undefined,
+            ),
+            { type: 'text/csv' },
+          ),
+          `${dataStem}.csv`,
         )
       } else {
         const def = this.definition()
@@ -853,10 +1131,26 @@ export class LabController {
           `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
           `${def.name}, step ${s.viewStep ?? s.currentStep}`,
           ...formulaLines(def, symbol),
+          ...(this.circleThirdActive() ? thirdCircleFormulaLines(symbol) : []),
           `parameters ${JSON.stringify(s.params)}`,
+          ...(this.circleThirdActive()
+            ? [
+                `third circle ${JSON.stringify(thirdCircleConfig(s.constantId, s.params, s.presentation))}; radius factor ${s.presentation.thirdRadius}`,
+              ]
+            : []),
         ].join('\n')
-        const parts = geometrySvg(this.renderer.store, count, `π Infinite Lab — ${def.name}`, desc, from)
-        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
+        const parts = geometrySvg(
+          this.renderer.store,
+          count,
+          `π Infinite Lab — ${def.name}`,
+          desc,
+          from,
+          s.presentation,
+          is3d,
+          s.experimentId === 'two-arm-torus',
+          this.circleThirdActive() ? this.thirdCircle.store : undefined,
+        )
+        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${dataStem}.svg`)
       }
     } catch (err) {
       this.reportError(`${format.toUpperCase()} export failed`, err)
@@ -898,10 +1192,11 @@ export class LabController {
       ? (step: number, frame: number) => view3d.renderRecordingStep(step, frame)
       : (step: number) => this.renderer.renderStep(step)
     try {
+      if (this.circleThirdActive()) await this.thirdCircle.ready(this.renderer.store.countUpToStep(to))
       if (view3d) view3d.beginRecording(from, to, o.glow ? 'luminous' : look)
       else {
         if (o.glow) this.renderer.setLook('luminous')
-        this.renderer.frameSteps(from, to)
+        // Keep the current camera for recording, as PNG does.
       }
       const first = renderStep(from, 0)
       const size = videoSize(first.width, first.height)
@@ -996,7 +1291,13 @@ export class LabController {
   importJson(text: string): void {
     try {
       const parsed = parseImport(text)
-      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest, parsed.compatibilityNote)
+      this.applyConfig(
+        parsed.config,
+        parsed.steps,
+        parsed.expectedDigest,
+        parsed.compatibilityNote,
+        parsed.expectedThirdDigest,
+      )
     } catch (err) {
       this.store.setState({
         verify: { status: 'error', message: err instanceof Error ? err.message : String(err) },
@@ -1008,11 +1309,40 @@ export class LabController {
     const expected = this.pendingVerify
     if (!expected) return
     this.pendingVerify = null
-    const actual = await geometryDigest(this.renderer.store, this.renderer.store.count)
-    const status = actual === expected ? 'verified' : 'mismatch'
-    const note = status === 'mismatch' ? this.verifyNote : undefined
-    this.verifyNote = undefined
-    this.store.setState({ verify: { status, expected, actual, note } })
+    const thirdExpected = this.pendingThirdVerify
+    this.pendingThirdVerify = null
+    const count = this.renderer.store.count,
+      epoch = this.initId
+    try {
+      const actual = await geometryDigest(this.renderer.store, count)
+      let thirdActual: string | undefined
+      if (thirdExpected) {
+        await this.thirdCircle.ready(count)
+        thirdActual = await geometryDigest(this.thirdCircle.store, count)
+      }
+      if (epoch !== this.initId || this.store.getState().verify.status !== 'running') return
+      const thirdMismatch = thirdExpected && thirdActual !== thirdExpected
+      const status = actual === expected && !thirdMismatch ? 'verified' : 'mismatch'
+      const note = thirdMismatch
+        ? '第3円QのSHA-256が一致しません。'
+        : thirdExpected
+          ? '元のPと第3円QのSHA-256を両方確認しました。'
+          : status === 'mismatch'
+            ? this.verifyNote
+            : undefined
+      this.verifyNote = undefined
+      this.store.setState({
+        verify: {
+          status,
+          expected: thirdMismatch ? thirdExpected : expected,
+          actual: thirdMismatch ? thirdActual! : actual,
+          note,
+        },
+      })
+    } catch (error) {
+      if (epoch === this.initId && this.store.getState().verify.status === 'running')
+        this.reportError('verify failed', error)
+    }
   }
 
   // ---- worker plumbing ---------------------------------------------------------
@@ -1030,6 +1360,8 @@ export class LabController {
     // While new digits are being computed, keep the choice in the store only;
     // onMath() starts the simulation with the new digits and the current settings.
     if (!this.digits || !s.constant || s.phase === 'computing') return
+    this.thirdSourceReady = false
+    this.thirdCircle.sync(null)
     const c = CONSTANTS[s.constantId]!
     // Copy: the main thread keeps its digits for display; the worker owns its own buffer.
     const digits = this.digits.slice()
@@ -1101,7 +1433,7 @@ export class LabController {
       finished: false,
       playing: false,
       waiting: false,
-      follow: true,
+      follow: this.store.getState().switching !== null ? this.switchFollow : true,
       stepsPerSecond: 0,
     })
   }
@@ -1112,6 +1444,8 @@ export class LabController {
         // Only the ready of the latest init counts (config changes may be queued behind it).
         if (msg.initId !== this.initId || this.store.getState().phase === 'computing') return
         this.resetView()
+        this.thirdSourceReady = true
+        this.syncThirdCircle()
         // a new run replaces a failed one (e.g. corrected Playground formulas)
         this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps, error: null })
         if (this.filmPending) {
@@ -1122,10 +1456,23 @@ export class LabController {
         this.pending = null
         if (pending?.verify) {
           this.pendingVerify = pending.verify
+          this.pendingThirdVerify = pending.thirdVerify ?? null
           this.verifyNote = pending.note
         }
+        const p = this.store.getState().presentation
+        if (p.camera2d) {
+          this.renderer.restoreView({ ...p.camera2d, follow: false, framed: null, step: Infinity })
+          this.store.setState({ follow: false })
+        }
+        if (p.camera) {
+          this.view3d?.restoreCamera(p.camera)
+          this.store.setState({ follow: false })
+        }
         if (pending?.seek) this.seek(pending.seek)
-        else void this.verifyIfPending() // e.g. a 0-step file
+        else {
+          this.finishSwitch()
+          void this.verifyIfPending()
+        } // e.g. a 0-step file
         break
       }
       case 'reset':
@@ -1156,7 +1503,10 @@ export class LabController {
           this.seekTarget = null
           // Batches from before the seek can carry the worker past the target: show the target.
           if (msg.currentStep > target) this.seek(target)
-          else void this.verifyIfPending()
+          else {
+            this.finishSwitch()
+            void this.verifyIfPending()
+          }
         }
         break
       }
@@ -1173,7 +1523,10 @@ export class LabController {
           const target = this.seekTarget
           this.seekTarget = null
           if (msg.currentStep > target) this.seek(target)
-          else void this.verifyIfPending()
+          else {
+            this.finishSwitch()
+            void this.verifyIfPending()
+          }
         }
         break
       case 'inspect':

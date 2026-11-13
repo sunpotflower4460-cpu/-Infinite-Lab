@@ -1,0 +1,23 @@
+{
+  "snapshots": [
+    "desktop-300-solo.jpg",
+    "desktop-300-mirror.jpg",
+    "desktop-300-yin-yang.jpg",
+    "desktop-1000-solo.jpg",
+    "desktop-1000-mirror.jpg",
+    "desktop-1000-yin-yang.jpg",
+    "desktop-10000-solo.jpg",
+    "desktop-10000-mirror.jpg",
+    "desktop-10000-yin-yang.jpg",
+    "mobile-300-solo.jpg",
+    "mobile-300-mirror.jpg",
+    "mobile-300-yin-yang.jpg",
+    "mobile-1000-solo.jpg",
+    "mobile-1000-mirror.jpg",
+    "mobile-1000-yin-yang.jpg",
+    "mobile-10000-solo.jpg",
+    "mobile-10000-mirror.jpg",
+    "mobile-10000-yin-yang.jpg"
+  ],
+  "errors": []
+}

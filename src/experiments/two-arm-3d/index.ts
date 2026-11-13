@@ -1,8 +1,20 @@
 import { point, type GeometryInstruction } from '../../geometry/types'
 import { detCos, detSin } from '../../math/detmath'
-import { disk } from '../two-arm'
+import { disk, twoArmFormulas, twoArm } from '../two-arm'
 import { paramsToEnv, runFormulas, traceSymbols } from '../core/Experiment'
-import { add, assign, cos, modTau, mul, sin, v, type FormulaSet } from '../core/formula'
+import {
+  add,
+  assign,
+  cos,
+  modTau,
+  mul,
+  sin,
+  v,
+  halfDifference,
+  sqrt,
+  num,
+  type FormulaSet,
+} from '../core/formula'
 import type {
   ExperimentDefinition,
   GeometryExperiment,
@@ -31,8 +43,10 @@ const theta2 = assign(
  * Arm 1 (length r1) turns in the horizontal plane at speed 1; arm 2 (length r2), attached at its
  * tip, turns C times as fast in the vertical plane that contains arm 1. The pen can only reach
  * the torus with R = r1, r = r2 — as the 2D pen can only reach the disk of radius r1 + r2 — and
- * whether it fills it is decided by C: a fraction p/q closes after q turns (a (q, p) torus knot),
- * an irrational C never closes and covers the torus densely.
+ * continuous-time coverage is decided by C: a fraction p/q closes after q turns (for R > r,
+ * a (q, p) torus knot); irrational C gives a dense continuous trajectory. With fixed dt,
+ * finite discrete samples need not close or uniformly cover the surface.
+ * R = r is a horn torus, R < r a spindle; negative rho must retain its sign.
  */
 const torusFormulas: FormulaSet = [
   theta1,
@@ -98,6 +112,7 @@ const heightFormulas: FormulaSet = [
 ]
 
 const symbols = {
+  delta: 'δ',
   theta1: 'θ₁',
   theta2: 'θ₂',
   rho: 'ρ',
@@ -207,7 +222,7 @@ export const twoArmTorus: ExperimentDefinition = {
   id: 'two-arm-torus',
   name: 'Two-Arm 3D: Torus (vertical arm 2)',
   description:
-    '{C} two-arm machine with arm 2 turning in the vertical plane, {C}× as fast as arm 1: the pen stays on a torus (R = arm 1, r = arm 2) and fills it only if {C} is irrational',
+    '{C} two-arm machine with arm 2 turning in the vertical plane: same angles as 2D, different x/y. Torus R = arm 1, r = arm 2; a hole exists if R > r. Finite samples need not be uniform.',
   view: '3d',
   parameters: [
     DT,
@@ -278,9 +293,44 @@ export const twoArmHeight: ExperimentDefinition = {
   create: () => new PointPath(heightFormulas),
 }
 
+/**
+ * Sphere Lift: exactly the flat pen's x/y, with signed half-phase height.
+ * Every sampled point lies on radius scale·(r1+r2), within float64 error.
+ * Straight segments between samples are chords, not surface geodesics.
+ */
+const sphereFormulas: FormulaSet = [
+  ...twoArmFormulas,
+  assign(
+    'delta',
+    halfDifference(v('n'), v('dt')),
+    'signed half-phase; C−1 formed at 448-bit precision before mod 2π',
+  ),
+  assign(
+    'z',
+    mul(mul(v('scale'), mul(num(2), sqrt(mul(v('r1'), v('r2'))))), sin(v('delta'))),
+    'sphere height; the original x/y remain unchanged',
+  ),
+]
+export const twoArmSphereLift: ExperimentDefinition = {
+  id: 'two-arm-sphere-lift',
+  name: 'Sphere Lift (same x/y as 2D)',
+  description:
+    'Original {C} two-arm x/y lifted by z = scale × 2√(r1 r2) sin((({C}−1)t)/2). Sampled points lie on a sphere; unequal arms visit a band, finite samples are not uniform coverage.',
+  view: '3d',
+  parameters: twoArm.parameters,
+  formulas: sphereFormulas,
+  symbols,
+  extent: (p) => {
+    const r = p.scale! * (p.r1! + p.r2!)
+    return { ...disk(r), minZ: -r, maxZ: r }
+  },
+  create: () => new PointPath(sphereFormulas),
+}
+
 /** The Two-Arm family: the 2D machine, arm 2 turned vertical (torus), the table turned (ball), or lifted by time. */
 export const TWO_ARM_VIEWS = [
   { id: 'two-arm', label: '2D' },
+  { id: twoArmSphereLift.id, label: 'Sphere' },
   { id: twoArmTorus.id, label: 'Torus' },
   { id: 'two-arm-ball', label: 'Ball' },
   { id: twoArmHeight.id, label: 'Height' },

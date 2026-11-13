@@ -1,3 +1,4 @@
+import { DEFAULT_PRESENTATION, type Presentation, type Flow } from '../lab/presentation'
 import { create } from 'zustand'
 import { defaultParams, type DigitStart, type ParamValues, type StepTrace } from '../experiments/core/types'
 import { digitCircleWalk } from '../experiments/digit-circle-walk'
@@ -54,6 +55,11 @@ export type VideoState =
   | { status: 'error'; message: string }
 
 export interface LabState {
+  presentation: Presentation
+  selectedFlow: Flow
+  thirdCircleRecords: number
+  thirdCircleError: string | null
+  switching: number | null
   phase: Phase
   error: string | null
   constantId: string
@@ -120,6 +126,11 @@ export interface LabState {
 
 function initialState(): LabState {
   return {
+    presentation: { ...DEFAULT_PRESENTATION },
+    selectedFlow: 'original',
+    switching: null,
+    thirdCircleRecords: 0,
+    thirdCircleError: null,
     phase: 'idle',
     error: null,
     constantId: 'pi',

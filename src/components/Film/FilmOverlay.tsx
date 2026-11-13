@@ -1,3 +1,5 @@
+import { ObservationControls } from '../Canvas/ObservationControls'
+import { FormulaViewer } from '../FormulaViewer/FormulaViewer'
 import { getController } from '../../app/LabController'
 import { filmNumbers, PI_CONVERGENTS, stageFor, type FilmInfoLevel } from '../../film/explain'
 import { useLab } from '../../state/labStore'
@@ -18,11 +20,12 @@ const LEVELS: { id: FilmInfoLevel; label: string }[] = [
  */
 export function FilmOverlay() {
   const c = getController()
+  const is3d = useLab((s) => s.experimentId !== 'two-arm')
   const level = useLab((s) => s.filmInfo)
   const playing = useLab((s) => s.playing)
   const phase = useLab((s) => s.phase)
   const finished = useLab((s) => s.finished)
-  const step = useLab((s) => s.currentStep)
+  const step = useLab((s) => s.viewStep ?? s.currentStep)
   const dt = useLab((s) => (typeof s.params.dt === 'number' ? s.params.dt : 0))
   const { t, turns1, turns2 } = filmNumbers(step, dt)
 
@@ -38,10 +41,13 @@ export function FilmOverlay() {
   return (
     <div className="film-overlay" data-testid="film">
       <button
-        className="film-tap"
+        className={`film-tap ${is3d ? 'film-tap-small' : ''}`}
         aria-label={playing ? 'Pause film' : 'Play film'}
         onClick={() => c.toggleFilm()}
-      />
+      >
+        {is3d ? (playing ? '⏸ 一時停止' : '▶ 再生') : null}
+      </button>
+      <ObservationControls controller={c} film />
       <div className="film-top">
         <div className="film-levels" role="radiogroup" aria-label="説明の詳しさ">
           {LEVELS.map((l) => (
@@ -119,9 +125,7 @@ function Simple({ turns1, turns2, t }: { turns1: number; turns2: number; t: numb
           <b className="mono">{turns1 > 0 ? (turns2 / turns1).toFixed(5) : '—'}</b>
         </div>
       </div>
-      <p className="film-stage" data-testid="film-stage" data-stage={stage.id}>
-        {stage.text}
-      </p>
+      <FilmStage text={stage.text} id={stage.id} />
       <div className="film-time mono" data-testid="film-time">
         T = {t.toFixed(2)}
       </div>
@@ -129,8 +133,24 @@ function Simple({ turns1, turns2, t }: { turns1: number; turns2: number; t: numb
   )
 }
 
+function FilmStage({ text, id }: { text: string; id: string }) {
+  const experiment = useLab((s) => s.experimentId)
+  return (
+    <p className="film-stage" data-testid="film-stage" data-stage={id}>
+      {experiment === 'two-arm'
+        ? text
+        : experiment === 'two-arm-sphere-lift'
+          ? 'π の二本腕の座標を球面へ持ち上げています。有限の点は均一に球面を埋めるとは限りません。'
+          : experiment === 'two-arm-torus'
+            ? '2Dと同じ2つの回転角で、大円と管の周りを進みます。R>rなら穴が開きます。有限のstepで均一に埋まるとは限りません。'
+            : 'π の回転速度比による3D実験です。詳細な数式は「専門」で確認できます。'}
+    </p>
+  )
+}
+
 function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: number; dt: number }) {
-  const trace = useLab((s) => s.currentTrace)
+  const id = useLab((s) => s.experimentId)
+  const trace = useLab((s) => (s.viewStep === null ? s.currentTrace : (s.inspected ?? s.currentTrace)))
   const params = useLab((s) => s.params)
   const precision = useLab((s) => s.constant?.precision ?? s.precision)
   const algorithm = useLab((s) => s.constant?.algorithm ?? '')
@@ -141,11 +161,14 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
   return (
     <>
       <PiValue decimals={40} />
+      {id !== 'two-arm' && <FormulaViewer source="current" compact />}
       <div className="film-math mono" data-testid="film-math">
-        <div>
-          z(t) = r₁·e<sup>iθ₁</sup> + r₂·e<sup>iθ₂</sup>, r₁ = {String(params.r1)}, r₂ = {String(params.r2)},
-          ×{String(params.scale)}
-        </div>
+        {id === 'two-arm' && (
+          <div data-testid="film-flat-formula">
+            x(t) + i·y(t) = r₁·e<sup>iθ₁</sup> + r₂·e<sup>iθ₂</sup>, r₁ = {String(params.r1)}, r₂ ={' '}
+            {String(params.r2)}, ×{String(params.scale)}
+          </div>
+        )}
         <div>θ₁ = (n × dt) mod 2π = {value('theta1')}</div>
         <div>θ₂ = (n × dt × π) mod 2π = {value('theta2')}</div>
         <div>
@@ -160,12 +183,16 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
         <div>速さ {formatInt(Math.round(sps))} steps/s（映像と同じく指数的に加速）</div>
       </div>
       <table className="film-convergents mono" data-testid="film-convergents">
-        <caption>π に近い分数（連分数の近似分数）: q 周でほぼ閉じ、p − q 回対称</caption>
+        <caption>
+          {id === 'two-arm-torus'
+            ? 'π に近い分数: R>rならq周（大円）・p周（管）で閉じる連続時間の軌跡。固定dtの有限サンプルでの閉鎖は保証しません。'
+            : '2DのTwo-Armでの目安（連分数の近似分数）: q 周でほぼ閉じ、p − q 回対称'}
+        </caption>
         <thead>
           <tr>
             <th>p/q</th>
             <th>π − p/q</th>
-            <th>対称</th>
+            <th>{id === 'two-arm-torus' ? '大円 / 管' : '対称'}</th>
             <th>q 周</th>
           </tr>
         </thead>
@@ -176,7 +203,7 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
                 {p}/{q}
               </td>
               <td>{(Math.PI - p / q).toExponential(2)}</td>
-              <td>{p - q}</td>
+              <td>{id === 'two-arm-torus' ? `${q} / ${p}` : p - q}</td>
               <td>{turns1 >= q ? '✓' : ''}</td>
             </tr>
           ))}
@@ -207,7 +234,7 @@ function Expert({ turns1, turns2, t, dt }: { turns1: number; turns2: number; t: 
 function FilmSave() {
   const c = getController()
   const video = useLab((s) => s.video)
-  const step = useLab((s) => s.currentStep)
+  const step = useLab((s) => s.viewStep ?? s.currentStep)
   if (!webCodecsAvailable()) return null
   const recording = video.status === 'recording'
   return (

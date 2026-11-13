@@ -1542,3 +1542,222 @@ input:not([type]) {
 .room .mono {
   font-family: var(--mono);
 }
+
+/* View controls are presentation only; keep the picture and save/info buttons reachable. */
+.observation-controls {
+  position: absolute;
+  left: 10px;
+  bottom: 28px;
+  z-index: 4;
+  max-width: calc(100% - 20px);
+  padding: 8px 10px;
+  background: rgba(5, 8, 15, 0.88);
+  border: 1px solid #303845;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #dce2eb;
+}
+.observation-controls fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.observation-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.observation-row button,
+.observation-row select {
+  min-height: 36px;
+  font-size: 11px;
+  padding: 5px 9px;
+}
+.observation-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.observation-rule {
+  max-width: 560px;
+  font-size: 10px;
+  color: #b4bfce;
+  line-height: 1.5;
+}
+.observation-options summary {
+  cursor: pointer;
+  padding: 8px;
+}
+.observation-options > div {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  background: #111722;
+  padding: 12px;
+  border: 1px solid #465164;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  z-index: 10;
+  max-height: min(var(--observation-options-height, 70dvh), 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.observation-options input {
+  max-width: 140px;
+}
+.film-overlay {
+  pointer-events: none;
+}
+.film-top,
+.film-tap,
+.film-observation,
+.film-panel {
+  pointer-events: auto;
+}
+.film-observation {
+  top: calc(64px + env(safe-area-inset-top));
+  bottom: auto;
+  left: 12px;
+  right: 12px;
+  max-width: none;
+}
+.film-observation .observation-options > div {
+  bottom: auto;
+  top: 100%;
+}
+.observation-controls[data-options-side='below'] .observation-options > div {
+  bottom: auto;
+  top: 100%;
+}
+.third-options input[type='checkbox'] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+.third-options input[type='number'] {
+  width: 80px;
+  flex: 0 0 80px;
+}
+.film-tap-small {
+  inset: auto;
+  bottom: calc(41% + 8px);
+  left: 16px;
+  width: auto;
+  height: 38px;
+  padding: 8px 12px;
+  background: #141a25;
+  border: 1px solid #414958;
+  border-radius: 8px;
+  z-index: 3;
+}
+.camera-presets {
+  position: absolute;
+  top: 85px;
+  right: 10px;
+  display: flex;
+  gap: 5px;
+}
+.camera-presets button {
+  font-size: 11px;
+  min-height: 36px;
+  background: #111722dd;
+}
+.lab[data-film='on'] .stage-3d-rotate {
+  top: 200px;
+  z-index: 4;
+}
+.lab[data-film='on'] .camera-presets {
+  top: 240px;
+  z-index: 4;
+}
+.lab[data-film='on'][data-film-info='simple'] .stage-3d,
+.lab[data-film='on'][data-film-info='expert'] .stage-3d {
+  bottom: 40%;
+}
+@media (min-aspect-ratio: 1/1) {
+  .film-observation {
+    right: 12px;
+    left: auto;
+    width: min(580px, 52vw);
+  }
+  .lab[data-film='on'] .film-panel {
+    top: 70px;
+  }
+  .lab[data-film='on'][data-film-info='simple'] .stage-3d,
+  .lab[data-film='on'][data-film-info='expert'] .stage-3d {
+    left: calc(min(380px, 42vw) + 24px);
+    bottom: 0;
+  }
+  .film-tap-small {
+    bottom: 16px;
+    left: auto;
+    right: 16px;
+  }
+}
+@media (max-width: 600px) {
+  .observation-controls {
+    padding: 6px;
+  }
+  .observation-row {
+    gap: 4px;
+  }
+  .observation-row button {
+    min-height: 40px;
+    padding: 5px 8px;
+  }
+  .film-observation {
+    left: 6px;
+    right: 6px;
+  }
+  .film-levels button {
+    min-height: 40px;
+    padding: 4px 7px;
+  }
+}
+.stage-3d {
+  background: #04050a;
+}
+.lab[data-film='on'] .stage-3d {
+  background: #000;
+}
+.torus-presets {
+  display: grid;
+  gap: 6px;
+}
+.torus-presets > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+/* Fit the 3D picture/camera controls below the actual observation-panel height. */
+.lab[data-film='on'] .stage .stage-3d-canvas {
+  top: var(--film-controls-bottom, 220px);
+}
+.lab[data-film='on'] .stage .stage-3d-rotate {
+  top: calc(var(--film-controls-bottom, 220px) + 8px);
+}
+.lab[data-film='on'] .stage .camera-presets {
+  top: calc(var(--film-controls-bottom, 220px) + 46px);
+}
+.third-flow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.third-flow-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #cbb0ed;
+}
+.third-options {
+  display: grid;
+  gap: 12px;
+}
+.third-rule {
+  color: #d3bfea;
+}

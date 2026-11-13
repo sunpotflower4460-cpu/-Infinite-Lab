@@ -20,7 +20,7 @@ import type {
  * closes (near-closures follow C's rational approximations, e.g. π ≈ 22/7, 355/113).
  * It uses the constant's value; the digits only bound the number of steps.
  */
-const formulas = [
+export const twoArmFormulas = [
   assign('theta1', modTau([v('n'), v('dt')]), 'arm 1 angle (exact BigInt reduction)'),
   assign('theta2', modTau([v('n'), v('dt')], true), 'arm 2 turns C× as fast (exact BigInt reduction)'),
   assign('x', mul(v('scale'), add(mul(v('r1'), cos(v('theta1'))), mul(v('r2'), cos(v('theta2'))))), 'pen x'),
@@ -52,7 +52,7 @@ class TwoArm implements GeometryExperiment<PenState> {
 
   step(ctx: StepContext, trace?: TraceSink) {
     const env = runFormulas(
-      formulas,
+      twoArmFormulas,
       { ...this.paramEnv, n: ctx.index, digit: ctx.digit },
       trace ? traceSymbols(symbols, ctx) : symbols,
       trace,
@@ -105,7 +105,7 @@ export const twoArm: ExperimentDefinition = {
       description: 'Arms at the current step',
     },
   ],
-  formulas,
+  formulas: twoArmFormulas,
   symbols,
   extent: (p) => disk(p.scale! * (Math.abs(p.r1!) + Math.abs(p.r2!))),
   create: () => new TwoArm(),
