@@ -1,4 +1,11 @@
-import { overlayRule, transformPoint } from '../../lab/presentation'
+import {
+  overlayRule,
+  transformFlowPoint,
+  flowLabel,
+  visibleFlows,
+  thirdRule,
+  hasThirdFlow,
+} from '../../lab/presentation'
 import { useState } from 'react'
 import { getController } from '../../app/LabController'
 import { useLab } from '../../state/labStore'
@@ -11,7 +18,10 @@ export function Inspector() {
   const current = useLab((s) => s.currentTrace)
   const currentStep = useLab((s) => s.currentStep)
   const presentation = useLab((s) => s.presentation)
-  const flow = useLab((s) => s.selectedFlow)
+  const selectedFlow = useLab((s) => s.selectedFlow)
+  const supportsThird = useLab((s) => s.experimentId === 'two-arm-torus')
+  const flows = visibleFlows(presentation, supportsThird)
+  const flow = flows.includes(selectedFlow) ? selectedFlow : flows[0]!
   const trace = inspected ?? current
   const [query, setQuery] = useState('')
 
@@ -50,25 +60,22 @@ export function Inspector() {
           <FormulaViewer compact />
           <div className="panel-subtitle">Geometry</div>
           <p data-testid="inspector-flow">
-            {presentation.mode === 'yin-yang'
-              ? flow === 'derived'
-                ? '陽 / derived'
-                : '陰 / original'
-              : flow === 'derived'
-                ? '鏡像 / derived'
-                : '元 / original'}{' '}
-            · step {trace.step}
+            {flowLabel(presentation, flow)} · step {trace.step}
           </p>
           <p className="muted small">{overlayRule(presentation.mode)}</p>
-          {flow === 'derived' && presentation.mode !== 'solo' && trace.env.x !== undefined && (
+          {hasThirdFlow(presentation, supportsThird) && (
+            <p className="muted small">{thirdRule(presentation)}</p>
+          )}
+          {flow !== 'original' && trace.env.x !== undefined && (
             <p className="mono" data-testid="derived-coordinates">
-              P′ = (
-              {transformPoint(trace.env.x, trace.env.y!, trace.env.z ?? 0, presentation.mode)
+              {flow === 'third' ? 'Q' : 'P′'} = (
+              {transformFlowPoint(trace.env.x, trace.env.y!, trace.env.z ?? 0, presentation, flow)
                 .map(formatExact)
                 .join(', ')}
               )
             </p>
           )}
+          {flow !== 'original' && <p className="muted small">以下は対応するstepの元のPの記録です。</p>}
           <ul className="instructions mono">
             {trace.instructions.map((g, i) => (
               <li key={i}>

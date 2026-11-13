@@ -23,6 +23,15 @@ export function Stage3D({ controller }: { controller: LabController }) {
         if (cancelled || !host.current) return
         const store = controller.store
         scene.current = new Scene3D(host.current, {
+          torusRadii: () => {
+            const s = store.getState()
+            return s.experimentId === 'two-arm-torus'
+              ? {
+                  major: Number(s.params.r1) * Number(s.params.scale),
+                  minor: Number(s.params.r2) * Number(s.params.scale),
+                }
+              : null
+          },
           presentation: () => store.getState().presentation,
           selectedFlow: () => store.getState().selectedFlow,
           onCamera: (camera) => store.setState((s) => ({ presentation: { ...s.presentation, camera } })),

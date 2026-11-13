@@ -1602,6 +1602,9 @@ input:not([type]) {
   display: grid;
   gap: 12px;
   z-index: 10;
+  max-height: min(70dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .observation-options input {
   max-width: 140px;
@@ -1702,16 +1705,6 @@ input:not([type]) {
     padding: 4px 7px;
   }
 }
-/* Reserve the controls' space in Film instead of covering the top of the sphere. */
-.lab[data-film='on'] .stage-3d-canvas {
-  top: 195px;
-}
-.lab[data-film='on'] .stage-3d-rotate {
-  top: 202px;
-}
-.lab[data-film='on'] .camera-presets {
-  top: 242px;
-}
 .stage-3d {
   background: #04050a;
 }
@@ -1726,10 +1719,32 @@ input:not([type]) {
   color: var(--muted);
   font-size: 10px;
 }
-/* Torus includes a radius readout: keep camera controls below that readout. */
-.lab[data-film='on'] .stage[data-experiment='two-arm-torus'] .stage-3d-rotate {
-  top: 220px;
+/* Fit the 3D picture/camera controls below the actual observation-panel height. */
+.lab[data-film='on'] .stage .stage-3d-canvas {
+  top: var(--film-controls-bottom, 220px);
 }
-.lab[data-film='on'] .stage[data-experiment='two-arm-torus'] .camera-presets {
-  top: 256px;
+.lab[data-film='on'] .stage .stage-3d-rotate {
+  top: calc(var(--film-controls-bottom, 220px) + 8px);
+}
+.lab[data-film='on'] .stage .camera-presets {
+  top: calc(var(--film-controls-bottom, 220px) + 46px);
+}
+.third-flow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.third-flow-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #cbb0ed;
+}
+.third-options {
+  display: grid;
+  gap: 12px;
+}
+.third-rule {
+  color: #d3bfea;
 }

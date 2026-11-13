@@ -1,8 +1,15 @@
+import { useEffect, useRef } from 'react'
 import { useStore } from 'zustand'
 import type { LabController } from '../../app/LabController'
 import { TorusReadout } from './TorusReadout'
 import { TWO_ARM_VIEWS } from '../../experiments/two-arm-3d'
-import { overlayRule, type OverlayMode, type Presentation } from '../../lab/presentation'
+import {
+  overlayRule,
+  hasThirdFlow,
+  thirdRule,
+  type OverlayMode,
+  type Presentation,
+} from '../../lab/presentation'
 
 export function ObservationControls({
   controller,
@@ -11,6 +18,7 @@ export function ObservationControls({
   controller: LabController
   film?: boolean
 }) {
+  const panel = useRef<HTMLDivElement>(null)
   const p = useStore(controller.store, (s) => s.presentation)
   const id = useStore(controller.store, (s) => s.experimentId)
   const step = useStore(controller.store, (s) => s.currentStep)
@@ -20,8 +28,25 @@ export function ObservationControls({
   const video = useStore(controller.store, (s) => s.video.status)
   const family = TWO_ARM_VIEWS.some((v) => v.id === id)
   const set = (update: Partial<Presentation>) => controller.setPresentation(update)
+  const third = hasThirdFlow(p, id === 'two-arm-torus')
+  useEffect(() => {
+    const node = panel.current
+    const stage = node?.closest<HTMLElement>('.stage')
+    if (!film || !node || !stage) return
+    const resize = () =>
+      stage.style.setProperty('--film-controls-bottom', node.offsetTop + node.offsetHeight + 8 + 'px')
+    const observer = new ResizeObserver(resize)
+    observer.observe(node)
+    resize()
+    return () => {
+      observer.disconnect()
+      stage.style.removeProperty('--film-controls-bottom')
+    }
+  }, [film])
+
   return (
     <div
+      ref={panel}
       className={`observation-controls ${film ? 'film-observation' : ''}`}
       data-testid="observation-controls"
     >
@@ -100,6 +125,42 @@ export function ObservationControls({
                   </button>
                 </div>
               )}
+              {id === 'two-arm-torus' && (
+                <div className="third-options">
+                  <label>
+                    第3の濃さ{' '}
+                    <input
+                      aria-label="第3の濃さ"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={p.thirdOpacity}
+                      onChange={(e) => set({ thirdOpacity: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    第3の位相{' '}
+                    <select
+                      aria-label="第3の位相"
+                      value={p.thirdQuarter}
+                      onChange={(e) => set({ thirdQuarter: e.target.value === '1' ? 1 : -1 })}
+                    >
+                      <option value={1}>大円 +90°</option>
+                      <option value={-1}>大円 −90°</option>
+                    </select>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      aria-label="トーラス面の補助表示"
+                      checked={p.torusSurface}
+                      onChange={(e) => set({ torusSurface: e.target.checked })}
+                    />{' '}
+                    トーラス面を薄く表示（補助）
+                  </label>
+                </div>
+              )}
               <label>
                 配色{' '}
                 <select
@@ -119,9 +180,10 @@ export function ObservationControls({
                   value={p.flow}
                   onChange={(e) => set({ flow: e.target.value as Presentation['flow'] })}
                 >
-                  <option value="both">両方</option>
+                  <option value="both">{third ? '3本すべて' : '両方'}</option>
                   <option value="original">元 / 陰のみ</option>
                   <option value="derived">鏡像 / 陽のみ</option>
+                  {third && <option value="third">第3のみ</option>}
                 </select>
               </label>
               <label>
@@ -163,11 +225,33 @@ export function ObservationControls({
             </div>
           </details>
         </div>
+        {id === 'two-arm-torus' && (
+          <label className="third-flow-toggle">
+            <input
+              type="checkbox"
+              aria-label="第3の流れを半透明で表示"
+              checked={third}
+              onChange={(e) =>
+                set(
+                  e.target.checked
+                    ? { thirdFlow: true, mode: 'yin-yang', flow: 'both' }
+                    : { thirdFlow: false, flow: p.flow === 'third' ? 'both' : p.flow },
+                )
+              }
+            />
+            第3の流れを半透明で表示
+          </label>
+        )}
       </fieldset>
       <div className="observation-rule" data-testid="overlay-rule">
         {overlayRule(p.mode)}
       </div>
       {id === 'two-arm-torus' && <TorusReadout controller={controller} />}
+      {third && (
+        <div className="observation-rule third-rule" data-testid="third-rule">
+          {thirdRule(p)} 濃さ {Math.round(p.thirdOpacity * 100)}%
+        </div>
+      )}
       {id === 'two-arm-sphere-lift' && (
         <div className="observation-rule">
           x・yは2Dと同一。z = 2·scale·√(r₁r₂)·sin δ。点は球面、結ぶ線分は弦です。

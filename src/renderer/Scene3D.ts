@@ -1,9 +1,12 @@
+import { setFlowTransform } from './flowTransform'
 import { segmentDistance } from './hitTest'
 import { pathGeometry, PathMaterial } from './Polyline3D'
 import {
   DEFAULT_PRESENTATION,
-  PALETTES,
-  flowSigns,
+  flowColor,
+  flowAxes,
+  visibleFlows,
+  transformFlowPoint,
   type Presentation,
   type Camera3DView,
   type Flow,
@@ -16,6 +19,9 @@ import {
   DynamicDrawUsage,
   Line,
   Mesh,
+  TorusGeometry,
+  MeshBasicMaterial,
+  DoubleSide,
   InstancedInterleavedBuffer,
   LineBasicMaterial,
   NormalBlending,
@@ -37,6 +43,7 @@ import { COLORS, LOOKS, type Look } from './layers/GeometryLayer'
 
 /** What the 3D view reads each frame (the lab's state; the view never changes the data). */
 export interface Scene3DSource {
+  torusRadii?(): { major: number; minor: number } | null
   presentation?(): Presentation
   selectedFlow?(): Flow
   onCamera?(view: Camera3DView): void
@@ -79,7 +86,7 @@ export class Scene3D {
   private readonly nativeShown = new BufferGeometry().setAttribute('position', this.nativeAttribute)
   private readonly nativeContext = new BufferGeometry().setAttribute('position', this.nativeAttribute)
   private readonly nativeMaterials = Array.from(
-    { length: 4 },
+    { length: 6 },
     () => new LineBasicMaterial({ transparent: true, depthWrite: false }),
   )
   private readonly nativeLines = this.nativeMaterials.map(
@@ -96,6 +103,12 @@ export class Scene3D {
   private readonly derivedContextMaterial = new PathMaterial()
   private readonly derivedLine = new Mesh(this.shown, this.derivedMaterial)
   private readonly derivedContext = new Mesh(this.context, this.derivedContextMaterial)
+  private readonly thirdMaterial = new PathMaterial()
+  private readonly thirdContextMaterial = new PathMaterial()
+  private readonly thirdLine = new Mesh(this.shown, this.thirdMaterial)
+  private readonly thirdContext = new Mesh(this.context, this.thirdContextMaterial)
+  private torusShell: Mesh<TorusGeometry, MeshBasicMaterial> | null = null
+  private shellKey = ''
   private readonly marker: Points
   private readonly markerPosition = new Float32Array(3)
   private readonly guidePositions = new Float32Array(3 * 8)
@@ -143,13 +156,22 @@ export class Scene3D {
       if (!this.recording) this.source.onCamera?.(this.cameraView())
     })
 
-    for (const line of [this.originalLine, this.originalContext, this.derivedLine, this.derivedContext])
+    for (const line of [
+      this.originalLine,
+      this.originalContext,
+      this.derivedLine,
+      this.derivedContext,
+      this.thirdLine,
+      this.thirdContext,
+    ])
       line.frustumCulled = false
     this.scene.add(
       this.originalContext,
       this.originalLine,
       this.derivedContext,
       this.derivedLine,
+      this.thirdContext,
+      this.thirdLine,
       ...this.nativeLines,
     )
     for (const line of this.nativeLines) line.frustumCulled = false
@@ -197,25 +219,35 @@ export class Scene3D {
     }
     if (!Number.isFinite(box.min.x)) return
     const pres = this.source.presentation?.() ?? DEFAULT_PRESENTATION
-    if (pres.mode !== 'solo') {
-      const [sx, sy, sz] = flowSigns(pres.mode)
-      const a = new Vector3(box.min.x * sx, box.min.y * sy, box.min.z * sz)
-      const b = new Vector3(box.max.x * sx, box.max.y * sy, box.max.z * sz)
-      box.min.min(a).min(b)
-      box.max.max(a).max(b)
-    }
+    const flows = visibleFlows(pres, !!this.source.torusRadii?.())
+    const corners: Vector3[] = []
+    for (const x of [box.min.x, box.max.x])
+      for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) corners.push(new Vector3(x, y, z))
+    for (const flow of flows)
+      for (const p of corners) {
+        const q = new Vector3(...transformFlowPoint(p.x, p.y, p.z, pres, flow))
+        box.min.min(q)
+        box.max.max(q)
+      }
     const centre = box.min.clone().add(box.max).multiplyScalar(0.5)
     // bounding sphere about the box centre: the farthest shown point (sampled when there are
     // very many), at least the reachable region's half-size — not the box's half-diagonal,
     // which would leave a ball or a torus small in the frame
     let r2 = 0
     const p = this.positions
-    const stride = Math.max(1, Math.ceil((to - from) / 200_000))
+    const axes = flows.map((flow) => flowAxes(pres, flow))
+    const stride = Math.max(1, Math.ceil(((to - from) * flows.length) / 200_000))
     for (let i = from; i < to; i += stride) {
-      const dx = p[3 * i]! - centre.x
-      const dy = p[3 * i + 1]! - centre.y
-      const dz = p[3 * i + 2]! - centre.z
-      r2 = Math.max(r2, dx * dx + dy * dy + dz * dz)
+      const x = p[3 * i]!,
+        y = p[3 * i + 1]!,
+        z = p[3 * i + 2]!
+      for (const [a, b, c, d, e] of axes) {
+        const dx = a * x + b * y - centre.x
+        const dy = c * x + d * y - centre.y
+        const dz = e * z - centre.z
+        r2 = Math.max(r2, dx * dx + dy * dy + dz * dz)
+      }
     }
     const half = box.max.clone().sub(box.min).multiplyScalar(0.5)
     const reach = extent ? Math.max(half.x, half.y, half.z) : 0
@@ -382,10 +414,14 @@ export class Scene3D {
       this.contextMaterial,
       this.derivedMaterial,
       this.derivedContextMaterial,
+      this.thirdMaterial,
+      this.thirdContextMaterial,
       this.marker.material,
       this.guideLine.material,
     ])
       (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose())
+    this.torusShell?.geometry.dispose()
+    this.torusShell?.material.dispose()
     this.renderer.dispose()
     // release the GL context now: browsers keep only ~16, and the oldest (possibly the 2D
     // canvas's) is dropped when switching 2D ↔ 3D often
@@ -410,7 +446,17 @@ export class Scene3D {
     }
     const p = this.source.presentation?.() ?? DEFAULT_PRESENTATION
     if (p.autoRotate !== this.autoRotate) this.setAutoRotate(p.autoRotate)
-    const state = `${from}/${to}/${range?.context}/${marked}/${look}/${p.mode}/${p.palette}/${p.opacity}/${p.glow}/${p.width}/${p.flow}/${this.source.selectedFlow?.()}`
+    const state =
+      `${from}/${to}/${range?.context}/${marked}/${look}/${p.mode}/${p.palette}/${p.opacity}/${p.glow}/${p.width}/${p.flow}/${this.source.selectedFlow?.()}` +
+      '/' +
+      [
+        p.thirdFlow,
+        p.thirdOpacity,
+        p.thirdQuarter,
+        p.torusSurface,
+        this.source.torusRadii?.()?.major,
+        this.source.torusRadii?.()?.minor,
+      ].join('/')
     if (state !== this.lastState) {
       this.lastState = state
       this.applyState(from, to, range?.context ?? 'hide', marked, look)
@@ -448,6 +494,8 @@ export class Scene3D {
       this.contextMaterial,
       this.derivedMaterial,
       this.derivedContextMaterial,
+      this.thirdMaterial,
+      this.thirdContextMaterial,
     ])
       m.sync(size.x, size.y)
     this.renderer.render(this.scene, this.camera)
@@ -533,44 +581,14 @@ export class Scene3D {
   private applyState(from: number, to: number, context: 'dim' | 'hide', marked: number | null, look: Look) {
     const style = LOOKS[look]
     const p = this.source.presentation?.() ?? DEFAULT_PRESENTATION
+    const flows = visibleFlows(p, !!this.source.torusRadii?.())
+    const selected = this.source.selectedFlow?.() ?? 'original'
+    const markedFlow = flows.includes(selected) ? selected : flows[0]!
     const paired = p.mode !== 'solo'
-    const [a, b] = PALETTES[p.palette]
-    const signs = flowSigns(p.mode)
-    this.guideLine.scale.set(
-      ...(paired && this.source.selectedFlow?.() === 'derived'
-        ? signs
-        : ([1, 1, 1] as [number, number, number])),
-    )
-    this.derivedLine.scale.set(...signs)
-    this.derivedContext.scale.set(...signs)
-    this.originalLine.visible = this.originalContext.visible = !paired || p.flow !== 'derived'
-    this.derivedLine.visible = this.derivedContext.visible = paired && p.flow !== 'original'
     const luminous = look === 'luminous'
     this.renderer.setClearColor(new Color(style.background))
-    for (const m of [this.lineMaterial, this.contextMaterial]) {
-      m.color.set(style.line)
-      m.blending = luminous && !paired ? AdditiveBlending : NormalBlending
-    }
-    if (paired) this.lineMaterial.color.set(a)
-    this.lineMaterial.opacity = paired ? Math.min(1, p.opacity * (1 + p.glow * 0.5)) : luminous ? 0.3 : 0.55
-    this.lineMaterial.linewidth = p.width
-    this.derivedMaterial.color.set(b)
-    this.derivedMaterial.blending = this.lineMaterial.blending
-    this.derivedMaterial.opacity = this.lineMaterial.opacity
-    this.derivedMaterial.linewidth = p.width
-    this.derivedContextMaterial.color.set(b)
-    this.derivedContextMaterial.opacity = 0.05
-    this.contextMaterial.opacity = luminous ? 0.04 : 0.08
-
-    // a polyline joins consecutive records: the shown range starts at `from`, the faint context
-    // runs up to (and including) the first shown point so the curve stays connected
-    this.lineMaterial.range(from, to)
-    this.derivedMaterial.range(from, to)
+    this.syncTorusSurface(p)
     const contextTo = !p.trail && context === 'dim' && from > 0 ? from + 1 : 0
-    this.contextMaterial.range(0, contextTo)
-    this.derivedContextMaterial.range(0, contextTo)
-    // Native thin lines preserve the existing fast path. Wider lines use AA screen quads;
-    // at very high density use thin strokes (presentation quality only, never decimate data).
     const wide = p.width !== 1 && to - from < 50_000
     this.shown.instanceCount = this.context.instanceCount = Math.max(0, to - 1)
     this.nativeShown.setDrawRange(from, Math.max(0, to - from))
@@ -580,35 +598,96 @@ export class Scene3D {
       this.contextMaterial,
       this.derivedMaterial,
       this.derivedContextMaterial,
+      this.thirdMaterial,
+      this.thirdContextMaterial,
     ]
-    const shown = [
-      !paired || p.flow !== 'derived',
-      contextTo > 0 && (!paired || p.flow !== 'derived'),
-      paired && p.flow !== 'original',
-      contextTo > 0 && paired && p.flow !== 'original',
+    const meshes = [
+      this.originalLine,
+      this.originalContext,
+      this.derivedLine,
+      this.derivedContext,
+      this.thirdLine,
+      this.thirdContext,
     ]
-    const meshes = [this.originalLine, this.originalContext, this.derivedLine, this.derivedContext]
+    const allFlows: Flow[] = ['original', 'derived', 'third']
     this.nativeLines.forEach((line, i) => {
-      const m = this.nativeMaterials[i]!,
-        source = materials[i]!
-      m.color.copy(source.color)
-      m.opacity = source.opacity
-      m.blending = source.blending
-      line.scale.set(...(i >= 2 ? signs : ([1, 1, 1] as [number, number, number])))
-      line.visible = !wide && shown[i]!
-      meshes[i]!.visible = wide && shown[i]!
+      const flow = allFlows[Math.floor(i / 2)]!
+      const isContext = i % 2 === 1
+      const m = materials[i]!,
+        native = this.nativeMaterials[i]!,
+        mesh = meshes[i]!
+      m.color.set(!paired && flow === 'original' ? style.line : flowColor(p, flow))
+      m.blending = luminous && !paired ? AdditiveBlending : NormalBlending
+      m.opacity =
+        flow === 'third'
+          ? p.thirdOpacity * (isContext ? 0.12 : 1)
+          : isContext
+            ? luminous
+              ? 0.04
+              : 0.08
+            : paired
+              ? Math.min(1, p.opacity * (1 + p.glow * 0.5))
+              : luminous
+                ? 0.3
+                : 0.55
+      m.linewidth = p.width
+      m.range(isContext ? 0 : from, isContext ? contextTo : to)
+      native.color.copy(m.color)
+      native.opacity = m.opacity
+      native.blending = m.blending
+      setFlowTransform(line, p, flow)
+      setFlowTransform(mesh, p, flow)
+      const show = flows.includes(flow) && m.opacity > 0 && (!isContext || contextTo > 0)
+      line.visible = show && !wide
+      mesh.visible = show && wide
     })
-
+    setFlowTransform(this.guideLine, p, markedFlow)
+    const markVisible = markedFlow !== 'third' || p.thirdOpacity > 0
+    this.guideLine.visible = this.guideLine.geometry.drawRange.count > 1 && markVisible
+    ;(this.guideLine.material as LineBasicMaterial).color.set(
+      markedFlow === 'third' ? flowColor(p, 'third') : COLORS.highlight,
+    )
     const store = this.source.store
     const index = marked === null ? -1 : store.firstIndexOfStep(marked)
-    this.marker.visible = index >= from && index < to && store.stepAt(index) === marked
+    this.marker.visible = markVisible && index >= from && index < to && store.stepAt(index) === marked
     if (this.marker.visible) {
-      this.markerPosition.set(this.positions.subarray(3 * index, 3 * index + 3))
-      if (paired && this.source.selectedFlow?.() === 'derived')
-        this.markerPosition.set(this.markerPosition.map((v, i) => v * signs[i]!))
+      const original = this.positions.subarray(3 * index, 3 * index + 3)
+      this.markerPosition.set(transformFlowPoint(original[0]!, original[1]!, original[2]!, p, markedFlow))
+      ;(this.marker.material as PointsMaterial).color.set(
+        markedFlow === 'third' ? flowColor(p, 'third') : COLORS.highlight,
+      )
       this.marker.geometry.attributes.position!.needsUpdate = true
     }
     this.dirty = true
+  }
+
+  /** A labelled visual aid, not geometry records or evidence of a physical field. */
+  private syncTorusSurface(p: Presentation): void {
+    const radii = this.source.torusRadii?.()
+    const key =
+      p.torusSurface && radii && radii.major > 0 && radii.minor > 0 ? radii.major + '/' + radii.minor : ''
+    if (key === this.shellKey) return
+    this.shellKey = key
+    if (this.torusShell) {
+      this.scene.remove(this.torusShell)
+      this.torusShell.geometry.dispose()
+      this.torusShell.material.dispose()
+      this.torusShell = null
+    }
+    if (key && radii) {
+      this.torusShell = new Mesh(
+        new TorusGeometry(radii.major, radii.minor, 24, 96),
+        new MeshBasicMaterial({
+          color: 0x829ab7,
+          transparent: true,
+          opacity: 0.045,
+          depthWrite: false,
+          side: DoubleSide,
+        }),
+      )
+      this.torusShell.renderOrder = -2
+      this.scene.add(this.torusShell)
+    }
   }
 
   private applyGuide(guide: GeometryInstruction[] | null): void {
@@ -619,7 +698,11 @@ export class Scene3D {
     })
     this.guideLine.geometry.setDrawRange(0, pts.length)
     this.guideLine.geometry.attributes.position!.needsUpdate = true
-    this.guideLine.visible = pts.length > 1
+    const p = this.source.presentation?.() ?? DEFAULT_PRESENTATION
+    const flows = visibleFlows(p, !!this.source.torusRadii?.())
+    const selected = this.source.selectedFlow?.() ?? 'original'
+    const flow = flows.includes(selected) ? selected : flows[0]!
+    this.guideLine.visible = pts.length > 1 && (flow !== 'third' || p.thirdOpacity > 0)
     this.dirty = true
   }
 
@@ -688,15 +771,13 @@ export class Scene3D {
     let bestD = PICK_TOLERANCE_PX * PICK_TOLERANCE_PX
     const pres = this.source.presentation?.() ?? DEFAULT_PRESENTATION
     let flow: Flow = 'original'
-    const flows: Flow[] =
-      pres.mode === 'solo' ? ['original'] : pres.flow === 'both' ? ['original', 'derived'] : [pres.flow]
+    const flows = visibleFlows(pres, !!this.source.torusRadii?.()).filter(
+      (f) => f !== 'third' || pres.thirdOpacity > 0,
+    )
     for (const which of flows) {
-      const signs = which === 'derived' ? flowSigns(pres.mode) : [1, 1, 1]
       let previous: [number, number] | null = null
       for (let i = from; i < to; i++) {
-        const x = p[3 * i]! * signs[0]!
-        const y = p[3 * i + 1]! * signs[1]!
-        const z = p[3 * i + 2]! * signs[2]!
+        const [x, y, z] = transformFlowPoint(p[3 * i]!, p[3 * i + 1]!, p[3 * i + 2]!, pres, which)
         const w = m[3]! * x + m[7]! * y + m[11]! * z + m[15]!
         if (w <= 0) {
           previous = null

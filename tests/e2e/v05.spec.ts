@@ -56,7 +56,7 @@ test.describe('Formula Playground (spec §10)', () => {
       page.getByRole('button', { name: 'Export JSON' }).click(),
     ])
     const file = JSON.parse(readFileSync(await download.path(), 'utf8'))
-    expect(file.version).toBe(4)
+    expect(file.version).toBe(5)
     expect(file.config.formulas).toEqual({
       angle: '(angle_prev + digit × π / 5) mod 2π',
       radius: 'digit / 2',

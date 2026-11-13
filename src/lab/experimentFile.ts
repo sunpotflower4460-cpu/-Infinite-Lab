@@ -5,8 +5,8 @@ export const FILE_FORMAT = 'pi-infinite-lab/experiment'
  * 2 (v0.3): the high-precision C used by constMod (Pi Rotation) is always 120 decimals.
  * 1 (v0.2): C came from the chosen precision's digits (fewer than 120 below precision 120).
  */
-export const FILE_VERSION = 4 // 4: view-only presentation; 3: config.formulas (Formula Playground)
-export const SUPPORTED_VERSIONS = [1, 2, 3, 4] as const
+export const FILE_VERSION = 5 // 5: optional third torus flow; 4: view-only presentation; 3: config.formulas (Formula Playground)
+export const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5] as const
 
 /**
  * Reproducible experiment record (JSON export, spec §28). The config + steps fully determine

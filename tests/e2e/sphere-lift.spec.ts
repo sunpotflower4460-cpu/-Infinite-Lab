@@ -50,7 +50,7 @@ test('JSON and History round-trip view settings while SHA-256 continues to verif
     page.getByRole('button', { name: 'Export JSON', exact: true }).click(),
   ])
   const file = JSON.parse(readFileSync(await json.path(), 'utf8'))
-  expect(file.version).toBe(4)
+  expect(file.version).toBe(5)
   expect(file.config.presentation.mode).toBe('yin-yang')
   expect(file.config.presentation.trail).toBe(100)
   if (await page.getByTestId('canvas-3d').count())

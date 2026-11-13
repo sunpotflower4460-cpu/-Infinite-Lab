@@ -1,4 +1,11 @@
-import { DEFAULT_PRESENTATION, parsePresentation, type Presentation, type Flow } from '../lab/presentation'
+import {
+  DEFAULT_PRESENTATION,
+  parsePresentation,
+  hasThirdFlow,
+  thirdRule,
+  type Presentation,
+  type Flow,
+} from '../lab/presentation'
 import { CONSTANTS } from '../math/constants'
 import { formulaLines, getExperiment, resolveExperiment } from '../experiments/registry'
 import {
@@ -88,16 +95,30 @@ export class LabController {
     this.renderer.onUserCamera = () => this.store.setState({ follow: false })
     this.renderer.onPick = (step, flow) => this.onPicked(step, flow)
     this.unsubscribePresentation = this.store.subscribe((s, prev) => {
-      if (s.presentation !== prev.presentation) {
+      if (s.presentation !== prev.presentation || s.experimentId !== prev.experimentId) {
         // Camera updates during orbit do not restyle/rebuild geometry.
         if (
-          ['mode', 'trail', 'palette', 'opacity', 'width', 'glow', 'flow'].some(
+          s.experimentId !== prev.experimentId ||
+          [
+            'mode',
+            'trail',
+            'palette',
+            'opacity',
+            'width',
+            'glow',
+            'flow',
+            'thirdFlow',
+            'thirdOpacity',
+            'thirdQuarter',
+            'torusSurface',
+          ].some(
             (key) =>
               s.presentation[key as keyof Presentation] !== prev.presentation[key as keyof Presentation],
           )
         )
-          this.renderer.setPresentation(s.presentation)
+          this.renderer.setPresentation(s.presentation, s.experimentId === 'two-arm-torus')
       }
+      if (s.selectedFlow !== prev.selectedFlow) this.renderer.setHighlightFlow(s.selectedFlow)
     })
     this.store.setState({ history: loadHistory(browserStorage()) })
   }
@@ -195,7 +216,18 @@ export class LabController {
     this.store.setState((s) => ({
       presentation: { ...s.presentation, camera2d: { cx: view.cx, cy: view.cy, zoom: view.zoom } },
     }))
-    this.store.setState({ experimentId, params: validated })
+    this.store.setState({
+      experimentId,
+      params: validated,
+      selectedFlow: 'original',
+      presentation: {
+        ...this.store.getState().presentation,
+        flow:
+          experimentId !== 'two-arm-torus' && state.presentation.flow === 'third'
+            ? 'both'
+            : state.presentation.flow,
+      },
+    })
     this.initSimulation()
   }
 
@@ -266,7 +298,7 @@ export class LabController {
       verify: expectedDigest ? { status: 'running', expected: expectedDigest } : { status: 'idle' },
     })
     this.renderer.setLook(this.store.getState().look)
-    this.renderer.setPresentation(this.store.getState().presentation)
+    this.renderer.setPresentation(this.store.getState().presentation, config.experiment === 'two-arm-torus')
     const loaded = this.loaded
     const computing = this.store.getState().phase === 'computing'
     if (
@@ -598,7 +630,10 @@ export class LabController {
   }
 
   setPresentation(update: Partial<Presentation>): void {
-    const p = parsePresentation({ ...this.store.getState().presentation, ...update })
+    const next = { ...this.store.getState().presentation, ...update }
+    if (update.mode && update.mode !== 'yin-yang') next.thirdFlow = false
+    if (next.flow === 'third' && (!next.thirdFlow || next.mode !== 'yin-yang')) next.flow = 'both'
+    const p = parsePresentation(next)
     this.store.setState({ presentation: p, selectedFlow: 'original' })
     if (this.peer && !this.owner) this.peer.setPresentation(update)
   }
@@ -872,6 +907,13 @@ export class LabController {
         'Geometry is evaluated in IEEE-754 float64 with deterministic (fdlibm-port) sin/cos.',
         'geometrySha256 covers all records as little-endian float64 [kind, step, a, b, c, d, e].',
         'Re-running config for `steps` steps must reproduce geometrySha256 exactly.',
+        'Presentation transforms and the optional torus surface guide are excluded from geometrySha256 and geometryRecords.',
+        ...(hasThirdFlow(s.presentation, s.experimentId === 'two-arm-torus')
+          ? [
+              thirdRule(s.presentation),
+              'The third curve is an added phase rule on the same torus, not an independently measured energy flow.',
+            ]
+          : []),
       ],
     }
   }
@@ -926,7 +968,17 @@ export class LabController {
         this.download(await png, `${this.fileStem()}.png`)
       } else if (format === 'csv') {
         this.download(
-          new Blob(geometryCsv(this.renderer.store, count, from, is3d, s.presentation), { type: 'text/csv' }),
+          new Blob(
+            geometryCsv(
+              this.renderer.store,
+              count,
+              from,
+              is3d,
+              s.presentation,
+              s.experimentId === 'two-arm-torus',
+            ),
+            { type: 'text/csv' },
+          ),
           `${this.fileStem()}.csv`,
         )
       } else {
@@ -946,6 +998,7 @@ export class LabController {
           from,
           s.presentation,
           is3d,
+          s.experimentId === 'two-arm-torus',
         )
         this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
       }
