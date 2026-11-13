@@ -141,6 +141,32 @@ test('translucent third flow picks the source step, becomes invisible at zero, a
       return null
     })
   await expect.poll(coloredPixel).not.toBeNull()
+  if (await page.getByTestId('canvas-3d').count()) {
+    // Opaque wide stroke cores must retain the chosen sRGB palette color. Without
+    // output encoding the same #cbb0ed tint becomes the much darker #986fd8.
+    const dominant = await canvas.evaluate((el: HTMLCanvasElement) => {
+      const c = document.createElement('canvas')
+      c.width = el.width
+      c.height = el.height
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(el, 0, 0)
+      const pixels = ctx.getImageData(0, 0, c.width, c.height).data
+      const counts = new Map<string, number>()
+      for (let i = 0; i < pixels.length; i += 4) {
+        const [r, g, b] = [pixels[i]!, pixels[i + 1]!, pixels[i + 2]!]
+        if (b > r + 6 && r > g + 6 && b > 80) {
+          const key = [r, g, b].join(',')
+          counts.set(key, (counts.get(key) ?? 0) + 1)
+        }
+      }
+      return [...counts]
+        .sort((a, b) => b[1] - a[1])[0]?.[0]
+        .split(',')
+        .map(Number)
+    })
+    expect(dominant).toHaveLength(3)
+    dominant!.forEach((value, i) => expect(Math.abs(value - [203, 176, 237][i]!)).toBeLessThanOrEqual(1))
+  }
   const pixel = await coloredPixel()
   const rect = await canvas.boundingBox()
   await page.mouse.click(rect!.x + pixel!.x, rect!.y + pixel!.y)

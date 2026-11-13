@@ -20,9 +20,31 @@ import { geometryDigest } from '../../../src/geometry/digest'
 import { geometryCsv, geometrySvg } from '../../../src/lab/exporters'
 import { parseImport, FILE_FORMAT, FILE_VERSION } from '../../../src/lab/experimentFile'
 import { makeRunner } from '../helpers'
+import independentReferences from '../../fixtures/third-flow-reference.json'
 
 const p: Presentation = { ...DEFAULT_PRESENTATION, mode: 'yin-yang', thirdFlow: true }
 const pi = binaryConstantFor('pi', COMPUTE_SYNC.pi!)
+
+it('agrees with independent Decimal parametrizations for P, -P and both third phases', () => {
+  for (const ref of independentReferences) {
+    const e = evaluateSet(
+      getExperiment('two-arm-torus').formulas,
+      { n: ref.n, dt: ref.dt, r1: ref.r1, r2: ref.r2, scale: ref.scale },
+      { constant: binaryConstantFor(ref.constant, COMPUTE_SYNC[ref.constant]!), pi },
+    )
+    const radius = Math.max(1, ref.scale * (ref.r1 + ref.r2))
+    for (const [flow, quarter, expected] of [
+      ['original', 1, ref.original],
+      ['derived', 1, ref.derived],
+      ['third', 1, ref.positive],
+      ['third', -1, ref.negative],
+    ] as const) {
+      const actual = transformFlowPoint(e.x!, e.y!, e.z!, { ...p, thirdQuarter: quarter }, flow)
+      for (let i = 0; i < 3; i++) expect(Math.abs(actual[i]! - expected[i]!) / radius).toBeLessThan(4e-15)
+    }
+  }
+})
+
 for (const constant of ['pi', 'frac-22-7'])
   for (const [r1, r2] of [
     [1.3, 1],

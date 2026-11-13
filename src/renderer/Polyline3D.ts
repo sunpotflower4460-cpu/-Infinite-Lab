@@ -75,7 +75,8 @@ export class PathMaterial extends ShaderMaterial {
         void main() {
           float coverage=clamp(width*.5+.5-abs(across),0.,1.);
           if(coverage==0.) discard;
-          outColor=vec4(tint,alpha*coverage);
+          // Three stores Color in linear space; match native lines' output encoding.
+          outColor=linearToOutputTexel(vec4(tint,alpha*coverage));
         }`,
     })
   }
