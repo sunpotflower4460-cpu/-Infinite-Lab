@@ -22,7 +22,13 @@ import { parseImport, FILE_FORMAT, FILE_VERSION } from '../../../src/lab/experim
 import { makeRunner } from '../helpers'
 import independentReferences from '../../fixtures/third-flow-reference.json'
 
-const p: Presentation = { ...DEFAULT_PRESENTATION, mode: 'yin-yang', thirdFlow: true }
+const p: Presentation = {
+  ...DEFAULT_PRESENTATION,
+  mode: 'yin-yang',
+  thirdFlow: true,
+  thirdModel: 'phase',
+  thirdOpacity: 0.23,
+}
 const pi = binaryConstantFor('pi', COMPUTE_SYNC.pi!)
 
 it('agrees with independent Decimal parametrizations for P, -P and both third phases', () => {

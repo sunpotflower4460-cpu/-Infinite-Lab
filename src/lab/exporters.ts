@@ -46,12 +46,17 @@ function eachFlow(
   p: Presentation,
   visit: (d: Float64Array, o: number, flow: Flow) => void,
   supportsThird: boolean,
+  thirdStore?: GeometryStore,
 ) {
-  for (const flow of visibleFlows(p, supportsThird))
-    store.forEachRecordFrom(from, count, (d, o) => {
-      const r = transformedRecord(d, o, p, flow)
+  for (const flow of visibleFlows(p, supportsThird)) {
+    const circle = flow === 'third' && p.thirdModel === 'circle'
+    if (circle && (!thirdStore || thirdStore.count < count))
+      throw new Error('Third-circle geometry is not ready')
+    ;(circle ? thirdStore! : store).forEachRecordFrom(from, count, (d, o) => {
+      const r = circle ? { d, o } : transformedRecord(d, o, p, flow)
       visit(r.d, r.o, flow)
     })
+  }
 }
 
 /** Shortest decimal that round-trips to the same float64 (exact, never rounded for display). */
@@ -79,8 +84,9 @@ export function geometryCsv(
   withZ = false,
   presentation: Presentation = DEFAULT_PRESENTATION,
   supportsThird = false,
+  thirdStore?: GeometryStore,
 ): string[] {
-  const paired = presentation.mode !== 'solo'
+  const paired = presentation.mode !== 'solo' || hasThirdFlow(presentation, supportsThird)
   const parts: string[] = [(withZ ? CSV_HEADER_3D : CSV_HEADER) + (paired ? ',flow' : '') + '\n']
   let rows: string[] = []
   eachFlow(
@@ -104,6 +110,7 @@ export function geometryCsv(
       }
     },
     supportsThird,
+    thirdStore,
   )
   if (rows.length) parts.push(rows.join('\n') + '\n')
   return parts
@@ -127,6 +134,7 @@ export function geometrySvg(
   presentation: Presentation = DEFAULT_PRESENTATION,
   connectedPoints = false,
   supportsThird = false,
+  thirdStore?: GeometryStore,
 ): string[] {
   const b = store.boundsBetween(from, count) ?? { minX: -1, minY: -1, maxX: 1, maxY: 1 }
   const corners = [
@@ -135,7 +143,17 @@ export function geometrySvg(
     [b.maxX, b.minY],
     [b.maxX, b.maxY],
   ]
-  for (const flow of visibleFlows(presentation, supportsThird))
+  for (const flow of visibleFlows(presentation, supportsThird)) {
+    if (flow === 'third' && presentation.thirdModel === 'circle') {
+      const q = thirdStore?.boundsBetween(from, count)
+      if (q) {
+        b.minX = Math.min(b.minX, q.minX)
+        b.maxX = Math.max(b.maxX, q.maxX)
+        b.minY = Math.min(b.minY, q.minY)
+        b.maxY = Math.max(b.maxY, q.maxY)
+      }
+      continue
+    }
     for (const [x, y] of corners) {
       const q = transformFlowPoint(x!, y!, 0, presentation, flow)
       b.minX = Math.min(b.minX, q[0])
@@ -143,6 +161,7 @@ export function geometrySvg(
       b.minY = Math.min(b.minY, q[1])
       b.maxY = Math.max(b.maxY, q[1])
     }
+  }
   description +=
     '\nSVG: orthographic (x,y) projection; camera perspective is not exported. ' +
     overlayRule(presentation.mode) +
@@ -171,16 +190,22 @@ export function geometrySvg(
     presentation,
     (d, o, flow) => {
       const kind = d[o]
+      const tipOnly = flow === 'third' && presentation.thirdModel === 'circle' && !presentation.thirdTrace
+      if (tipOnly && d[o + 1] !== store.stepAt(count - 1)) return
       const step = num(d[o + 1]!)
       const color = flowColor(presentation, flow)
-      const alpha = flow === 'third' ? presentation.thirdOpacity : presentation.opacity
+      const alpha =
+        flow === 'third'
+          ? presentation.thirdOpacity *
+            (presentation.thirdModel === 'circle' && presentation.thirdGuides ? 0.3 : 1)
+          : presentation.opacity
       const lineStyle =
-        presentation.mode === 'solo'
+        presentation.mode === 'solo' && flow !== 'third'
           ? legacyLineStyle
           : `stroke="${hex(color)}" stroke-opacity="${alpha}" stroke-width="${presentation.width}" vector-effect="non-scaling-stroke"`
       rows.push(`<g data-flow="${flow}">`)
       const [a, bb, c, e, f] = [d[o + 2]!, d[o + 3]!, d[o + 4]!, d[o + 5]!, d[o + 6]!]
-      if (kind === KIND.point && connectedPoints) {
+      if (kind === KIND.point && connectedPoints && !tipOnly) {
         if (previous?.flow === flow)
           rows.push(
             `<line data-step="${step}" x1="${num(previous.x)}" y1="${num(previous.y)}" x2="${num(a)}" y2="${num(bb)}" ${lineStyle}/>`,
@@ -205,7 +230,9 @@ export function geometrySvg(
           )
         }
       } else {
-        rows.push(`<circle data-step="${step}" cx="${num(a)}" cy="${num(bb)}" r="${num(dot)}" ${dotStyle}/>`)
+        rows.push(
+          `<circle data-step="${step}" cx="${num(a)}" cy="${num(bb)}" r="${num(dot)}" ${flow === 'third' ? `fill="${hex(color)}" fill-opacity="${alpha}"` : dotStyle}/>`,
+        )
       }
       rows.push('</g>')
       if (rows.length >= ROWS_PER_PART) {
@@ -214,6 +241,7 @@ export function geometrySvg(
       }
     },
     supportsThird,
+    thirdStore,
   )
   if (rows.length) parts.push(rows.join('\n') + '\n')
   parts.push('</g>\n</svg>\n')

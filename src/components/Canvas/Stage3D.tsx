@@ -23,6 +23,8 @@ export function Stage3D({ controller }: { controller: LabController }) {
         if (cancelled || !host.current) return
         const store = controller.store
         scene.current = new Scene3D(host.current, {
+          thirdStore: () => (controller.circleThirdActive() ? controller.thirdCircle.store : null),
+          thirdFrame: (step) => controller.thirdFrame(step),
           torusRadii: () => {
             const s = store.getState()
             return s.experimentId === 'two-arm-torus'
@@ -47,7 +49,20 @@ export function Stage3D({ controller }: { controller: LabController }) {
             return s.film && s.filmInfo === 'off' ? null : ((s.inspected ?? s.currentTrace)?.overlay ?? null)
           },
           look: () => store.getState().look,
-          extent: () => controller.extent(),
+          extent: () => {
+            const extent = controller.extent()
+            if (!extent || !controller.circleThirdActive()) return extent
+            const s = store.getState(),
+              a = Number(s.params.scale) * Number(s.params.r2) * s.presentation.thirdRadius
+            return {
+              minX: extent.minX - a,
+              maxX: extent.maxX + a,
+              minY: extent.minY - a,
+              maxY: extent.maxY + a,
+              minZ: extent.minZ - a,
+              maxZ: extent.maxZ + a,
+            }
+          },
           follow: () => store.getState().follow,
           onUserCamera: () => store.setState({ follow: false }),
           onPick: (step, flow) => controller.pickStep(step, flow),

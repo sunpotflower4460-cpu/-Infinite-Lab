@@ -169,10 +169,14 @@ tests/
 ## Sphere Lift / presentation（v0.7）
 
 - Formula ASTの `halfDifference(n,dt)` はC−1を448-bitで計算してからmod 2πへ還元する。Two-Armのx/y式木を共有し、Sphereも1step=1pointを保つ。
-- `lab/presentation.ts` はSolo / Mirror / Yin–Yang、Trail、配色、流れの選択、線幅・透明度・明るさ、カメラを表す。JSON v5の `config.presentation` に保存し、v1〜v4も読み込める。設定のない旧版はSoloになる。幾何学digestには入れない。
+- `lab/presentation.ts` はSolo / Mirror / Yin–Yang、Trail、配色、流れの選択、線幅・透明度・明るさ、カメラを表す。JSON v6の `config.presentation` に保存し、v1〜v5も読み込める。設定のない旧版はSoloになる。幾何学digestには入れない。
 - 2Dの派生レイヤーは同じGeometryStoreから増分転送し、コンテナ変換で鏡映／反転する。毎フレーム全座標を複製しない。Trailは範囲uniformで指定。
 - 3Dの元／派生ポリラインは同じfloat32位置属性を共有し、物体変換で対を描く。通常の細い線は既存のnative線、太線は `Polyline3D.ts` の画面ピクセル幅付きインスタンス描画。50,000点以上で細線へ戻し、データは間引かない。アンマウント時は両方のgeometry・materialとWebGL contextを解放する。
 - 真上プリセットはOrthographicCamera、斜めはPerspectiveCamera。投影方式・zoomも保存し、真上でzがx/yの拡大率を変えない。ピッキングは各流れの変換後の線分に対して行い、元stepとflowをInspectorへ渡す。
 - 形の切替時は表示stepと共有パラメータを保存し、workerの新しいinitに対するreadyを待って同じstepへseekする。完了後に以前の再生状態を復元する。
-- Torusの任意の第3軌跡は `Q=(−σ·y,σ·x,z)`（σ=±1）。`transformFlowPoint` / `inverseFlowPoint` / `flowAxes` を表示・選択・Exportで共用し、`flowTransform.ts` で整数成分だけの3D行列を作る。native線・太線とも元のgeometryを共有し、3本分の元データは作らない。2Dフォールバックは同じstoreをコンテナ回転で表示する。第3オフでは旧来の2本、濃さ0では選択・マーカーも無効。
+- 第3の円は `thirdCircle.ts` のFormula ASTで `Q=P+a(cos(C²t)eφ+sin(C²t)ez)` を評価する。PのGeometryStoreは変更せず、追加時だけ専用WorkerとQ用storeを作る。1ジョブ最大2,048点、同時に1ジョブとして増分転送し、設定変更時は世代を更新して古い応答を破棄する。
+- P/−Pは従来の位置属性を共有し、実際に異なるQには `PointPath3D` の専用座標を使う。元とQのSHA-256をJSON / Historyで別々に検証する。旧v5の位相モデルは明示的な互換表示として保持する。
+- `ThirdCircleConstruction` は3つの作図円を共有の単位円geometryから、O・E・Pとそれぞれの面へ変換する。角度と半径は実行する式から得る。カメラだけの変更で全点を再計算しない。動画では記録stepごとに円の姿勢と先端を更新する。
+- 第3の作図円をMicroscopeの1点でも全て収めるようFitで円の範囲を考慮する。調整欄は画面の上下の空きに合わせて開き、スクロールで全項目へ到達できる。
+
 - トーラスの補助面はR/rが変わったときだけ作成し、変更・アンマウント時にGPU資源を破棄する。描画用の三角形メッシュで、記録・digest・CSV・SVGからは除外。Filmの3Dキャンバスとカメラ操作はResizeObserverで実際の説明欄の高さの下へ配置する。

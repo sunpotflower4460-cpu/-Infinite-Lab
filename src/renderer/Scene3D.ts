@@ -1,4 +1,7 @@
 import { setFlowTransform } from './flowTransform'
+import { PointPath3D } from './PointPath3D'
+import { ThirdCircleConstruction } from './ThirdCircleConstruction'
+import type { ThirdCircleFrame } from '../lab/thirdCircle'
 import { segmentDistance } from './hitTest'
 import { pathGeometry, PathMaterial } from './Polyline3D'
 import {
@@ -43,6 +46,8 @@ import { COLORS, LOOKS, type Look } from './layers/GeometryLayer'
 
 /** What the 3D view reads each frame (the lab's state; the view never changes the data). */
 export interface Scene3DSource {
+  thirdStore?(): GeometryStore | null
+  thirdFrame?(step?: number): ThirdCircleFrame | null
   torusRadii?(): { major: number; minor: number } | null
   presentation?(): Presentation
   selectedFlow?(): Flow
@@ -109,6 +114,8 @@ export class Scene3D {
   private readonly thirdContext = new Mesh(this.context, this.thirdContextMaterial)
   private torusShell: Mesh<TorusGeometry, MeshBasicMaterial> | null = null
   private shellKey = ''
+  private thirdPath: PointPath3D | null = null
+  private readonly construction = new ThirdCircleConstruction()
   private readonly marker: Points
   private readonly markerPosition = new Float32Array(3)
   private readonly guidePositions = new Float32Array(3 * 8)
@@ -193,6 +200,7 @@ export class Scene3D {
     this.guideLine.renderOrder = 2
     this.guideLine.visible = false
     this.scene.add(this.guideLine)
+    this.scene.add(this.construction.group)
 
     this.installPicking()
     this.canvas.addEventListener('dblclick', () => this.fit())
@@ -220,6 +228,57 @@ export class Scene3D {
     if (!Number.isFinite(box.min.x)) return
     const pres = this.source.presentation?.() ?? DEFAULT_PRESENTATION
     const flows = visibleFlows(pres, !!this.source.torusRadii?.())
+    if (flows.includes('third') && this.thirdPath) {
+      const a = this.thirdPath.positions
+      if (from === 0 && this.thirdPath.uploaded) {
+        box.min.min(this.thirdPath.min)
+        box.max.max(this.thirdPath.max)
+      } else
+        for (let i = from; i < Math.min(to, this.thirdPath.uploaded); i++) {
+          const q = new Vector3(a[3 * i], a[3 * i + 1], a[3 * i + 2])
+          box.min.min(q)
+          box.max.max(q)
+        }
+    }
+    const marked = this.source.markedStep(),
+      markedIndex = marked === null ? -1 : this.source.store.firstIndexOfStep(marked)
+    const guideStep =
+      markedIndex >= from && markedIndex < to
+        ? (marked ?? undefined)
+        : to > 0
+          ? this.source.store.stepAt(to - 1)
+          : undefined
+    const frame =
+      flows.includes('third') && pres.thirdModel === 'circle' && pres.thirdOpacity > 0
+        ? this.source.thirdFrame?.(guideStep)
+        : null
+    const circles: { center: Vector3; x: Vector3; y: Vector3; radius: number }[] =
+      frame && pres.thirdGuides
+        ? [
+            { center: new Vector3(), x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), radius: frame.major },
+            {
+              center: new Vector3(...frame.elbow),
+              x: new Vector3(...frame.sample.radial),
+              y: new Vector3(0, 0, 1),
+              radius: frame.minor,
+            },
+            {
+              center: new Vector3(...frame.center),
+              x: new Vector3(...frame.sample.tangent),
+              y: new Vector3(0, 0, 1),
+              radius: frame.sample.radius,
+            },
+          ]
+        : []
+    for (const c of circles) {
+      const half = new Vector3(
+        Math.hypot(c.x.x, c.y.x),
+        Math.hypot(c.x.y, c.y.y),
+        Math.hypot(c.x.z, c.y.z),
+      ).multiplyScalar(c.radius)
+      box.min.min(c.center.clone().sub(half))
+      box.max.max(c.center.clone().add(half))
+    }
     const corners: Vector3[] = []
     for (const x of [box.min.x, box.max.x])
       for (const y of [box.min.y, box.max.y])
@@ -236,18 +295,31 @@ export class Scene3D {
     // which would leave a ball or a torus small in the frame
     let r2 = 0
     const p = this.positions
-    const axes = flows.map((flow) => flowAxes(pres, flow))
+    const axes = flows.map((flow) => ({
+      axes: flowAxes(pres, flow),
+      path: flow === 'third' ? this.thirdPath : null,
+    }))
     const stride = Math.max(1, Math.ceil(((to - from) * flows.length) / 200_000))
     for (let i = from; i < to; i += stride) {
-      const x = p[3 * i]!,
-        y = p[3 * i + 1]!,
-        z = p[3 * i + 2]!
-      for (const [a, b, c, d, e] of axes) {
+      for (const item of axes) {
+        if (item.path && i >= item.path.uploaded) continue
+        const data = item.path?.positions ?? p
+        const x = data[3 * i]!,
+          y = data[3 * i + 1]!,
+          z = data[3 * i + 2]!
+        const [a, b, c, d, e] = item.axes
         const dx = a * x + b * y - centre.x
         const dy = c * x + d * y - centre.y
         const dz = e * z - centre.z
         r2 = Math.max(r2, dx * dx + dy * dy + dz * dz)
       }
+    }
+    for (const c of circles) {
+      const offset = c.center.clone().sub(centre)
+      r2 = Math.max(
+        r2,
+        offset.lengthSq() + c.radius * c.radius + 2 * c.radius * Math.hypot(offset.dot(c.x), offset.dot(c.y)),
+      )
     }
     const half = box.max.clone().sub(box.min).multiplyScalar(0.5)
     const reach = extent ? Math.max(half.x, half.y, half.z) : 0
@@ -297,6 +369,7 @@ export class Scene3D {
    */
   beginRecording(fromStep: number, toStep: number, look: Look): HTMLCanvasElement {
     this.sync()
+    this.syncThird()
     const store = this.source.store
     this.recording = { from: store.firstIndexOfStep(fromStep), to: store.countUpToStep(toStep), look }
     this.controls.enabled = false
@@ -384,6 +457,7 @@ export class Scene3D {
 
   async snapshotPng(): Promise<Blob> {
     this.sync()
+    this.syncThird()
     const [from, to] = this.shownRange()
     this.applyState(
       from,
@@ -422,6 +496,8 @@ export class Scene3D {
       (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose())
     this.torusShell?.geometry.dispose()
     this.torusShell?.material.dispose()
+    this.thirdPath?.dispose()
+    this.construction.dispose()
     this.renderer.dispose()
     // release the GL context now: browsers keep only ~16, and the oldest (possibly the 2D
     // canvas's) is dropped when switching 2D ↔ 3D often
@@ -435,6 +511,11 @@ export class Scene3D {
     this.frameId = requestAnimationFrame(this.loop)
     if (this.recording) return // frames are drawn by renderRecordingStep
     const grew = this.sync()
+    const thirdGrew = this.syncThird()
+    if (thirdGrew) {
+      this.lastState = ''
+      this.dirty = true
+    }
     const [from, to] = this.shownRange()
     const range = this.source.range()
     const marked = this.source.markedStep()
@@ -451,6 +532,10 @@ export class Scene3D {
       '/' +
       [
         p.thirdFlow,
+        p.thirdModel,
+        p.thirdRadius,
+        p.thirdGuides,
+        p.thirdTrace,
         p.thirdOpacity,
         p.thirdQuarter,
         p.torusSurface,
@@ -474,7 +559,7 @@ export class Scene3D {
     const now = performance.now()
     if (
       (this.source.follow() || this.lastFit === 0) &&
-      (grew || this.lastFit === 0) &&
+      (grew || thirdGrew || this.lastFit === 0) &&
       now - this.lastFit > FIT_INTERVAL_MS
     ) {
       const first = this.lastFit === 0
@@ -567,6 +652,18 @@ export class Scene3D {
     this.lastState = ''
   }
 
+  private syncThird(): boolean {
+    const store = this.source.thirdStore?.()
+    if (!store) {
+      if (!this.thirdPath) return false
+      this.thirdPath.dispose()
+      this.thirdPath = null
+      return true
+    }
+    this.thirdPath ??= new PointPath3D()
+    return this.thirdPath.sync(store)
+  }
+
   /** Records [from, to) shown: the Microscope range (if any) up to the Timeline cut-off. */
   private shownRange(): [number, number] {
     const to = Math.min(this.source.visibleRecords(), this.uploaded)
@@ -593,6 +690,12 @@ export class Scene3D {
     this.shown.instanceCount = this.context.instanceCount = Math.max(0, to - 1)
     this.nativeShown.setDrawRange(from, Math.max(0, to - from))
     this.nativeContext.setDrawRange(0, contextTo)
+    this.thirdLine.geometry = this.thirdPath?.shown ?? this.shown
+    this.thirdContext.geometry = this.thirdPath?.context ?? this.context
+    this.nativeLines[4]!.geometry = this.thirdPath?.nativeShown ?? this.nativeShown
+    this.nativeLines[5]!.geometry = this.thirdPath?.nativeContext ?? this.nativeContext
+    const thirdTo = Math.min(to, this.thirdPath?.uploaded ?? to)
+    this.thirdPath?.range(from, thirdTo, contextTo)
     const materials = [
       this.lineMaterial,
       this.contextMaterial,
@@ -620,7 +723,7 @@ export class Scene3D {
       m.blending = luminous && !paired ? AdditiveBlending : NormalBlending
       m.opacity =
         flow === 'third'
-          ? p.thirdOpacity * (isContext ? 0.12 : 1)
+          ? p.thirdOpacity * (isContext ? 0.12 : this.thirdPath && p.thirdGuides ? 0.3 : 1)
           : isContext
             ? luminous
               ? 0.04
@@ -631,33 +734,50 @@ export class Scene3D {
                 ? 0.3
                 : 0.55
       m.linewidth = p.width
-      m.range(isContext ? 0 : from, isContext ? contextTo : to)
+      const end = flow === 'third' ? thirdTo : to
+      m.range(isContext ? 0 : from, isContext ? Math.min(contextTo, end) : end)
       native.color.copy(m.color)
       native.opacity = m.opacity
       native.blending = m.blending
       setFlowTransform(line, p, flow)
       setFlowTransform(mesh, p, flow)
-      const show = flows.includes(flow) && m.opacity > 0 && (!isContext || contextTo > 0)
+      const show =
+        flows.includes(flow) &&
+        !(flow === 'third' && this.thirdPath && !p.thirdTrace) &&
+        m.opacity > 0 &&
+        (isContext ? contextTo > 0 : end > from)
       line.visible = show && !wide
       mesh.visible = show && wide
     })
     setFlowTransform(this.guideLine, p, markedFlow)
     const markVisible = markedFlow !== 'third' || p.thirdOpacity > 0
-    this.guideLine.visible = this.guideLine.geometry.drawRange.count > 1 && markVisible
+    this.guideLine.visible = this.guideLine.geometry.drawRange.count > 1 && markVisible && !this.thirdPath
     ;(this.guideLine.material as LineBasicMaterial).color.set(
       markedFlow === 'third' ? flowColor(p, 'third') : COLORS.highlight,
     )
     const store = this.source.store
     const index = marked === null ? -1 : store.firstIndexOfStep(marked)
-    this.marker.visible = markVisible && index >= from && index < to && store.stepAt(index) === marked
+    this.marker.visible =
+      markVisible &&
+      index >= from &&
+      index < (markedFlow === 'third' ? thirdTo : to) &&
+      store.stepAt(index) === marked
     if (this.marker.visible) {
-      const original = this.positions.subarray(3 * index, 3 * index + 3)
+      const original = (
+        markedFlow === 'third' && this.thirdPath ? this.thirdPath.positions : this.positions
+      ).subarray(3 * index, 3 * index + 3)
       this.markerPosition.set(transformFlowPoint(original[0]!, original[1]!, original[2]!, p, markedFlow))
       ;(this.marker.material as PointsMaterial).color.set(
         markedFlow === 'third' ? flowColor(p, 'third') : COLORS.highlight,
       )
       this.marker.geometry.attributes.position!.needsUpdate = true
     }
+    const guideStep = this.marker.visible ? (marked ?? undefined) : to > 0 ? store.stepAt(to - 1) : undefined
+    this.construction.update(
+      this.source.thirdFrame?.(guideStep) ?? null,
+      p,
+      !!this.thirdPath && flows.includes('third'),
+    )
     this.dirty = true
   }
 
@@ -702,7 +822,8 @@ export class Scene3D {
     const flows = visibleFlows(p, !!this.source.torusRadii?.())
     const selected = this.source.selectedFlow?.() ?? 'original'
     const flow = flows.includes(selected) ? selected : flows[0]!
-    this.guideLine.visible = pts.length > 1 && (flow !== 'third' || p.thirdOpacity > 0)
+    this.guideLine.visible =
+      pts.length > 1 && (flow !== 'third' || p.thirdOpacity > 0) && !this.source.thirdStore?.()
     this.dirty = true
   }
 
@@ -775,9 +896,12 @@ export class Scene3D {
       (f) => f !== 'third' || pres.thirdOpacity > 0,
     )
     for (const which of flows) {
+      const data = which === 'third' && this.thirdPath ? this.thirdPath.positions : p
+      const end = Math.min(to, which === 'third' ? (this.thirdPath?.uploaded ?? to) : to)
       let previous: [number, number] | null = null
-      for (let i = from; i < to; i++) {
-        const [x, y, z] = transformFlowPoint(p[3 * i]!, p[3 * i + 1]!, p[3 * i + 2]!, pres, which)
+      const start = which === 'third' && this.thirdPath && !pres.thirdTrace ? Math.max(from, end - 1) : from
+      for (let i = start; i < end; i++) {
+        const [x, y, z] = transformFlowPoint(data[3 * i]!, data[3 * i + 1]!, data[3 * i + 2]!, pres, which)
         const w = m[3]! * x + m[7]! * y + m[11]! * z + m[15]!
         if (w <= 0) {
           previous = null

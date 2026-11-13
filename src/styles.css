@@ -1602,7 +1602,7 @@ input:not([type]) {
   display: grid;
   gap: 12px;
   z-index: 10;
-  max-height: min(70dvh, 560px);
+  max-height: min(var(--observation-options-height, 70dvh), 560px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -1628,6 +1628,19 @@ input:not([type]) {
 .film-observation .observation-options > div {
   bottom: auto;
   top: 100%;
+}
+.observation-controls[data-options-side='below'] .observation-options > div {
+  bottom: auto;
+  top: 100%;
+}
+.third-options input[type='checkbox'] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+.third-options input[type='number'] {
+  width: 80px;
+  flex: 0 0 80px;
 }
 .film-tap-small {
   inset: auto;

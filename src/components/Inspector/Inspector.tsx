@@ -22,7 +22,9 @@ export function Inspector() {
   const supportsThird = useLab((s) => s.experimentId === 'two-arm-torus')
   const flows = visibleFlows(presentation, supportsThird)
   const flow = flows.includes(selectedFlow) ? selectedFlow : flows[0]!
+  const circle = supportsThird && presentation.thirdModel === 'circle' && flow === 'third'
   const trace = inspected ?? current
+  const thirdPoint = circle && trace ? c.thirdFrame(trace.step)?.sample.point : null
   const [query, setQuery] = useState('')
 
   const submit = (e: React.FormEvent) => {
@@ -68,11 +70,25 @@ export function Inspector() {
           )}
           {flow !== 'original' && trace.env.x !== undefined && (
             <p className="mono" data-testid="derived-coordinates">
-              {flow === 'third' ? 'Q' : 'P′'} = (
-              {transformFlowPoint(trace.env.x, trace.env.y!, trace.env.z ?? 0, presentation, flow)
-                .map(formatExact)
-                .join(', ')}
-              )
+              {circle && !thirdPoint ? (
+                'Qを計算中…'
+              ) : (
+                <>
+                  {flow === 'third' ? 'Q' : 'P′'} = (
+                  {(circle
+                    ? thirdPoint!
+                    : transformFlowPoint(trace.env.x, trace.env.y!, trace.env.z ?? 0, presentation, flow)
+                  )
+                    .map(formatExact)
+                    .join(', ')}
+                  )
+                </>
+              )}
+            </p>
+          )}
+          {circle && (
+            <p className="muted small">
+              Q=P+R₃(cos ω₃·eφ+sin ω₃·ez)。第3の円は第2の円に直交し、元のトーラス面の内外を通ります。
             </p>
           )}
           {flow !== 'original' && <p className="muted small">以下は対応するstepの元のPの記録です。</p>}

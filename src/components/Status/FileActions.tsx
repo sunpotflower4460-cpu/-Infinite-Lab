@@ -58,7 +58,11 @@ function VerifyBadge() {
       return <span className="badge muted">reproducing…</span>
     case 'verified':
       return (
-        <span className="badge ok" data-testid="verify" title={`SHA-256 ${verify.actual}`}>
+        <span
+          className="badge ok"
+          data-testid="verify"
+          title={`SHA-256 ${verify.actual}${verify.note ? '\n' + verify.note : ''}`}
+        >
           ✓ reproduced (SHA-256 match)
         </span>
       )

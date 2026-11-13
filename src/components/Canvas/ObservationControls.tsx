@@ -29,17 +29,30 @@ export function ObservationControls({
   const family = TWO_ARM_VIEWS.some((v) => v.id === id)
   const set = (update: Partial<Presentation>) => controller.setPresentation(update)
   const third = hasThirdFlow(p, id === 'two-arm-torus')
+  const circleRecords = useStore(controller.store, (s) => s.thirdCircleRecords)
+  const circleError = useStore(controller.store, (s) => s.thirdCircleError)
   useEffect(() => {
     const node = panel.current
     const stage = node?.closest<HTMLElement>('.stage')
-    if (!film || !node || !stage) return
-    const resize = () =>
-      stage.style.setProperty('--film-controls-bottom', node.offsetTop + node.offsetHeight + 8 + 'px')
+    if (!node || !stage) return
+    const resize = () => {
+      if (film)
+        stage.style.setProperty('--film-controls-bottom', node.offsetTop + node.offsetHeight + 8 + 'px')
+      const rect = node.getBoundingClientRect()
+      const above = rect.top - 8,
+        below = window.innerHeight - rect.bottom - 8
+      const down = film || below > above
+      node.dataset.optionsSide = down ? 'below' : 'above'
+      node.style.setProperty('--observation-options-height', Math.max(96, down ? below : above) + 'px')
+    }
     const observer = new ResizeObserver(resize)
     observer.observe(node)
+    observer.observe(stage)
+    window.addEventListener('resize', resize)
     resize()
     return () => {
       observer.disconnect()
+      window.removeEventListener('resize', resize)
       stage.style.removeProperty('--film-controls-bottom')
     }
   }, [film])
@@ -139,17 +152,69 @@ export function ObservationControls({
                       onChange={(e) => set({ thirdOpacity: Number(e.target.value) })}
                     />
                   </label>
-                  <label>
-                    第3の位相{' '}
-                    <select
-                      aria-label="第3の位相"
-                      value={p.thirdQuarter}
-                      onChange={(e) => set({ thirdQuarter: e.target.value === '1' ? 1 : -1 })}
-                    >
-                      <option value={1}>大円 +90°</option>
-                      <option value={-1}>大円 −90°</option>
-                    </select>
-                  </label>
+                  {p.thirdModel === 'phase' ? (
+                    <>
+                      <span className="muted small">旧ファイルの位相モデルを復元しています。</span>
+                      <button
+                        onClick={() =>
+                          set({ thirdModel: 'circle', thirdFlow: true, thirdOpacity: 0.65, flow: 'both' })
+                        }
+                      >
+                        第3の円に切替
+                      </button>
+                      <label>
+                        第3の位相{' '}
+                        <select
+                          aria-label="第3の位相"
+                          value={p.thirdQuarter}
+                          onChange={(e) => set({ thirdQuarter: e.target.value === '1' ? 1 : -1 })}
+                        >
+                          <option value={1}>大円 +90°</option>
+                          <option value={-1}>大円 −90°</option>
+                        </select>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        第3の半径 / 管半径{' '}
+                        <input
+                          aria-label="第3の半径 / 管半径"
+                          type="number"
+                          min="0"
+                          max="3"
+                          step="0.1"
+                          value={p.thirdRadius}
+                          onChange={(e) => {
+                            const value = Number(e.target.value)
+                            if (Number.isFinite(value) && value >= 0 && value <= 3)
+                              set({ thirdRadius: value })
+                          }}
+                        />
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="3つの作図円"
+                          checked={p.thirdGuides}
+                          onChange={(e) => set({ thirdGuides: e.target.checked })}
+                        />{' '}
+                        3つの作図円と先端を表示
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="第3の先端の軌跡"
+                          checked={p.thirdTrace}
+                          onChange={(e) => set({ thirdTrace: e.target.checked })}
+                        />{' '}
+                        第3の先端の軌跡も表示
+                      </label>
+                      <span className="muted small">
+                        第3はPを中心に回転。ω₃=C²t、半径は管半径の指定倍率です。
+                      </span>
+                    </>
+                  )}
                   <label>
                     <input
                       type="checkbox"
@@ -180,10 +245,10 @@ export function ObservationControls({
                   value={p.flow}
                   onChange={(e) => set({ flow: e.target.value as Presentation['flow'] })}
                 >
-                  <option value="both">{third ? '3本すべて' : '両方'}</option>
+                  <option value="both">{third ? '全ての軌跡' : '両方'}</option>
                   <option value="original">元 / 陰のみ</option>
-                  <option value="derived">鏡像 / 陽のみ</option>
-                  {third && <option value="third">第3のみ</option>}
+                  {p.mode !== 'solo' && <option value="derived">鏡像 / 陽のみ</option>}
+                  {third && <option value="third">第3の先端のみ</option>}
                 </select>
               </label>
               <label>
@@ -229,17 +294,22 @@ export function ObservationControls({
           <label className="third-flow-toggle">
             <input
               type="checkbox"
-              aria-label="第3の流れを半透明で表示"
+              aria-label="第3の円を追加"
               checked={third}
               onChange={(e) =>
                 set(
                   e.target.checked
-                    ? { thirdFlow: true, mode: 'yin-yang', flow: 'both' }
+                    ? {
+                        thirdFlow: true,
+                        thirdModel: 'circle',
+                        flow: 'both',
+                        thirdOpacity: p.thirdModel === 'phase' ? 0.65 : p.thirdOpacity,
+                      }
                     : { thirdFlow: false, flow: p.flow === 'third' ? 'both' : p.flow },
                 )
               }
             />
-            第3の流れを半透明で表示
+            第3の円を追加
           </label>
         )}
       </fieldset>
@@ -250,6 +320,15 @@ export function ObservationControls({
       {third && (
         <div className="observation-rule third-rule" data-testid="third-rule">
           {thirdRule(p)} 濃さ {Math.round(p.thirdOpacity * 100)}%
+          {p.thirdModel === 'circle' && (
+            <div data-testid="third-circle-status">
+              {circleError
+                ? circleError
+                : circleRecords < step
+                  ? `第3を計算中… ${circleRecords.toLocaleString()} / ${step.toLocaleString()}`
+                  : `第3の先端 Q · ${circleRecords.toLocaleString()}点`}
+            </div>
+          )}
         </div>
       )}
       {id === 'two-arm-sphere-lift' && (

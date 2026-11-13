@@ -1,4 +1,4 @@
-/** View-only transformations: never inserted in GeometryStore or geometrySha256. */
+/** Keeps the original store/digest intact. The optional third circle has a separate derived store/digest. */
 export type OverlayMode = 'solo' | 'mirror' | 'yin-yang'
 export type Flow = 'original' | 'derived' | 'third'
 export interface Camera3DView {
@@ -19,6 +19,10 @@ export interface Presentation {
   camera?: Camera3DView
   camera2d?: { cx: number; cy: number; zoom: number }
   thirdFlow: boolean
+  thirdModel: 'circle' | 'phase'
+  thirdRadius: number
+  thirdGuides: boolean
+  thirdTrace: boolean
   thirdOpacity: number
   thirdQuarter: 1 | -1
   torusSurface: boolean
@@ -34,7 +38,11 @@ export const DEFAULT_PRESENTATION: Presentation = {
   flow: 'both',
   look: 'lab',
   thirdFlow: false,
-  thirdOpacity: 0.23,
+  thirdModel: 'circle',
+  thirdRadius: 1,
+  thirdGuides: true,
+  thirdTrace: false,
+  thirdOpacity: 0.65,
   thirdQuarter: 1,
   torusSurface: false,
   autoRotate: false,
@@ -74,12 +82,18 @@ export function parsePresentation(input: unknown): Presentation {
     'camera2d',
     'autoRotate',
     'thirdFlow',
+    'thirdModel',
+    'thirdRadius',
+    'thirdGuides',
+    'thirdTrace',
     'thirdOpacity',
     'thirdQuarter',
     'torusSurface',
   ]
   if (Object.keys(input).some((key) => !keys.includes(key))) throw new Error('unknown presentation setting')
   const p = { ...DEFAULT_PRESENTATION, ...input } as Presentation
+  // v5 stored a phase-rotated copy. Preserve those files instead of silently changing Q.
+  if (!Object.hasOwn(input, 'thirdModel') && Object.hasOwn(input, 'thirdFlow')) p.thirdModel = 'phase'
   if (
     !['solo', 'mirror', 'yin-yang'].includes(p.mode) ||
     !Object.hasOwn(PALETTES, p.palette) ||
@@ -87,12 +101,16 @@ export function parsePresentation(input: unknown): Presentation {
     !['lab', 'luminous'].includes(p.look) ||
     typeof p.autoRotate !== 'boolean' ||
     typeof p.thirdFlow !== 'boolean' ||
+    !['circle', 'phase'].includes(p.thirdModel) ||
+    typeof p.thirdGuides !== 'boolean' ||
+    typeof p.thirdTrace !== 'boolean' ||
     typeof p.torusSurface !== 'boolean' ||
     ![1, -1].includes(p.thirdQuarter)
   )
     throw new Error('invalid presentation mode')
   for (const [v, lo, hi] of [
     [p.thirdOpacity, 0, 1],
+    [p.thirdRadius, 0, 3],
     [p.trail, 0, 1e6],
     [p.opacity, 0.05, 1],
     [p.width, 0.5, 4],
@@ -129,9 +147,8 @@ export function parsePresentation(input: unknown): Presentation {
   return p
 }
 
-/** A third observation curve, Q=T(u±π/2,v), from the existing high-precision P=T(u,v).
- * Exact coordinate swaps/signs avoid another trigonometric reduction or source record.
- * It preserves x²+y² and z, hence every torus equation, including horn/spindle limits.
+/** View transforms only. The legacy phase model rotates P by a quarter-turn.
+ * A real third circle supplies independently computed Q coordinates; its view transform is identity.
  */
 export function transformFlowPoint(
   x: number,
@@ -140,7 +157,8 @@ export function transformFlowPoint(
   p: Presentation,
   flow: Flow,
 ): [number, number, number] {
-  if (flow === 'third') return [-p.thirdQuarter * y, p.thirdQuarter * x, z]
+  if (flow === 'third')
+    return p.thirdModel === 'phase' ? [-p.thirdQuarter * y, p.thirdQuarter * x, z] : [x, y, z]
   return flow === 'derived' ? transformPoint(x, y, z, p.mode) : [x, y, z]
 }
 export function inverseFlowPoint(
@@ -150,12 +168,12 @@ export function inverseFlowPoint(
   p: Presentation,
   flow: Flow,
 ): [number, number, number] {
-  return flow === 'third'
+  return flow === 'third' && p.thirdModel === 'phase'
     ? [p.thirdQuarter * y, -p.thirdQuarter * x, z]
     : transformFlowPoint(x, y, z, p, flow)
 }
 export function hasThirdFlow(p: Presentation, supportsThird = false): boolean {
-  return supportsThird && p.mode === 'yin-yang' && p.thirdFlow
+  return supportsThird && p.thirdFlow && (p.thirdModel === 'circle' || p.mode === 'yin-yang')
 }
 export function visibleFlows(p: Presentation, supportsThird = false): Flow[] {
   const available: Flow[] = p.mode === 'solo' ? ['original'] : ['original', 'derived']
@@ -165,7 +183,8 @@ export function visibleFlows(p: Presentation, supportsThird = false): Flow[] {
 }
 /** qx=a·x+b·y, qy=c·x+d·y, qz=e·z. Used by GPU object transforms. */
 export function flowAxes(p: Presentation, flow: Flow): [number, number, number, number, number] {
-  if (flow === 'third') return [0, -p.thirdQuarter, p.thirdQuarter, 0, 1]
+  if (flow === 'third')
+    return p.thirdModel === 'phase' ? [0, -p.thirdQuarter, p.thirdQuarter, 0, 1] : [1, 0, 0, 1, 1]
   const [x, y, z] = flow === 'derived' ? flowSigns(p.mode) : [1, 1, 1]
   return [x!, 0, 0, y!, z!]
 }
@@ -178,12 +197,14 @@ export function flowColor(p: Presentation, flow: Flow): number {
   return flow === 'third' ? THIRD_COLORS[p.palette] : PALETTES[p.palette][flow === 'derived' ? 1 : 0]
 }
 export function thirdRule(p: Presentation): string {
+  if (p.thirdModel === 'circle')
+    return '第3の円: 速度比 1:C:C²（πでは1:π:π²）。元Pを中心に、第2の円に直交する円を追加。Qは元トーラスの内外を通ります。'
   return p.thirdQuarter === 1
-    ? '第3: Q=(−y, x, z)。大円の位相を+90°ずらす追加の規則です。'
-    : '第3: Q=(y, −x, z)。大円の位相を−90°ずらす追加の規則です。'
+    ? '旧位相モデル: Q=(−y, x, z)。大円の位相を+90°ずらす規則です。'
+    : '旧位相モデル: Q=(y, −x, z)。大円の位相を−90°ずらす規則です。'
 }
 export function flowLabel(p: Presentation, flow: Flow): string {
-  if (flow === 'third') return '第3（半透明） / third'
+  if (flow === 'third') return p.thirdModel === 'circle' ? '第3円の先端 Q / third' : '第3（旧位相） / third'
   if (p.mode === 'yin-yang') return flow === 'derived' ? '陽 / derived' : '陰 / original'
   return flow === 'derived' ? '鏡像 / derived' : '元 / original'
 }

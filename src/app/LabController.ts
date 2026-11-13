@@ -41,6 +41,13 @@ import { createLabStore, SPEEDS, useLab, type LabStore, type Microscope } from '
 import type { MathRequest, MathResponse, SimRequest, SimResponse } from '../workers/protocol'
 
 import { version as APP_VERSION } from '../../package.json'
+import { ThirdCirclePath } from './ThirdCirclePath'
+import {
+  thirdCircleConfig,
+  thirdCircleSample,
+  thirdCircleFormulaLines,
+  type Point3,
+} from '../lab/thirdCircle'
 
 /**
  * Orchestrates:  math.worker (digits) → simulation.worker (geometry) → renderer, and mirrors
@@ -48,6 +55,11 @@ import { version as APP_VERSION } from '../../package.json'
  */
 export class LabController {
   readonly renderer = new PixiRenderer()
+  readonly thirdCircle = new ThirdCirclePath(this.renderer.store, (count, error) => {
+    this.store.setState({ thirdCircleRecords: count, thirdCircleError: error })
+    this.renderer.invalidateThird()
+  })
+  private cachedThirdFrame: { key: string; value: ReturnType<LabController['makeThirdFrame']> } | null = null
   private readonly mathWorker: Worker
   private readonly simWorker: Worker
   private mathRequestId = 0
@@ -63,11 +75,18 @@ export class LabController {
    * Work to do once the simulation for a restored / imported config is ready: run to
    * `seek` and compare the geometry digest with `verify`. Cancelled by any manual change.
    */
-  private pending: { seek: number | null; verify: string | null; note?: string } | null = null
+  private pending: {
+    seek: number | null
+    verify: string | null
+    note?: string
+    thirdVerify?: string
+  } | null = null
   /** Explanation attached to the next verification result (older file formats). */
   private verifyNote: string | undefined
   /** Digest to verify once `seekTarget` has been reached. */
   private pendingVerify: string | null = null
+  private pendingThirdVerify: string | null = null
+  private thirdSourceReady = false
   /** Forward seek in progress: the step we are computing up to. */
   private switchResume = false
   private switchFollow = false
@@ -108,6 +127,10 @@ export class LabController {
             'glow',
             'flow',
             'thirdFlow',
+            'thirdModel',
+            'thirdRadius',
+            'thirdGuides',
+            'thirdTrace',
             'thirdOpacity',
             'thirdQuarter',
             'torusSurface',
@@ -119,7 +142,17 @@ export class LabController {
           this.renderer.setPresentation(s.presentation, s.experimentId === 'two-arm-torus')
       }
       if (s.selectedFlow !== prev.selectedFlow) this.renderer.setHighlightFlow(s.selectedFlow)
+      if (
+        s.presentation !== prev.presentation ||
+        s.params !== prev.params ||
+        s.constantId !== prev.constantId ||
+        s.experimentId !== prev.experimentId ||
+        s.currentStep !== prev.currentStep ||
+        s.objects !== prev.objects
+      )
+        this.syncThirdCircle()
     })
+    this.renderer.thirdHighlight = () => this.thirdFrame()?.sample.point ?? null
     this.store.setState({ history: loadHistory(browserStorage()) })
   }
 
@@ -143,6 +176,7 @@ export class LabController {
     if (this.statsTimer) clearInterval(this.statsTimer)
     this.mathWorker.terminate()
     this.simWorker.terminate()
+    this.thirdCircle.dispose()
     this.unsubscribePresentation?.()
     this.renderer.destroy()
   }
@@ -164,6 +198,7 @@ export class LabController {
     this.switchResume = false
     this.store.setState({ switching: null })
     this.pendingVerify = null
+    this.pendingThirdVerify = null
     this.store.setState({ verify: { status: 'idle' } })
   }
 
@@ -282,9 +317,21 @@ export class LabController {
   }
 
   /** Apply a full configuration, then optionally run to `steps` and verify a digest. */
-  applyConfig(config: LabConfig, steps?: number, expectedDigest?: string, note?: string): void {
+  applyConfig(
+    config: LabConfig,
+    steps?: number,
+    expectedDigest?: string,
+    note?: string,
+    thirdVerify?: string,
+  ): void {
     this.pendingVerify = null
-    this.pending = { seek: steps && steps > 0 ? steps : null, verify: expectedDigest ?? null, note }
+    this.pendingThirdVerify = null
+    this.pending = {
+      seek: steps && steps > 0 ? steps : null,
+      verify: expectedDigest ?? null,
+      note,
+      thirdVerify,
+    }
     this.store.setState({
       presentation: parsePresentation(config.presentation),
       look: config.presentation?.look ?? 'lab',
@@ -630,12 +677,84 @@ export class LabController {
   }
 
   setPresentation(update: Partial<Presentation>): void {
+    if (update.thirdRadius !== undefined || update.thirdModel !== undefined || update.thirdFlow === false)
+      this.cancelPending()
     const next = { ...this.store.getState().presentation, ...update }
-    if (update.mode && update.mode !== 'yin-yang') next.thirdFlow = false
-    if (next.flow === 'third' && (!next.thirdFlow || next.mode !== 'yin-yang')) next.flow = 'both'
+    if (update.mode && update.mode !== 'yin-yang' && next.thirdModel === 'phase') next.thirdFlow = false
+    if (
+      next.flow === 'third' &&
+      (!next.thirdFlow || (next.thirdModel === 'phase' && next.mode !== 'yin-yang'))
+    )
+      next.flow = 'both'
     const p = parsePresentation(next)
     this.store.setState({ presentation: p, selectedFlow: 'original' })
     if (this.peer && !this.owner) this.peer.setPresentation(update)
+  }
+
+  circleThirdActive(): boolean {
+    const s = this.store.getState()
+    return (
+      s.experimentId === 'two-arm-torus' && s.presentation.thirdFlow && s.presentation.thirdModel === 'circle'
+    )
+  }
+
+  private syncThirdCircle(): void {
+    const s = this.store.getState()
+    this.thirdCircle.sync(
+      this.circleThirdActive() && this.thirdSourceReady
+        ? thirdCircleConfig(s.constantId, s.params, s.presentation)
+        : null,
+    )
+    this.renderer.setThirdStore(this.circleThirdActive() ? this.thirdCircle.store : null)
+    if (
+      s.thirdCircleRecords !== this.thirdCircle.store.count ||
+      s.thirdCircleError !== this.thirdCircle.failure
+    )
+      this.store.setState({
+        thirdCircleRecords: this.thirdCircle.store.count,
+        thirdCircleError: this.thirdCircle.failure,
+      })
+  }
+
+  thirdFrame(step?: number) {
+    if (!this.circleThirdActive() || !this.thirdSourceReady) return null
+    const s = this.store.getState()
+    const n = step ?? (s.inspected ?? s.currentTrace)?.step
+    if (!n) return null
+    const config = thirdCircleConfig(s.constantId, s.params, s.presentation)
+    const key = JSON.stringify([
+      this.renderer.store.generation,
+      Math.min(n, this.renderer.store.count),
+      n,
+      config,
+      s.params.r1,
+      s.params.scale,
+    ])
+    if (this.cachedThirdFrame?.key !== key) this.cachedThirdFrame = { key, value: this.makeThirdFrame(n) }
+    return this.cachedThirdFrame.value
+  }
+
+  private makeThirdFrame(step: number) {
+    const s = this.store.getState(),
+      store = this.renderer.store
+    const index = store.firstIndexOfStep(step)
+    let point: Point3 | null = null
+    store.forEachRecordFrom(index, index + 1, (d, o) => {
+      if (d[o + 1] === step) point = [d[o + 2]!, d[o + 3]!, d[o + 4]!]
+    })
+    if (!point) return null
+    const config = thirdCircleConfig(s.constantId, s.params, s.presentation)
+    const sample = thirdCircleSample(step, point, config)
+    const major = Number(s.params.scale) * Number(s.params.r1),
+      minor = Number(s.params.scale) * Number(s.params.r2)
+    return {
+      step,
+      center: point as Point3,
+      sample,
+      major,
+      minor,
+      elbow: sample.radial.map((x) => x * major) as Point3,
+    }
   }
 
   private finishSwitch(): void {
@@ -861,19 +980,25 @@ export class LabController {
 
   private async saveToHistoryUnsafe(): Promise<void> {
     const s = this.store.getState()
+    const count = this.renderer.store.count,
+      config = this.currentConfig()
+    if (this.circleThirdActive()) await this.thirdCircle.ready(count)
     const entry: HistoryEntry = {
       id: `${Date.now().toString(36)}-${Math.floor(performance.now()).toString(36)}`,
       timestamp: new Date().toISOString(),
-      config: this.currentConfig(),
+      config,
       steps: s.currentStep,
-      digest: await geometryDigest(this.renderer.store, this.renderer.store.count),
+      digest: await geometryDigest(this.renderer.store, count),
+      ...(this.circleThirdActive()
+        ? { thirdDigest: await geometryDigest(this.thirdCircle.store, count) }
+        : {}),
     }
     this.store.setState({ history: addHistory(browserStorage(), entry) })
   }
 
   restoreHistory(id: string): void {
     const entry = this.store.getState().history.find((e) => e.id === id)
-    if (entry) this.applyConfig(entry.config, entry.steps, entry.digest)
+    if (entry) this.applyConfig(entry.config, entry.steps, entry.digest, undefined, entry.thirdDigest)
   }
 
   deleteHistory(id: string): void {
@@ -884,22 +1009,36 @@ export class LabController {
   async buildExport(): Promise<ExperimentFile> {
     const s = this.store.getState()
     const def = this.definition()
+    const count = this.renderer.store.count
+    const config = this.currentConfig()
+    if (this.circleThirdActive()) await this.thirdCircle.ready(count)
     return {
       format: FILE_FORMAT,
       version: FILE_VERSION,
       createdAt: new Date().toISOString(),
       app: { name: 'π Infinite Lab', version: APP_VERSION },
-      config: this.currentConfig(),
+      config,
       steps: s.currentStep,
       constant: {
         symbol: s.constant?.symbol ?? '',
         algorithm: s.constant?.algorithm ?? '',
         precision: s.constant?.precision ?? s.precision,
       },
-      formulas: formulaLines(def, s.constant?.symbol ?? 'C'),
+      formulas: [
+        ...formulaLines(def, s.constant?.symbol ?? 'C'),
+        ...(this.circleThirdActive() ? thirdCircleFormulaLines(s.constant?.symbol) : []),
+      ],
       result: {
-        geometryRecords: this.renderer.store.count,
-        geometrySha256: await geometryDigest(this.renderer.store, this.renderer.store.count),
+        geometryRecords: count,
+        geometrySha256: await geometryDigest(this.renderer.store, count),
+        ...(this.circleThirdActive()
+          ? {
+              thirdCircle: {
+                geometryRecords: count,
+                geometrySha256: await geometryDigest(this.thirdCircle.store, count),
+              },
+            }
+          : {}),
         finalState: s.currentTrace?.env ?? {},
       },
       notes: [
@@ -911,7 +1050,7 @@ export class LabController {
         ...(hasThirdFlow(s.presentation, s.experimentId === 'two-arm-torus')
           ? [
               thirdRule(s.presentation),
-              'The third curve is an added phase rule on the same torus, not an independently measured energy flow.',
+              'The third model is an added observation rule; it does not calculate a measured physical energy field.',
             ]
           : []),
       ],
@@ -956,6 +1095,8 @@ export class LabController {
     try {
       const s = this.store.getState()
       const count = this.renderer.visibleRecords
+      const dataStem = this.fileStem()
+      if (this.circleThirdActive()) await this.thirdCircle.ready(count)
       // Microscope: only the range (the faint context is not part of the data)
       const fromStep = Math.max(
         s.microscope?.from ?? 0,
@@ -964,8 +1105,9 @@ export class LabController {
       const from = fromStep ? this.renderer.store.firstIndexOfStep(fromStep) : 0
       const is3d = this.definition().view === '3d'
       if (format === 'png') {
+        const name = `${this.fileStem()}.png`
         const png = is3d && this.view3d ? this.view3d.snapshotPng() : this.renderer.snapshotPng()
-        this.download(await png, `${this.fileStem()}.png`)
+        this.download(await png, name)
       } else if (format === 'csv') {
         this.download(
           new Blob(
@@ -976,10 +1118,11 @@ export class LabController {
               is3d,
               s.presentation,
               s.experimentId === 'two-arm-torus',
+              this.circleThirdActive() ? this.thirdCircle.store : undefined,
             ),
             { type: 'text/csv' },
           ),
-          `${this.fileStem()}.csv`,
+          `${dataStem}.csv`,
         )
       } else {
         const def = this.definition()
@@ -988,7 +1131,13 @@ export class LabController {
           `${symbol} (${s.constant?.precision ?? s.precision} digits, ${s.constant?.algorithm ?? ''})`,
           `${def.name}, step ${s.viewStep ?? s.currentStep}`,
           ...formulaLines(def, symbol),
+          ...(this.circleThirdActive() ? thirdCircleFormulaLines(symbol) : []),
           `parameters ${JSON.stringify(s.params)}`,
+          ...(this.circleThirdActive()
+            ? [
+                `third circle ${JSON.stringify(thirdCircleConfig(s.constantId, s.params, s.presentation))}; radius factor ${s.presentation.thirdRadius}`,
+              ]
+            : []),
         ].join('\n')
         const parts = geometrySvg(
           this.renderer.store,
@@ -999,8 +1148,9 @@ export class LabController {
           s.presentation,
           is3d,
           s.experimentId === 'two-arm-torus',
+          this.circleThirdActive() ? this.thirdCircle.store : undefined,
         )
-        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${this.fileStem()}.svg`)
+        this.download(new Blob(parts, { type: 'image/svg+xml' }), `${dataStem}.svg`)
       }
     } catch (err) {
       this.reportError(`${format.toUpperCase()} export failed`, err)
@@ -1042,6 +1192,7 @@ export class LabController {
       ? (step: number, frame: number) => view3d.renderRecordingStep(step, frame)
       : (step: number) => this.renderer.renderStep(step)
     try {
+      if (this.circleThirdActive()) await this.thirdCircle.ready(this.renderer.store.countUpToStep(to))
       if (view3d) view3d.beginRecording(from, to, o.glow ? 'luminous' : look)
       else {
         if (o.glow) this.renderer.setLook('luminous')
@@ -1140,7 +1291,13 @@ export class LabController {
   importJson(text: string): void {
     try {
       const parsed = parseImport(text)
-      this.applyConfig(parsed.config, parsed.steps, parsed.expectedDigest, parsed.compatibilityNote)
+      this.applyConfig(
+        parsed.config,
+        parsed.steps,
+        parsed.expectedDigest,
+        parsed.compatibilityNote,
+        parsed.expectedThirdDigest,
+      )
     } catch (err) {
       this.store.setState({
         verify: { status: 'error', message: err instanceof Error ? err.message : String(err) },
@@ -1152,11 +1309,40 @@ export class LabController {
     const expected = this.pendingVerify
     if (!expected) return
     this.pendingVerify = null
-    const actual = await geometryDigest(this.renderer.store, this.renderer.store.count)
-    const status = actual === expected ? 'verified' : 'mismatch'
-    const note = status === 'mismatch' ? this.verifyNote : undefined
-    this.verifyNote = undefined
-    this.store.setState({ verify: { status, expected, actual, note } })
+    const thirdExpected = this.pendingThirdVerify
+    this.pendingThirdVerify = null
+    const count = this.renderer.store.count,
+      epoch = this.initId
+    try {
+      const actual = await geometryDigest(this.renderer.store, count)
+      let thirdActual: string | undefined
+      if (thirdExpected) {
+        await this.thirdCircle.ready(count)
+        thirdActual = await geometryDigest(this.thirdCircle.store, count)
+      }
+      if (epoch !== this.initId || this.store.getState().verify.status !== 'running') return
+      const thirdMismatch = thirdExpected && thirdActual !== thirdExpected
+      const status = actual === expected && !thirdMismatch ? 'verified' : 'mismatch'
+      const note = thirdMismatch
+        ? '第3円QのSHA-256が一致しません。'
+        : thirdExpected
+          ? '元のPと第3円QのSHA-256を両方確認しました。'
+          : status === 'mismatch'
+            ? this.verifyNote
+            : undefined
+      this.verifyNote = undefined
+      this.store.setState({
+        verify: {
+          status,
+          expected: thirdMismatch ? thirdExpected : expected,
+          actual: thirdMismatch ? thirdActual! : actual,
+          note,
+        },
+      })
+    } catch (error) {
+      if (epoch === this.initId && this.store.getState().verify.status === 'running')
+        this.reportError('verify failed', error)
+    }
   }
 
   // ---- worker plumbing ---------------------------------------------------------
@@ -1174,6 +1360,8 @@ export class LabController {
     // While new digits are being computed, keep the choice in the store only;
     // onMath() starts the simulation with the new digits and the current settings.
     if (!this.digits || !s.constant || s.phase === 'computing') return
+    this.thirdSourceReady = false
+    this.thirdCircle.sync(null)
     const c = CONSTANTS[s.constantId]!
     // Copy: the main thread keeps its digits for display; the worker owns its own buffer.
     const digits = this.digits.slice()
@@ -1256,6 +1444,8 @@ export class LabController {
         // Only the ready of the latest init counts (config changes may be queued behind it).
         if (msg.initId !== this.initId || this.store.getState().phase === 'computing') return
         this.resetView()
+        this.thirdSourceReady = true
+        this.syncThirdCircle()
         // a new run replaces a failed one (e.g. corrected Playground formulas)
         this.store.setState({ phase: 'ready', totalSteps: msg.totalSteps, error: null })
         if (this.filmPending) {
@@ -1266,6 +1456,7 @@ export class LabController {
         this.pending = null
         if (pending?.verify) {
           this.pendingVerify = pending.verify
+          this.pendingThirdVerify = pending.thirdVerify ?? null
           this.verifyNote = pending.note
         }
         const p = this.store.getState().presentation

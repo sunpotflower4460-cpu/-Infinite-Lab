@@ -19,6 +19,7 @@ import { COLORS, LOOKS, type GeometryLayer, type LayerFrame, type Look } from '.
 import { GraphicsLayer } from './layers/GraphicsLayer'
 import { InstancedLayer } from './layers/InstancedLayer'
 import type { Renderer } from './Renderer'
+import type { Point3 } from '../lab/thirdCircle'
 
 export { COLORS }
 export type LayerMode = 'instanced' | 'graphics'
@@ -46,6 +47,19 @@ export class PixiRenderer implements Renderer {
   private derived: GeometryLayer | null = null
   private third: GeometryLayer | null = null
   private supportsThird = false
+  private thirdStore: GeometryStore | null = null
+  thirdHighlight?: () => Point3 | null
+
+  setThirdStore(store: GeometryStore | null): void {
+    if (this.thirdStore === store) return
+    this.thirdStore = store
+    this.needsFullRebuild = true
+    this.needsRender = true
+  }
+  invalidateThird(): void {
+    this.needsRender = true
+    this.drawHighlight()
+  }
 
   private app: Application | undefined
   private world = new Container()
@@ -238,9 +252,9 @@ export class PixiRenderer implements Renderer {
         line: color,
         point: color,
         circle: color,
-        lineAlpha: p.thirdOpacity,
-        circleAlpha: p.thirdOpacity,
-        pointAlpha: p.thirdOpacity,
+        lineAlpha: p.thirdOpacity * (p.thirdModel === 'circle' && p.thirdGuides ? 0.3 : 1),
+        circleAlpha: p.thirdOpacity * (p.thirdModel === 'circle' && p.thirdGuides ? 0.3 : 1),
+        pointAlpha: p.thirdOpacity * (p.thirdModel === 'circle' && p.thirdGuides ? 0.3 : 1),
         width: p.width,
       })
     }
@@ -250,6 +264,10 @@ export class PixiRenderer implements Renderer {
     if (!b) return null
     let result = { ...b }
     for (const flow of visibleFlows(this.presentation, this.supportsThird)) {
+      if (flow === 'third' && this.thirdStore) {
+        result = union(result, this.thirdStore.bounds)!
+        continue
+      }
       const corners = [
         [b.minX, b.minY],
         [b.minX, b.maxY],
@@ -432,6 +450,8 @@ export class PixiRenderer implements Renderer {
     this.layer.setContext(first, alpha)
     this.derived?.setContext(first, alpha)
     this.third?.setContext(first, alpha)
+    if (this.thirdStore && !this.presentation.thirdTrace)
+      this.third?.setContext(Math.max(0, Math.min(count, this.thirdStore.count) - 1), 0)
     const flows = visibleFlows(this.presentation, this.supportsThird)
     this.layer.container.visible = flows.includes('original')
     if (this.layer.sync(this.store, count, this.layerFrame(), full)) this.needsRender = true
@@ -448,13 +468,21 @@ export class PixiRenderer implements Renderer {
     if (this.third) {
       const q = this.presentation.thirdQuarter
       this.third.container.scale.set(1, 1)
-      this.third.container.rotation = (q * Math.PI) / 2
+      this.third.container.rotation = this.thirdStore ? 0 : (q * Math.PI) / 2
       this.third.container.position.set(
-        (-q * this.originY - this.originX) * this.bucket,
-        (q * this.originX - this.originY) * this.bucket,
+        this.thirdStore ? 0 : (-q * this.originY - this.originX) * this.bucket,
+        this.thirdStore ? 0 : (q * this.originX - this.originY) * this.bucket,
       )
       this.third.container.visible = flows.includes('third') && this.presentation.thirdOpacity > 0
-      if (this.third.sync(this.store, count, this.layerFrame(), full)) this.needsRender = true
+      if (
+        this.third.sync(
+          this.thirdStore ?? this.store,
+          Math.min(count, this.thirdStore?.count ?? count),
+          this.layerFrame(),
+          full,
+        )
+      )
+        this.needsRender = true
     }
     const now = performance.now()
     if (this.needsRender && this.app) {
@@ -518,8 +546,10 @@ export class PixiRenderer implements Renderer {
     const p = this.presentation
     const flows = visibleFlows(p, this.supportsThird).filter((f) => f !== 'third' || p.thirdOpacity > 0)
     for (const flow of flows) {
+      const records = flow === 'third' && this.thirdStore ? this.thirdStore : this.store
       const [qx, qy] = inverseFlowPoint(wx, wy, 0, p, flow)
-      this.store.forEachRecordNear(qx, qy, tol, count, (d, o) => {
+      records.forEachRecordNear(qx, qy, tol, count, (d, o) => {
+        if (flow === 'third' && this.thirdStore && !p.thirdTrace && d[o + 1]! !== head) return
         if (d[o + 1]! < minStep) return // Microscope: context is not pickable
         const kind = d[o]
         let dist: number
@@ -589,10 +619,16 @@ export class PixiRenderer implements Renderer {
     g.visible = flow !== 'third' || p.thirdOpacity > 0
     const [sx, sy] = flow === 'derived' ? flowSigns(p.mode) : [1, 1]
     g.scale.set(sx, sy)
-    g.rotation = flow === 'third' ? (p.thirdQuarter * Math.PI) / 2 : 0
+    g.rotation = flow === 'third' && p.thirdModel === 'phase' ? (p.thirdQuarter * Math.PI) / 2 : 0
     const origin = transformFlowPoint(this.originX, this.originY, 0, p, flow)
     g.position.set((origin[0] - this.originX) * this.bucket, (origin[1] - this.originY) * this.bucket)
-    const items = this.highlightData
+    const thirdPoint = flow === 'third' && this.thirdStore ? this.thirdHighlight?.() : null
+    const items =
+      flow === 'third' && this.thirdStore
+        ? thirdPoint
+          ? [{ type: 'point' as const, x: thirdPoint[0], y: thirdPoint[1], z: thirdPoint[2] }]
+          : null
+        : this.highlightData
     if (!items || items.length === 0) return
     const s = this.bucket
     const tx = (x: number) => (x - this.originX) * s

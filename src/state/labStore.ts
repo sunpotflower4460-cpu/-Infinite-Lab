@@ -57,6 +57,8 @@ export type VideoState =
 export interface LabState {
   presentation: Presentation
   selectedFlow: Flow
+  thirdCircleRecords: number
+  thirdCircleError: string | null
   switching: number | null
   phase: Phase
   error: string | null
@@ -127,6 +129,8 @@ function initialState(): LabState {
     presentation: { ...DEFAULT_PRESENTATION },
     selectedFlow: 'original',
     switching: null,
+    thirdCircleRecords: 0,
+    thirdCircleError: null,
     phase: 'idle',
     error: null,
     constantId: 'pi',
