@@ -1,0 +1,385 @@
+.dream-room {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow-y: auto;
+  background: #060a13;
+  color: #e2eaf9;
+  line-height: 1.7;
+  --dream-muted: #a2b1c9;
+  --dream-line: #263447;
+  --dream-accent: #7edee5;
+}
+.dream-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 4vw 14px;
+}
+.dream-eyebrow {
+  font: 10px var(--mono);
+  letter-spacing: 0.17em;
+  color: var(--dream-accent);
+}
+.dream-head h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.dream-close {
+  padding: 8px 14px;
+  flex-shrink: 0;
+  color: var(--dream-muted);
+  background: transparent;
+  border-color: var(--dream-line);
+}
+.dream-intro {
+  padding: 0 4vw 16px;
+  color: var(--dream-muted);
+  font-size: 14px;
+}
+.dream-intro p {
+  margin: 0;
+}
+.dream-mobile-break {
+  display: none;
+}
+.dream-tabs {
+  display: flex;
+  gap: 26px;
+  margin: 0 4vw;
+  border-bottom: 1px solid var(--dream-line);
+}
+.dream-tabs button {
+  padding: 13px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dream-muted);
+  font-size: 14px;
+}
+.dream-tabs button[aria-selected='true'] {
+  color: var(--dream-accent);
+  box-shadow: 0 1px var(--dream-accent);
+}
+.dream-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 30px;
+  padding: 24px 4vw;
+  max-width: 1800px;
+  margin: auto;
+}
+.dream-settings {
+  min-width: 0;
+}
+.dream-settings h3 {
+  font-size: 17px;
+  font-weight: 500;
+  margin: 2px 0 20px;
+}
+.dream-section-label {
+  color: var(--dream-accent);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  margin: 0;
+}
+.dream-settings label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: var(--dream-muted);
+}
+.dream-input-row {
+  display: flex;
+  gap: 6px;
+}
+.dream-input-row input {
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 15px;
+}
+.dream-input-row button {
+  flex-shrink: 0;
+}
+.dream-room select {
+  min-height: 36px;
+  border-color: var(--dream-line);
+}
+.dream-room button {
+  min-height: 34px;
+}
+.dream-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dream-examples button {
+  font-size: 11px;
+  background: transparent;
+  color: var(--dream-muted);
+  padding: 3px 8px;
+}
+.dream-note {
+  color: var(--dream-muted);
+  font-size: 11px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.dream-explanation {
+  font-size: 12px;
+  margin: 20px 0 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dream-line);
+  color: #c4d0e3;
+}
+.dream-observe {
+  min-width: 0;
+}
+.dream-canvas {
+  display: block;
+  width: 100%;
+  height: clamp(500px, 46vw, 690px);
+  border: 1px solid #1c2b3e;
+  border-radius: 12px;
+}
+.dream-transport {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 0;
+}
+.dream-transport button {
+  min-width: 94px;
+}
+.dream-timeline {
+  flex: 1;
+  min-width: 45px;
+  display: flex;
+}
+.dream-timeline input {
+  width: 100%;
+  accent-color: var(--dream-accent);
+}
+.dream-time {
+  font: 11px var(--mono);
+  color: var(--dream-muted);
+  white-space: nowrap;
+}
+.dream-current {
+  min-height: 25px;
+  margin: 10px 0 16px;
+  font-size: 13px;
+  color: #ffd18a;
+}
+.dream-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dream-line);
+}
+.dream-export > span {
+  color: var(--dream-muted);
+  font-size: 11px;
+  margin-right: auto;
+}
+.dream-export select {
+  width: 85px;
+}
+.dream-export button {
+  font-size: 11px;
+}
+.dream-export progress {
+  width: 80px;
+  accent-color: var(--dream-accent);
+}
+.dream-error {
+  color: #ff8897;
+}
+.dream-utterance {
+  margin: 18px 0 10px;
+  padding-left: 12px;
+  border-left: 2px solid var(--dream-accent);
+  font-size: 17px;
+}
+.dream-choices {
+  margin: 20px 0;
+  padding: 0;
+  border: none;
+}
+.dream-choices legend {
+  color: var(--dream-muted);
+  font-size: 11px;
+}
+.dream-choices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2eaf9;
+  margin: 7px 0;
+  min-height: 27px;
+  cursor: pointer;
+}
+.dream-choices input {
+  width: auto;
+  accent-color: #ffd18a;
+}
+.dream-evidence {
+  margin: 0 4vw 40px;
+  font-size: 12px;
+  color: var(--dream-muted);
+}
+.dream-evidence details {
+  border-top: 1px solid var(--dream-line);
+  padding: 14px 0;
+}
+.dream-evidence summary {
+  cursor: pointer;
+  color: #c4d0e3;
+}
+.dream-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 40px;
+}
+.dream-evidence h3 {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e2eaf9;
+}
+.dream-evidence a {
+  color: var(--dream-accent);
+}
+.dream-table-wrap {
+  overflow-x: auto;
+}
+.dream-evidence table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+  margin-top: 12px;
+}
+.dream-evidence th,
+.dream-evidence td {
+  padding: 8px;
+  border-bottom: 1px solid var(--dream-line);
+  font-weight: 400;
+}
+.dream-room .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 1000px) {
+  .dream-layout {
+    grid-template-columns: 215px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .dream-canvas {
+    height: 600px;
+  }
+}
+@media (max-width: 760px) {
+  .dream-head {
+    padding: 18px 16px 12px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .dream-head h2 {
+    font-size: 20px;
+  }
+  .dream-eyebrow {
+    font-size: 8px;
+  }
+  .dream-close {
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+  .dream-intro {
+    padding: 0 16px 15px;
+    font-size: 12px;
+  }
+  .dream-mobile-break {
+    display: block;
+  }
+  .dream-tabs {
+    gap: 18px;
+    margin: 0 16px;
+  }
+  .dream-tabs button {
+    font-size: 12px;
+    padding: 12px 0;
+  }
+  .dream-layout {
+    display: flex;
+    flex-direction: column;
+    padding: 18px 16px;
+    gap: 20px;
+  }
+  .dream-settings form {
+    margin-bottom: 8px;
+  }
+  .dream-settings h3 {
+    margin-bottom: 8px;
+  }
+  .dream-settings label {
+    margin: 9px 0;
+  }
+  .dream-settings input:not([type='radio']),
+  .dream-room select {
+    font-size: 16px;
+  }
+  .dream-settings select {
+    min-height: 42px;
+  }
+  .dream-room button {
+    min-height: 40px;
+  }
+  .dream-explanation {
+    margin: 12px 0 8px;
+    padding-top: 10px;
+  }
+  .dream-canvas {
+    height: 610px;
+  }
+  .dream-transport {
+    gap: 8px;
+  }
+  .dream-transport button {
+    min-width: 85px;
+    font-size: 11px;
+    padding: 4px 7px;
+  }
+  .dream-time {
+    font-size: 10px;
+  }
+  .dream-export {
+    gap: 6px;
+  }
+  .dream-export > span {
+    width: 100%;
+  }
+  .dream-export select {
+    font-size: 13px;
+    width: 75px;
+  }
+  .dream-choices label {
+    min-height: 38px;
+  }
+  .dream-evidence {
+    margin: 0 16px 30px;
+  }
+  .dream-evidence-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}

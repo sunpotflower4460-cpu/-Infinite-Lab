@@ -1,0 +1,84 @@
+{
+  "sourceCommit": "8874604831ae596ecba4c9cc7dc5a25228e5db65",
+  "browser": "156.0.8078.79",
+  "rendering": "Chromium, headless, software WebGL; room uses Canvas 2D",
+  "width": 1440,
+  "height": 900,
+  "fps": 30,
+  "meaningSeconds": 16,
+  "implementationSeconds": 40,
+  "chapters": [
+    {
+      "id": "create",
+      "choice": null,
+      "fromSeconds": 0,
+      "toSeconds": 8
+    },
+    {
+      "id": "ambiguous",
+      "choice": null,
+      "fromSeconds": 8,
+      "toSeconds": 16
+    },
+    {
+      "id": "ambiguous",
+      "choice": "candidate:1",
+      "fromSeconds": 16,
+      "toSeconds": 24
+    },
+    {
+      "id": "unknown",
+      "choice": null,
+      "fromSeconds": 24,
+      "toSeconds": 32
+    },
+    {
+      "id": "taught",
+      "choice": null,
+      "fromSeconds": 32,
+      "toSeconds": 40
+    }
+  ],
+  "timelinePreserved": true,
+  "meaningBefore": "1",
+  "meaningAfter": "1",
+  "mobileViewport": {
+    "width": 390,
+    "height": 844
+  },
+  "mobileTouchControls": true,
+  "playback": [
+    {
+      "name": "meaning-radial.mp4",
+      "width": 1440,
+      "height": 900,
+      "duration": 16,
+      "seekSeconds": 12.1501,
+      "readyState": 4,
+      "error": null
+    },
+    {
+      "name": "dream-box-implementation.mp4",
+      "width": 1440,
+      "height": 900,
+      "duration": 40,
+      "seekSeconds": 30.1491,
+      "readyState": 4,
+      "error": null
+    }
+  ],
+  "noOverflowMeaning": true,
+  "noOverflowImplementation": true,
+  "labStep": "0",
+  "pageErrors": [],
+  "files": {
+    "meaning-radial.mp4": {
+      "bytes": 542054,
+      "sha256": "2c25441082ed967eccac579df5e4041a275313a290ee59d913c582239a69200c"
+    },
+    "dream-box-implementation.mp4": {
+      "bytes": 1142246,
+      "sha256": "78957da13f670294a657fd74fa18a0e4e2b68aa9636dee55acb1796b107f942d"
+    }
+  }
+}

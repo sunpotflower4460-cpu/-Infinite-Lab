@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { getController } from './LabController'
 import { useLab } from '../state/labStore'
 import { LabCanvas } from '../components/Canvas/LabCanvas'
@@ -13,6 +14,9 @@ import { StatusStrip } from '../components/Status/StatusStrip'
 import { FileActions } from '../components/Status/FileActions'
 import { GoldenRoom } from '../components/Golden/GoldenRoom'
 import { openRoom, useRoom } from '../golden/room'
+import { openDreamRoom, useDreamRoom } from '../dream/room'
+
+const DreamRoom = lazy(() => import('../components/Dream/DreamRoom'))
 
 export function App() {
   const scientific = useLab((s) => s.scientific)
@@ -24,6 +28,8 @@ export function App() {
   const film = useLab((s) => s.film)
   const filmInfo = useLab((s) => s.filmInfo)
   const room = useRoom((s) => s.open)
+  const dreamRoom = useDreamRoom((s) => s.open)
+  const covered = room || dreamRoom
   const close = () => useLab.setState({ sheet: null })
   return (
     <div
@@ -32,7 +38,7 @@ export function App() {
       data-film={film ? 'on' : 'off'}
       data-film-info={filmInfo}
     >
-      <header className="topbar">
+      <header className="topbar" inert={covered} aria-hidden={covered}>
         <h1>
           <span className="accent">π</span> Infinite Lab
         </h1>
@@ -47,6 +53,9 @@ export function App() {
         <button className="room-open" onClick={openRoom} title="Golden ratio and π, side by side">
           φ と π の部屋
         </button>
+        <button className="room-open" onClick={openDreamRoom}>
+          言葉と意味の部屋
+        </button>
         <CompareToggle />
         <FileActions />
         <label className="toggle">
@@ -54,17 +63,17 @@ export function App() {
           Scientific Mode
         </label>
       </header>
-      <aside className="left" aria-label="Setup">
+      <aside className="left" aria-label="Setup" inert={covered} aria-hidden={covered}>
         <SheetHeader title="Setup" onClose={close} />
         <ExperimentPanel />
       </aside>
-      <main className="center">
+      <main className="center" inert={covered} aria-hidden={covered}>
         <div className="lanes">
           <LabCanvas />
           {peer && <LabCanvas controller={peer} lane={1} />}
         </div>
       </main>
-      <aside className="right" aria-label="Inspector">
+      <aside className="right" aria-label="Inspector" inert={covered} aria-hidden={covered}>
         <SheetHeader title="Inspector" onClose={close} />
         <Inspector />
         <MicroscopePanel />
@@ -72,7 +81,7 @@ export function App() {
       </aside>
       {/* pointerdown, not click: the click that follows a tap must not close a sheet the tap opened */}
       {sheet && <div className="sheet-backdrop mobile-only" onPointerDown={close} />}
-      <footer className="bottom">
+      <footer className="bottom" inert={covered} aria-hidden={covered}>
         <div className="mobile-bar mobile-only">
           <button
             className={sheet === 'setup' ? 'active' : ''}
@@ -96,6 +105,17 @@ export function App() {
         {error && <div className="error">Error: {error}</div>}
       </footer>
       {room && <GoldenRoom />}
+      {dreamRoom && (
+        <Suspense
+          fallback={
+            <div className="room" role="status">
+              言葉と意味の部屋を読み込み中…
+            </div>
+          }
+        >
+          <DreamRoom />
+        </Suspense>
+      )}
     </div>
   )
 }
