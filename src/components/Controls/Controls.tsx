@@ -1,4 +1,5 @@
 import { useRoom } from '../../golden/room'
+import { useDreamRoom } from '../../dream/room'
 import { useEffect } from 'react'
 import { useStore } from 'zustand'
 import { getController } from '../../app/LabController'
@@ -21,7 +22,7 @@ export function Controls() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (useRoom.getState().open) return // the room covers the lab: its keys are the page's (scroll)
+      if (useRoom.getState().open || useDreamRoom.getState().open) return // rooms own their keyboard input
       const t = e.target
       if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement) return
       // A focused button already reacts to Space/Enter itself; don't toggle twice.
