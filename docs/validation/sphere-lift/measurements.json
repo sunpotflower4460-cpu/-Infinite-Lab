@@ -1,0 +1,86 @@
+{
+  "measurements": [
+    {
+      "shape": "Sphere",
+      "step": 1000,
+      "mode": "Solo",
+      "medianPngMs": 19.700000000186265,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 58966217
+    },
+    {
+      "shape": "Sphere",
+      "step": 1000,
+      "mode": "左右対称",
+      "medianPngMs": 23.800000000046566,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 61907673
+    },
+    {
+      "shape": "Sphere",
+      "step": 1000,
+      "mode": "陰陽",
+      "medianPngMs": 24.5,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 58472121
+    },
+    {
+      "shape": "Sphere",
+      "step": 10000,
+      "mode": "Solo",
+      "medianPngMs": 37.300000000046566,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 63799817
+    },
+    {
+      "shape": "Sphere",
+      "step": 10000,
+      "mode": "左右対称",
+      "medianPngMs": 60.300000000046566,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 60439657
+    },
+    {
+      "shape": "Sphere",
+      "step": 10000,
+      "mode": "陰陽",
+      "medianPngMs": 63.5,
+      "storedRecords": 10000,
+      "geometryBytes": 560000,
+      "heap": 63356065
+    },
+    {
+      "shape": "Sphere",
+      "step": 100000,
+      "mode": "Solo",
+      "medianPngMs": 228.80000000004657,
+      "storedRecords": 100000,
+      "geometryBytes": 5600000,
+      "heap": 71697950
+    },
+    {
+      "shape": "Sphere",
+      "step": 100000,
+      "mode": "左右対称",
+      "medianPngMs": 401.5,
+      "storedRecords": 100000,
+      "geometryBytes": 5600000,
+      "heap": 72068599
+    },
+    {
+      "shape": "Sphere",
+      "step": 100000,
+      "mode": "陰陽",
+      "medianPngMs": 442.9000000001397,
+      "storedRecords": 100000,
+      "geometryBytes": 5600000,
+      "heap": 68730665
+    }
+  ],
+  "errors": []
+}

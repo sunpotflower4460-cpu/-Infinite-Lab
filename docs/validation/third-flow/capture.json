@@ -1,0 +1,91 @@
+{
+  "snapshots": [
+    "desktop-300.jpg",
+    "desktop-1000.jpg",
+    "desktop-10000.jpg",
+    "mobile-300.jpg",
+    "mobile-1000.jpg",
+    "mobile-10000.jpg"
+  ],
+  "errors": [],
+  "measurements": [
+    {
+      "step": 1000,
+      "third": false,
+      "sourceRecords": 10000,
+      "visibleRecords": 1000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 6
+    },
+    {
+      "step": 1000,
+      "third": true,
+      "sourceRecords": 10000,
+      "visibleRecords": 1000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 7
+    },
+    {
+      "step": 10000,
+      "third": false,
+      "sourceRecords": 10000,
+      "visibleRecords": 10000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 6
+    },
+    {
+      "step": 10000,
+      "third": true,
+      "sourceRecords": 10000,
+      "visibleRecords": 10000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 7
+    },
+    {
+      "step": 100000,
+      "third": false,
+      "sourceRecords": 100000,
+      "visibleRecords": 100000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 6
+    },
+    {
+      "step": 100000,
+      "third": true,
+      "sourceRecords": 100000,
+      "visibleRecords": 100000,
+      "sharedWideGeometry": true,
+      "sharedNativeGeometry": true,
+      "memory": {
+        "geometries": 5,
+        "textures": 0
+      },
+      "drawCalls": 7
+    }
+  ]
+}

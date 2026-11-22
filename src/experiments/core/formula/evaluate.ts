@@ -1,5 +1,10 @@
 import { detCos, detSin } from '../../../math/detmath'
-import { constantProductMod, productModTau, type BinaryConstant } from '../../../math/exactReduce'
+import {
+  constantProductMod,
+  productModTau,
+  halfDifferenceModTau,
+  type BinaryConstant,
+} from '../../../math/exactReduce'
 import type { Expr, FormulaSet } from './ast'
 
 /**
@@ -20,6 +25,9 @@ export interface EvalContext {
 
 export function evaluate(e: Expr, env: Env, ctx: EvalContext = {}): number {
   switch (e.kind) {
+    case 'halfDifference':
+      if (!ctx.constant || !ctx.pi) throw new Error('halfDifference needs C and π in high precision')
+      return halfDifferenceModTau(evaluate(e.n, env, ctx), evaluate(e.dt, env, ctx), ctx.constant, ctx.pi)
     case 'num':
       return e.value
     case 'pi':

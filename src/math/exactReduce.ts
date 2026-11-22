@@ -125,3 +125,12 @@ export function productModTau(
   const s = Math.max(0, bitLength(r) - 64)
   return Number(r >> BigInt(s)) * 2 ** (s - B)
 }
+
+/**
+ * ((C − 1) × n × dt / 2) mod 2π.
+ * Subtract 1 BEFORE reducing: halving two reduced phases loses the winding parity
+ * and can flip the hemisphere. All float64 factors retain their exact rational value.
+ */
+export function halfDifferenceModTau(n: number, dt: number, c: BinaryConstant, pi: BinaryConstant): number {
+  return productModTau([n, dt, 0.5], { ...c, raw: c.raw - (1n << BigInt(c.bits)) }, pi)
+}

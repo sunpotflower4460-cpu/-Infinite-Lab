@@ -7,6 +7,7 @@ export interface HistoryEntry {
   steps: number
   /** SHA-256 of the geometry at `steps` (see geometry/digest.ts). */
   digest?: string
+  thirdDigest?: string
 }
 
 export const HISTORY_KEY = 'pi-infinite-lab.history.v1'
@@ -37,6 +38,10 @@ export function loadHistory(storage: KeyValueStorage | undefined): HistoryEntry[
           config: parseConfig(e.config),
           steps: e.steps,
           digest: typeof e.digest === 'string' ? e.digest : undefined,
+          thirdDigest:
+            typeof e.thirdDigest === 'string' && /^[0-9a-f]{64}$/.test(e.thirdDigest)
+              ? e.thirdDigest
+              : undefined,
         })
       } catch {
         // skip invalid entry

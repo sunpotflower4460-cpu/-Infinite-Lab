@@ -255,6 +255,29 @@ export function parseExpr(src: string, options: ParseOptions): Expr {
 
   /** `left mod right`: an exact reduction when right is 2π, or when C is a factor; else float mod. */
   function reduction(left: Expr, right: Expr): Expr {
+    // Sphere Lift's exact half phase. Match this structure only: no float64 subtraction.
+    if (
+      isTwoPi(right) &&
+      left.kind === 'bin' &&
+      left.op === '/' &&
+      left.right.kind === 'num' &&
+      left.right.value === 2
+    ) {
+      const fs = flattenProduct(left.left)
+      const d = fs[0]
+      if (
+        fs.length === 3 &&
+        d?.kind === 'bin' &&
+        d.op === '-' &&
+        isConstantMark(d.left) &&
+        d.right.kind === 'num' &&
+        d.right.value === 1
+      ) {
+        if (findConstantMark(fs[1]!) || findConstantMark(fs[2]!))
+          throw new FormulaSyntaxError('half phase factors cannot contain C', ...range(left))
+        return { kind: 'halfDifference', n: fs[1]!, dt: fs[2]! }
+      }
+    }
     const factors = flattenProduct(left)
     const constants = factors.filter(isConstantMark)
     const rest = factors.filter((f) => !isConstantMark(f))

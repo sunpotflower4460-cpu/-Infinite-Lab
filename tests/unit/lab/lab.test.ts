@@ -181,7 +181,7 @@ describe('file format versions', () => {
     )
     expect(v2.compatibilityNote).toBeUndefined()
     expect(() =>
-      parseImport(JSON.stringify({ ...base, version: 4, config: { experiment: 'pi-rotation' } })),
+      parseImport(JSON.stringify({ ...base, version: 999, config: { experiment: 'pi-rotation' } })),
     ).toThrow(/version/)
   })
 

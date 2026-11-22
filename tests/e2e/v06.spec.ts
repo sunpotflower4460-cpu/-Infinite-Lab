@@ -45,7 +45,8 @@ test.describe('Two-Arm 3D (v0.6)', () => {
     // shared parameters carry over; Ball adds the table angle θ₃ = (n × dt × π²) mod 2π
     await view(page, 'Ball').click()
     await expect(page.getByLabel('Experiment')).toHaveValue('two-arm-ball')
-    await goTo(page, 10)
+    await expect(page.getByTestId('current-step')).toHaveText('300') // shape switches preserve time
+    await goTo(page, 350)
     await expect(page.getByTestId('inspector')).toContainText('θ₃ = (n × dt × π²) mod 2π')
 
     await view(page, '2D').click()

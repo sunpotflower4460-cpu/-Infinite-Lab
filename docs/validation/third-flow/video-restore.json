@@ -1,0 +1,106 @@
+{
+  "before": {
+    "step": 10000,
+    "viewStep": 1000,
+    "camera": {
+      "position": [
+        415.02116968086517,
+        -553.3615595744839,
+        345.85097473405233
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projection": "perspective",
+      "zoom": 1
+    },
+    "presentation": {
+      "mode": "yin-yang",
+      "trail": 300,
+      "palette": "gold-blue",
+      "opacity": 0.55,
+      "width": 2,
+      "glow": 0.3,
+      "flow": "both",
+      "look": "luminous",
+      "thirdFlow": true,
+      "thirdOpacity": 0.23,
+      "thirdQuarter": 1,
+      "torusSurface": true,
+      "autoRotate": false,
+      "camera2d": {
+        "cx": 0,
+        "cy": 0,
+        "zoom": 2.28
+      },
+      "camera": {
+        "position": [
+          415.02116968086517,
+          -553.3615595744839,
+          345.85097473405233
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "projection": "perspective",
+        "zoom": 1
+      }
+    }
+  },
+  "after": {
+    "step": 10000,
+    "viewStep": 1000,
+    "camera": {
+      "position": [
+        415.02116968086517,
+        -553.3615595744836,
+        345.8509747340521
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projection": "perspective",
+      "zoom": 1
+    },
+    "presentation": {
+      "mode": "yin-yang",
+      "trail": 300,
+      "palette": "gold-blue",
+      "opacity": 0.55,
+      "width": 2,
+      "glow": 0.3,
+      "flow": "both",
+      "look": "luminous",
+      "thirdFlow": true,
+      "thirdOpacity": 0.23,
+      "thirdQuarter": 1,
+      "torusSurface": true,
+      "autoRotate": false,
+      "camera2d": {
+        "cx": 0,
+        "cy": 0,
+        "zoom": 2.28
+      },
+      "camera": {
+        "position": [
+          415.02116968086517,
+          -553.3615595744839,
+          345.85097473405233
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "projection": "perspective",
+        "zoom": 1
+      }
+    }
+  }
+}
