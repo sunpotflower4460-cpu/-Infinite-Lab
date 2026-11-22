@@ -1,0 +1,7 @@
+{
+  "commit": "8874604831ae596ecba4c9cc7dc5a25228e5db65",
+  "aliasContextConditionQueries": 648,
+  "directRelationsCompared": 525,
+  "result": "PASS",
+  "scope": "frozen 21-concept / 23-relation prior; explainer-specific winner rule is not an Atlas feature"
+}

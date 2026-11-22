@@ -1,0 +1,599 @@
+{
+  "version": 3,
+  "source": "developer-authored Atlas-only prior, not experience-derived",
+  "concepts": [
+    {
+      "id": "potato",
+      "words": ["じゃがいも", "ジャガイモ", "馬鈴薯"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["encyclopedia-potato"],
+      "aliases": [
+        {
+          "word": "じゃがいも",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        },
+        {
+          "word": "ジャガイモ",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        },
+        {
+          "word": "馬鈴薯",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        }
+      ]
+    },
+    {
+      "id": "soy",
+      "words": ["大豆", "だいず"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["encyclopedia-soybean"],
+      "aliases": [
+        {
+          "word": "大豆",
+          "language": "ja",
+          "sourceId": "encyclopedia-soybean",
+          "pronunciation": "だいず"
+        },
+        {
+          "word": "だいず",
+          "language": "ja",
+          "sourceId": "encyclopedia-soybean",
+          "pronunciation": "だいず"
+        }
+      ]
+    },
+    {
+      "id": "stone",
+      "words": ["石"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "石",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "words": ["模型"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "模型",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "ingredient",
+      "words": ["食材"],
+      "kind": "role",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "食材",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "plant",
+      "words": ["植物"],
+      "kind": "category",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "植物",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "mineral",
+      "words": ["鉱物"],
+      "kind": "category",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "鉱物",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "artifact",
+      "words": ["人工物"],
+      "kind": "category",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "人工物",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "tool",
+      "words": ["道具"],
+      "kind": "role",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "道具",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "bridge",
+      "words": ["橋", "はし"],
+      "context": "交通",
+      "kind": "object",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "橋",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        },
+        {
+          "word": "はし",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "chopsticks",
+      "words": ["箸", "はし"],
+      "context": "食卓",
+      "kind": "object",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "箸",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        },
+        {
+          "word": "はし",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "metal",
+      "words": ["金属"],
+      "kind": "material",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "金属",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "wood",
+      "words": ["木材"],
+      "kind": "material",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "木材",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "tuber",
+      "words": ["塊茎"],
+      "kind": "category",
+      "version": 1,
+      "provenance": ["encyclopedia-potato"],
+      "aliases": [
+        {
+          "word": "塊茎",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        }
+      ]
+    },
+    {
+      "id": "seed",
+      "words": ["種子"],
+      "kind": "category",
+      "version": 1,
+      "provenance": ["encyclopedia-potato"],
+      "aliases": [
+        {
+          "word": "種子",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        }
+      ]
+    },
+    {
+      "id": "potato_plant",
+      "words": ["じゃがいもの植物"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["encyclopedia-potato"],
+      "aliases": [
+        {
+          "word": "じゃがいもの植物",
+          "language": "ja",
+          "sourceId": "encyclopedia-potato"
+        }
+      ]
+    },
+    {
+      "id": "soy_plant",
+      "words": ["ダイズ植物"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["encyclopedia-soybean"],
+      "aliases": [
+        {
+          "word": "ダイズ植物",
+          "language": "ja",
+          "sourceId": "encyclopedia-soybean"
+        }
+      ]
+    },
+    {
+      "id": "potato_model",
+      "words": ["じゃがいも模型"],
+      "kind": "object",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "じゃがいも模型",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "cooking",
+      "words": ["調理"],
+      "kind": "process",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "調理",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "boiling",
+      "words": ["茹でる", "ゆでる"],
+      "kind": "process",
+      "version": 1,
+      "provenance": ["atlas-design-pr22"],
+      "aliases": [
+        {
+          "word": "茹でる",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        },
+        {
+          "word": "ゆでる",
+          "language": "ja",
+          "sourceId": "atlas-design-pr22"
+        }
+      ]
+    },
+    {
+      "id": "tofu",
+      "words": ["豆腐"],
+      "kind": "substance",
+      "version": 1,
+      "provenance": ["encyclopedia-soybean"],
+      "aliases": [
+        {
+          "word": "豆腐",
+          "language": "ja",
+          "sourceId": "encyclopedia-soybean"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source": "potato",
+      "type": "is_a",
+      "target": "tuber",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "soy",
+      "type": "is_a",
+      "target": "seed",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "stone",
+      "type": "made_of",
+      "target": "mineral",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "qualifiers": {
+        "scope": "mineral-bearing stone only; stone is not a mineral taxon",
+        "conditions": {
+          "mineralBearing": true
+        }
+      }
+    },
+    {
+      "source": "model",
+      "type": "is_a",
+      "target": "artifact",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "potato",
+      "type": "used_as",
+      "target": "ingredient",
+      "context": "実験台",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "soy",
+      "type": "used_as",
+      "target": "ingredient",
+      "context": "実験台",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "stone",
+      "type": "used_as",
+      "target": "tool",
+      "context": "建設",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "model",
+      "type": "used_as",
+      "target": "tool",
+      "context": "教材",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "chopsticks",
+      "type": "is_a",
+      "target": "tool",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "chopsticks",
+      "type": "made_of",
+      "target": "wood",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "qualifiers": {
+        "scope": "wooden chopsticks only; metal and other materials also exist",
+        "conditions": {
+          "material": "wood"
+        }
+      }
+    },
+    {
+      "source": "potato",
+      "type": "part_of",
+      "target": "potato_plant",
+      "provenance": ["encyclopedia-potato"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "soy",
+      "type": "part_of",
+      "target": "soy_plant",
+      "provenance": ["encyclopedia-soybean"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "potato_plant",
+      "type": "is_a",
+      "target": "plant",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "soy_plant",
+      "type": "is_a",
+      "target": "plant",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "potato_model",
+      "type": "is_a",
+      "target": "model",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "potato_model",
+      "type": "resembles",
+      "target": "potato",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    },
+    {
+      "source": "potato_model",
+      "type": "used_as",
+      "target": "ingredient",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "料理",
+      "negated": true
+    },
+    {
+      "source": "potato",
+      "type": "used_as",
+      "target": "ingredient",
+      "provenance": ["encyclopedia-potato"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "料理",
+      "qualifiers": {
+        "scope": "suitable specimen only; not every instance",
+        "conditions": {
+          "suitableForCooking": true
+        }
+      }
+    },
+    {
+      "source": "potato",
+      "type": "affords",
+      "target": "boiling",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "料理",
+      "qualifiers": {
+        "conditions": {
+          "suitableForCooking": true
+        }
+      }
+    },
+    {
+      "source": "soy",
+      "type": "used_as",
+      "target": "ingredient",
+      "provenance": ["encyclopedia-soybean"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "料理",
+      "qualifiers": {
+        "scope": "suitable specimen only; not every instance",
+        "conditions": {
+          "suitableForCooking": true
+        }
+      }
+    },
+    {
+      "source": "soy",
+      "type": "affords",
+      "target": "boiling",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "料理",
+      "qualifiers": {
+        "conditions": {
+          "suitableForCooking": true
+        }
+      }
+    },
+    {
+      "source": "soy",
+      "type": "transforms_to",
+      "target": "tofu",
+      "provenance": ["encyclopedia-soybean"],
+      "confidenceKind": "asserted",
+      "status": "confirmed",
+      "context": "加工",
+      "qualifiers": {
+        "conditions": {
+          "process": "soymilk-coagulation"
+        }
+      }
+    },
+    {
+      "source": "boiling",
+      "type": "part_of",
+      "target": "cooking",
+      "provenance": ["atlas-design-pr22"],
+      "confidenceKind": "asserted",
+      "status": "confirmed"
+    }
+  ],
+  "categoryRules": [
+    {
+      "concept": "ingredient",
+      "context": "実験台",
+      "actionId": "a-1",
+      "positiveResult": true,
+      "evidence": "atlas-developer-station-definition-v2"
+    }
+  ],
+  "properties": [
+    {
+      "id": "potato-composition",
+      "conceptRef": "potato",
+      "property": "composition",
+      "value": "contains starch",
+      "valueType": "qualitative",
+      "sourceIds": ["encyclopedia-potato"],
+      "scope": "typical tuber; no numerical material model"
+    },
+    {
+      "id": "soy-organ",
+      "conceptRef": "soy",
+      "property": "botanicalOrgan",
+      "value": "seed",
+      "valueType": "qualitative",
+      "sourceIds": ["encyclopedia-soybean"],
+      "scope": "seed sense of 大豆"
+    }
+  ]
+}
